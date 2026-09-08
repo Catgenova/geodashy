@@ -1,4 +1,5 @@
 using Geodashy.Core;
+using Geodashy.Gameplay;
 using Geodashy.Rendering;
 using UnityEngine;
 
@@ -25,8 +26,17 @@ namespace Geodashy.Editing
         SpriteRenderer selectionBox;
         SpriteRenderer ceilingLine;
         SpriteRenderer finishLine;
+        SpriteRenderer spawnGhost, spawnLabel, spawnLine, spawnArrow;
+        SpriteRenderer markerGhost, markerLabel, markerLine;
         float lastGridSize = -1f;
         float lastBeatWidth = -1f;
+        bool spawnDirty = true;
+        GameRunner.StartState spawnState;
+        GameRunner.StartState markerState;
+        bool hasMarker;
+
+        public static readonly Color SpawnColor = new Color(0.35f, 1f, 0.5f, 1f);
+        public static readonly Color MarkerColor = new Color(0.4f, 0.85f, 1f, 1f);
 
         public static EditorGrid Create(Transform parent, EditorCamera cam, LevelEditor editor)
         {
@@ -36,6 +46,7 @@ namespace Geodashy.Editing
             g.editorCamera = cam;
             g.editor = editor;
             g.Build();
+            editor.LevelChanged += () => g.spawnDirty = true;
             return g;
         }
 
@@ -69,6 +80,55 @@ namespace Geodashy.Editing
 
             finishLine = SpriteLibrary.CreateRenderer("FinishGuide", transform, PlaceholderSpriteFactory.WhiteSquare(), GridSorting + 2);
             finishLine.color = new Color(1f, 0.85f, 0.3f, 0.5f);
+
+            // spawn preview: the real mount, ghosted, plus a label, a start line and an arrow
+            spawnLine = SpriteLibrary.CreateRenderer("SpawnLine", transform, PlaceholderSpriteFactory.WhiteSquare(), GridSorting + 3);
+            spawnLine.color = new Color(SpawnColor.r, SpawnColor.g, SpawnColor.b, 0.45f);
+            spawnGhost = SpriteLibrary.CreateRenderer("SpawnGhost", transform, null, GuideSorting + 2);
+            spawnLabel = SpriteLibrary.CreateRenderer("SpawnLabel", transform, PlaceholderSpriteFactory.ForText("SPAWN", Color.white), GuideSorting + 3);
+            spawnLabel.color = SpawnColor;
+            spawnArrow = SpriteLibrary.CreateRenderer("SpawnArrow", transform, PlaceholderSpriteFactory.ForText("V", Color.white), GuideSorting + 3);
+            spawnArrow.color = SpawnColor;
+
+            markerLine = SpriteLibrary.CreateRenderer("MarkerLine", transform, PlaceholderSpriteFactory.WhiteSquare(), GridSorting + 3);
+            markerLine.color = new Color(MarkerColor.r, MarkerColor.g, MarkerColor.b, 0.45f);
+            markerGhost = SpriteLibrary.CreateRenderer("MarkerGhost", transform, null, GuideSorting + 2);
+            markerLabel = SpriteLibrary.CreateRenderer("MarkerLabel", transform, PlaceholderSpriteFactory.ForText("TEST FROM HERE", Color.white), GuideSorting + 3);
+            markerLabel.color = MarkerColor;
+        }
+
+        void RefreshSpawn()
+        {
+            spawnDirty = false;
+            var level = editor.level;
+            spawnState = GameRunner.ResolveStart(level, null);
+            hasMarker = level.playtestX >= 0f;
+            if (hasMarker) markerState = GameRunner.ResolveStart(level, new Vector2(level.playtestX, level.playtestY));
+            ApplyGhost(spawnGhost, spawnState, SpawnColor);
+            markerGhost.enabled = markerLabel.enabled = markerLine.enabled = hasMarker;
+            if (hasMarker) ApplyGhost(markerGhost, markerState, MarkerColor);
+        }
+
+        static void ApplyGhost(SpriteRenderer sr, GameRunner.StartState st, Color tint)
+        {
+            var mount = MountCatalog.Get(st.mount);
+            sr.sprite = SpriteLibrary.ForMount(mount);
+            float s = st.mini ? 0.6f : 1f;
+            float baseScale = sr.sprite != null ? mount.width / Mathf.Max(0.01f, sr.sprite.bounds.size.x) : 1f;
+            sr.transform.localScale = new Vector3(baseScale * s, baseScale * s * (st.flipped ? -1f : 1f), 1f);
+            sr.transform.position = new Vector3(st.position.x, st.position.y, 0f);
+            sr.color = new Color(tint.r, tint.g, tint.b, 0.75f);
+            sr.enabled = true;
+        }
+
+        /// <summary>Where the rider will appear when testing from the start.</summary>
+        public Vector2 SpawnPosition
+        {
+            get
+            {
+                if (spawnDirty) RefreshSpawn();
+                return spawnState.position;
+            }
         }
 
         public void SetSelectionBox(Rect? r)
@@ -147,13 +207,32 @@ namespace Geodashy.Editing
                 bpmGuide.transform.position = new Vector3(left, view.center.y, 0f);
             }
 
-            // playtest marker ---------------------------------------------
-            if (level != null && level.playtestX >= 0f)
+            // spawn + playtest marker ------------------------------------
+            if (level != null)
             {
-                playtestMarker.enabled = true;
-                playtestMarker.transform.position = new Vector3(level.playtestX, level.playtestY, 0f);
+                if (spawnDirty) RefreshSpawn();
+                float bob = Mathf.Sin(Time.unscaledTime * 3f) * 0.12f;
+                float ceilY = groundY + level.settings.ceilingHeight;
+                var sp = spawnState.position;
+                spawnLine.transform.position = new Vector3(sp.x, (groundY + ceilY) / 2f, 0f);
+                spawnLine.transform.localScale = new Vector3(0.06f, ceilY - groundY + 2f, 1f);
+                spawnLabel.transform.position = new Vector3(sp.x, sp.y + 2.1f + bob, 0f);
+                spawnLabel.transform.localScale = Vector3.one * 0.6f;
+                spawnArrow.transform.position = new Vector3(sp.x, sp.y + 1.35f + bob, 0f);
+                spawnArrow.transform.localScale = Vector3.one * 0.6f;
+                spawnLabel.enabled = spawnArrow.enabled = spawnLine.enabled = spawnGhost.enabled = true;
+
+                playtestMarker.enabled = hasMarker;
+                if (hasMarker)
+                {
+                    var mp = markerState.position;
+                    playtestMarker.transform.position = new Vector3(mp.x, mp.y, 0f);
+                    markerLine.transform.position = new Vector3(mp.x, (groundY + ceilY) / 2f, 0f);
+                    markerLine.transform.localScale = new Vector3(0.06f, ceilY - groundY + 2f, 1f);
+                    markerLabel.transform.position = new Vector3(mp.x, mp.y + 1.6f - bob, 0f);
+                    markerLabel.transform.localScale = Vector3.one * 0.5f;
+                }
             }
-            else playtestMarker.enabled = false;
 
             // ceiling + finish guides -------------------------------------
             if (level != null)

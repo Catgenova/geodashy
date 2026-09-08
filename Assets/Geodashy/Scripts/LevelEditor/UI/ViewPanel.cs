@@ -100,7 +100,7 @@ namespace Geodashy.Editing.UI
                 editor.editorCamera.Position = new Vector2(v * len, editor.editorCamera.Position.y);
             });
             var nr = UIFactory.Row(c, 26, 3);
-            UIFactory.Button(nr, "⇤ Start", () => editor.editorCamera.Position = new Vector2(6f, editor.level.settings.groundY + 4f), -1, 24, null, 12);
+            UIFactory.Button(nr, "⇤ Spawn", editor.GoToSpawn, -1, 24, null, 12);
             UIFactory.Button(nr, "End ⇥", () => editor.editorCamera.Position = new Vector2(editor.level.GetFinishX(), editor.level.settings.groundY + 4f), -1, 24, null, 12);
             UIFactory.Button(c, "Go to ground", () => editor.editorCamera.Position = new Vector2(editor.editorCamera.Position.x, editor.level.settings.groundY + 4f), -1, 24, null, 12);
 
@@ -116,7 +116,7 @@ namespace Geodashy.Editing.UI
             var mr = UIFactory.Row(c, 26, 3);
             UIFactory.Button(mr, "Set at camera", () => editor.SetPlaytestMarker(editor.editorCamera.Position), -1, 24, null, 11);
             UIFactory.Button(mr, "Clear", () => editor.SetPlaytestMarker(null), 60, 24, null, 11);
-            UIFactory.Label(c, "M sets the marker at the cursor. Shift+M clears. Shift+P or ▶ Marker plays from it.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 50);
+            UIFactory.Label(c, "The green rider shows where you spawn (x 0 on the ground, or the right-most Start Position object). The blue rider is the test marker: M sets it at the cursor, Shift+M clears it, Shift+P or ▶ Marker plays from it.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 96);
 
             editor.ViewOptionsChanged += Refresh;
             ui.UIScaleChanged += Refresh;

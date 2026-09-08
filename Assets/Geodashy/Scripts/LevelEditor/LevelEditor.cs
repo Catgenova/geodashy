@@ -878,6 +878,13 @@ namespace Geodashy.Editing
         // playtest
         // =====================================================================
 
+        /// <summary>Centres the camera on the spawn point.</summary>
+        public void GoToSpawn()
+        {
+            var sp = grid.SpawnPosition;
+            editorCamera.Position = new Vector2(sp.x + editorCamera.HalfWidth * 0.5f, Mathf.Max(sp.y, level.settings.groundY + 4f));
+        }
+
         public void SetPlaytestMarker(Vector2? pos)
         {
             if (pos == null)
@@ -1076,7 +1083,7 @@ namespace Geodashy.Editing
             if (kb[Key.LeftBracket].wasPressedThisFrame) SetEditorLayer(currentEditorLayer - 1);
             if (kb[Key.RightBracket].wasPressedThisFrame) SetEditorLayer(currentEditorLayer + 1);
             if (kb[Key.Backslash].wasPressedThisFrame) SetShowAllLayers(!showAllLayers);
-            if (kb[Key.Home].wasPressedThisFrame) editorCamera.Position = new Vector2(6f, level.settings.groundY + 4f);
+            if (kb[Key.Home].wasPressedThisFrame) GoToSpawn();
             if (kb[Key.End].wasPressedThisFrame) editorCamera.Position = new Vector2(level.GetFinishX(), level.settings.groundY + 4f);
             if (kb[Key.P].wasPressedThisFrame) StartPlaytest(shift);
             if (kb[Key.Enter].wasPressedThisFrame) StartPlaytest(false);

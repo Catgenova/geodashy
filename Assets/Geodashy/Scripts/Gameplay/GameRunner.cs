@@ -73,17 +73,32 @@ namespace Geodashy.Gameplay
             Respawn();
         }
 
-        /// <summary>Determines the spawn position and initial state, honouring Start Position objects and portals to the left.</summary>
-        void ComputeStart(Vector2? marker)
+        /// <summary>Resolved spawn state: where the rider appears and with what mount/speed/gravity/size.</summary>
+        public struct StartState
+        {
+            public Vector2 position;
+            public string mount;
+            public int speed;
+            public bool flipped;
+            public bool mini;
+            /// <summary>The Start Position object that was used, or null.</summary>
+            public LevelObject startObject;
+        }
+
+        /// <summary>
+        /// Determines the spawn position and initial state. Uses the right-most enabled Start Position
+        /// (left of the marker when one is given), then applies every portal between it and the marker.
+        /// Shared with the editor so the spawn preview always matches the game.
+        /// </summary>
+        public static StartState ResolveStart(LevelData level, Vector2? marker)
         {
             var s = level.settings;
-            startMount = s.startMount;
-            startSpeed = s.startSpeed;
-            startFlipped = s.startGravityFlipped;
-            startMini = s.startMini;
-            startPos = new Vector2(0f, s.groundY + 0.5f);
+            var st = new StartState
+            {
+                mount = s.startMount, speed = s.startSpeed, flipped = s.startGravityFlipped, mini = s.startMini,
+                position = new Vector2(0f, s.groundY + 0.5f)
+            };
 
-            // right-most enabled start position (left of the marker if one is given)
             LevelObject best = null;
             foreach (var o in level.objects)
             {
@@ -93,17 +108,17 @@ namespace Geodashy.Gameplay
             }
             if (best != null)
             {
-                startPos = new Vector2(best.x, best.y);
-                startMount = best.GetString("mount", startMount);
-                startSpeed = best.GetInt("speed", startSpeed);
-                startFlipped = best.GetBool("flipped", startFlipped);
-                startMini = best.GetBool("mini", startMini);
+                st.startObject = best;
+                st.position = new Vector2(best.x, best.y);
+                st.mount = best.GetString("mount", st.mount);
+                st.speed = best.GetInt("speed", st.speed);
+                st.flipped = best.GetBool("flipped", st.flipped);
+                st.mini = best.GetBool("mini", st.mini);
             }
             if (marker != null)
             {
                 float scanFrom = best != null ? best.x : -1f;
-                startPos = marker.Value;
-                // apply every portal between the base state and the marker
+                st.position = marker.Value;
                 var portals = new List<LevelObject>();
                 foreach (var o in level.objects)
                 {
@@ -117,16 +132,27 @@ namespace Geodashy.Gameplay
                     var def = ObjectCatalog.Get(p.type);
                     switch (def.portalType)
                     {
-                        case PortalType.Mount: startMount = def.portalMount; break;
-                        case PortalType.GravityNormal: startFlipped = false; break;
-                        case PortalType.GravityFlip: startFlipped = true; break;
-                        case PortalType.Speed: startSpeed = (int)def.portalSpeed; break;
-                        case PortalType.SizeMini: startMini = true; break;
-                        case PortalType.SizeNormal: startMini = false; break;
+                        case PortalType.Mount: st.mount = def.portalMount; break;
+                        case PortalType.GravityNormal: st.flipped = false; break;
+                        case PortalType.GravityFlip: st.flipped = true; break;
+                        case PortalType.Speed: st.speed = (int)def.portalSpeed; break;
+                        case PortalType.SizeMini: st.mini = true; break;
+                        case PortalType.SizeNormal: st.mini = false; break;
                     }
                 }
             }
-            startPos.x = Mathf.Max(0f, startPos.x);
+            st.position.x = Mathf.Max(0f, st.position.x);
+            return st;
+        }
+
+        void ComputeStart(Vector2? marker)
+        {
+            var st = ResolveStart(level, marker);
+            startPos = st.position;
+            startMount = st.mount;
+            startSpeed = st.speed;
+            startFlipped = st.flipped;
+            startMini = st.mini;
         }
 
         void Respawn()

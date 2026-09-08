@@ -330,6 +330,10 @@ namespace Geodashy.Editing.UI
             "+ / − — zoom   ·   Ctrl+0 — reset zoom   ·   Home / End — level start / end\n" +
             "G — toggle grid snap   ·   Ctrl+G — toggle grid   ·   [ ] — editor layer   ·   \\ — show all layers\n" +
             "H — hide interface\n\n" +
+            "SPAWN\n" +
+            "The green ghost rider marks where you spawn: x 0 on the ground, or the right-most enabled Start Position object.\n" +
+            "Place a Start Position (Special category) to move it and to override the mount, speed and gravity.\n" +
+            "Home — jump the camera to the spawn\n\n" +
             "PLAYTEST\n" +
             "P or Enter — play from the start   ·   Shift+P or Ctrl+Enter — play from the marker\n" +
             "M — set marker at cursor   ·   Shift+M — clear marker\n" +
