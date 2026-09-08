@@ -42,6 +42,8 @@ namespace Geodashy.Gameplay
         float deathTimer;
         ParticleBurst particles;
         float slowMo;
+        int lastBeat = -1;
+        public GroundProps groundProps;
         LevelObjectView pulsingPortal;
         float portalPulse;
         LevelStats stats;
@@ -216,6 +218,7 @@ namespace Geodashy.Gameplay
             coins = 0;
             gems = 0;
             keys = 0;
+            lastBeat = -1;
             autoCheckpointTimer = 0f;
             lastCheckpointX = -100f;
             ResetWorld();
@@ -391,6 +394,19 @@ namespace Geodashy.Gameplay
             else if (!string.IsNullOrEmpty(level.settings.songId)) PlaySong(level.settings.songId, offset, false);
         }
 
+        void UpdateBeat()
+        {
+            var s = level.settings;
+            if (!s.beatPulse || s.bpm < 20f) return;
+            float songTime = s.songOffset + startPos.x / MountCatalog.Speed(startSpeed) + elapsed;
+            int beat = Mathf.FloorToInt(songTime * s.bpm / 60f);
+            if (beat == lastBeat) return;
+            lastBeat = beat;
+            bool bar = beat % 4 == 0;
+            ground.Pulse(bar ? 1f : 0.55f);
+            background.Pulse(bar ? 0.9f : 0.35f);
+        }
+
         void UpdateAutoCheckpoint(float dt)
         {
             if (!practice || !autoCheckpoints || player.dead || complete) return;
@@ -526,6 +542,7 @@ namespace Geodashy.Gameplay
             player.SetInput(held, pressed);
             player.Tick(dt);
             UpdateAutoCheckpoint(dt);
+            UpdateBeat();
             triggers.Update(dt);
             world.UpdateSpinners(dt);
             world.FlushDirty();

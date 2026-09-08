@@ -33,6 +33,7 @@ namespace Geodashy.Rendering
 
         Color skyTop, skyBottom;
         Color bgTint = Color.white;
+        float pulse;
         float baseCameraY;
 
         public static ParallaxBackground Create(Transform parent, Camera cam, LevelSettings settings)
@@ -113,6 +114,12 @@ namespace Geodashy.Rendering
             layers[index].sprite = SpriteLibrary.ForBackgroundLayer(def);
         }
 
+        /// <summary>Beat pulse: briefly brightens the sky.</summary>
+        public void Pulse(float strength = 1f)
+        {
+            pulse = Mathf.Max(pulse, strength);
+        }
+
         /// <summary>Crossfades to another theme (BG Switch trigger).</summary>
         public void SwitchTheme(string themeId, float duration)
         {
@@ -143,6 +150,8 @@ namespace Geodashy.Rendering
 
             sky.transform.position = new Vector3(camX, camY, 0f);
             sky.transform.localScale = new Vector3(halfW * 2f + 1f, halfH * 2f + 1f, 1f);
+            pulse = Mathf.Max(0f, pulse - Time.deltaTime * 4f);
+            sky.color = Color.Lerp(new Color(0.93f, 0.93f, 0.95f, 1f), Color.white, pulse);
 
             float groundY = settings != null ? settings.groundY : 0f;
             for (int i = 0; i < 3; i++)

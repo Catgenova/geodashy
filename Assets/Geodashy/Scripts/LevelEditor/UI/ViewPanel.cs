@@ -9,7 +9,8 @@ namespace Geodashy.Editing.UI
     {
         EditorUI ui;
         LevelEditor editor;
-        Toggle snapToggle, gridToggle, guideToggle, bpmToggle, allLayersToggle, hitboxToggle;
+        Toggle snapToggle, gridToggle, guideToggle, bpmToggle, allLayersToggle, hitboxToggle, beatToggle;
+        Button[] beatButtons;
         Button[] gridButtons;
         readonly float[] gridSizes = { 0.25f, 0.5f, 1f, 2f };
         Text layerLabel, zoomLabel, posLabel, uiScaleLabel, savedLabel;
@@ -68,6 +69,27 @@ namespace Geodashy.Editing.UI
                 int idx = i;
                 gridButtons[i] = UIFactory.Button(gr, names[i], () => editor.SetGridSize(gridSizes[idx]), -1, 24, null, 12);
             }
+
+            beatToggle = UIFactory.Toggle(c, "Snap X to the beat", editor.beatSnap, v =>
+            {
+                editor.beatSnap = v;
+                if (v) editor.grid.showBpmGuide = true;
+                editor.NotifyViewOptionsChanged();
+            });
+            var br = UIFactory.Row(c, 26, 3);
+            string[] beatNames = { "1 beat", "½", "¼" };
+            int[] beatDivs = { 1, 2, 4 };
+            beatButtons = new Button[beatDivs.Length];
+            for (int i = 0; i < beatDivs.Length; i++)
+            {
+                int idx = i;
+                beatButtons[i] = UIFactory.Button(br, beatNames[i], () =>
+                {
+                    editor.beatDivision = beatDivs[idx];
+                    editor.NotifyViewOptionsChanged();
+                }, -1, 24, null, 12);
+            }
+            UIFactory.Label(c, "Uses the level BPM and start speed, so every obstacle lands on the music.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 32);
 
             UIFactory.SectionHeader(c, "Guides");
             hitboxToggle = UIFactory.Toggle(c, "Hitbox edges on all objects (B)", editor.showHitboxes, v =>
@@ -148,6 +170,10 @@ namespace Geodashy.Editing.UI
             snapToggle.SetIsOnWithoutNotify(editor.snapToGrid);
             gridToggle.SetIsOnWithoutNotify(editor.grid.showGrid);
             hitboxToggle.SetIsOnWithoutNotify(editor.showHitboxes);
+            beatToggle.SetIsOnWithoutNotify(editor.beatSnap);
+            bpmToggle.SetIsOnWithoutNotify(editor.grid.showBpmGuide);
+            int[] divs = { 1, 2, 4 };
+            for (int i = 0; i < beatButtons.Length; i++) UIFactory.SetButtonActive(beatButtons[i], editor.beatDivision == divs[i]);
             allLayersToggle.SetIsOnWithoutNotify(editor.showAllLayers);
             for (int i = 0; i < gridSizes.Length; i++) UIFactory.SetButtonActive(gridButtons[i], Mathf.Approximately(gridSizes[i], editor.gridSize));
             layerLabel.text = "Layer " + editor.currentEditorLayer + (editor.showAllLayers ? " (all shown)" : "");

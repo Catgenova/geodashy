@@ -179,6 +179,11 @@ namespace Geodashy.Editing.UI
                 s.groundTheme = groundIds[i];
                 Changed();
             }, 140, 28, groundNames);
+            BoolField.Create(c, "Automatic scenery along the ground (torches, banners, trees…)", s.groundProps, v =>
+            {
+                s.groundProps = v;
+                Changed();
+            });
 
             UIFactory.SectionHeader(c, "Colours");
             bgColorField = ColorField.Create(c, "Background", s.backgroundColor, v =>
@@ -281,6 +286,11 @@ namespace Geodashy.Editing.UI
                 s.bpm = v;
                 editor.MarkDirty();
             }, false, 140);
+            BoolField.Create(c, "Pulse the ground line and sky on every beat", s.beatPulse, v =>
+            {
+                s.beatPulse = v;
+                editor.MarkDirty();
+            });
             var mr = UIFactory.Row(c, 26, 12);
             BoolField.Create(mr, "Fade in", s.fadeIn, v =>
             {

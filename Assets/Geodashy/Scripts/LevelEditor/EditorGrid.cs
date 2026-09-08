@@ -191,8 +191,7 @@ namespace Geodashy.Editing
             bpmGuide.enabled = showBpmGuide && level != null;
             if (bpmGuide.enabled)
             {
-                float speed = MountCatalog.Speed(level.settings.startSpeed);
-                float beat = speed * 60f / Mathf.Max(20f, level.settings.bpm);
+                float beat = editor.BeatLength / Mathf.Max(1, editor.beatSnap ? editor.beatDivision : 1);
                 if (!Mathf.Approximately(beat, lastBeatWidth))
                 {
                     var r = new Raster(64, 4);

@@ -20,11 +20,22 @@ namespace Geodashy.Gameplay
             var data = level.DeepClone();
             background = ParallaxBackground.Create(transform, cam, data.settings);
             ground = GroundRenderer.Create(transform, cam, data.settings);
+            var props = GroundProps.Create(transform, cam, data.settings, x => LevelObjectNear(data, x));
             cam.backgroundColor = data.settings.backgroundColor;
             var go = new GameObject("Game Runner");
             go.transform.SetParent(transform, false);
             runner = go.AddComponent<GameRunner>();
             runner.Begin(data, cam, background, ground, null, () => onExit?.Invoke(), practice, "menu");
+        }
+
+        public static bool LevelObjectNear(LevelData data, float x)
+        {
+            float groundY = data.settings.groundY;
+            foreach (var o in data.objects)
+            {
+                if (Mathf.Abs(o.x - x) < 2.2f && o.y < groundY + 3.5f) return true;
+            }
+            return false;
         }
 
         void Update()

@@ -282,6 +282,10 @@ namespace Geodashy.Core
         public float bpm = 120f;
         public bool fadeIn = true;
         public bool fadeOut = true;
+        /// <summary>Flash the ground line and sky on every beat of the BPM.</summary>
+        public bool beatPulse = true;
+        /// <summary>Automatic decorative scenery along the ground line.</summary>
+        public bool groundProps = true;
 
         /// <summary>If no Finish object exists, the level ends this many blocks after the last object.</summary>
         public float finishPadding = 8f;

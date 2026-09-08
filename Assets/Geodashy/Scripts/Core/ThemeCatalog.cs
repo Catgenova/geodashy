@@ -86,12 +86,12 @@ namespace Geodashy.Core
             Ground("dark_stone", "Dark Keep", "4d4a5a", "2e2c38", "b0b0ff", "bricks");
             Ground("grass", "Grassland", "5fa54a", "5a3a1a", "ffffff", "grass");
             Ground("wood", "Tavern Floor", "a9743d", "7a5028", "ffe0a0", "planks");
-            Ground("sand", "Desert Sand", "e0c080", "b3904f", "ffffff", "plain");
-            Ground("ice", "Frozen Lake", "c0e8ff", "6fb2d8", "ffffff", "plain");
-            Ground("lava", "Lava Rock", "6b3a2f", "3d1d16", "ff9a3a", "bricks");
-            Ground("crystal", "Crystal Bed", "b48cf0", "7d55c8", "ffffff", "plain");
-            Ground("swamp", "Bog", "5a6a3b", "3b4726", "a0ff80", "plain");
-            Ground("cloud", "Cloud Floor", "f4f6ff", "c5cdea", "ffffff", "plain");
+            Ground("sand", "Desert Sand", "e0c080", "b3904f", "ffffff", "sand");
+            Ground("ice", "Frozen Lake", "c0e8ff", "6fb2d8", "ffffff", "ice");
+            Ground("lava", "Lava Rock", "6b3a2f", "3d1d16", "ff9a3a", "lava");
+            Ground("crystal", "Crystal Bed", "b48cf0", "7d55c8", "ffffff", "crystal");
+            Ground("swamp", "Bog", "5a6a3b", "3b4726", "a0ff80", "swamp");
+            Ground("cloud", "Cloud Floor", "f4f6ff", "c5cdea", "ffffff", "cloud");
         }
 
         static void Layer(string id, string name, string style, string silhouette, float height, float width, int seed)

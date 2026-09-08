@@ -123,6 +123,8 @@ namespace Geodashy.Rendering
                         for (int col = 0; col < 4; col++) r.FillRect(off + col * 64, y0, off + col * 64 + 2, y0 + 32, dark);
                         r.FillRect(0, y0 + 30, w, y0 + 31, light);
                     }
+                    // battlement notches cut into the top course
+                    for (int x = 8; x < w; x += 32) r.FillRect(x, h - 30, x + 16, h - 14, dark);
                     break;
                 case "planks":
                     for (int col = 0; col < 8; col++)
@@ -140,6 +142,59 @@ namespace Geodashy.Rendering
                         int y = (i * 53) % (h - 20);
                         r.FillCircle(x, y, 3, dark);
                     }
+                    // roots reaching down from the turf
+                    for (int i = 0; i < 6; i++)
+                    {
+                        float x = 20 + i * 42;
+                        r.Line(x, h - 14, x - 10, h - 60, 3, dark);
+                        r.Line(x, h - 14, x + 12, h - 48, 2, dark);
+                    }
+                    for (int x = 4; x < w; x += 9) r.FillTriangle(new Vector2(x - 2, h - 14), new Vector2(x + 2, h - 14), new Vector2(x + 1, h - 4), Raster.Lighten(g.top, 0.15f));
+                    break;
+                case "sand":
+                    for (int i = 0; i < 30; i++) r.FillEllipse((i * 41) % w, (i * 67) % (h - 24), 5, 3, light);
+                    for (int y = 40; y < h - 20; y += 48)
+                    for (int x = 0; x < w; x += 4)
+                        r.FillRect(x, y + Mathf.RoundToInt(Mathf.Sin(x * 0.2f) * 4f), x + 2, y + Mathf.RoundToInt(Mathf.Sin(x * 0.2f) * 4f) + 1, dark);
+                    break;
+                case "ice":
+                    for (int i = 0; i < 7; i++)
+                    {
+                        float x = 12 + i * 36;
+                        r.Line(x, h - 14, x + 18, h - 70, 1.5f, Raster.Lighten(g.body, 0.5f));
+                        r.Line(x + 18, h - 70, x + 4, h - 120, 1.5f, Raster.Lighten(g.body, 0.5f));
+                    }
+                    r.FillRect(0, h - 40, w, h - 38, Raster.Lighten(g.body, 0.35f));
+                    break;
+                case "lava":
+                    for (int row = 0; row < 8; row++)
+                    {
+                        int y0 = row * 32;
+                        r.FillRect(0, y0, w, y0 + 2, dark);
+                        int off = (row % 2) * 32;
+                        for (int col = 0; col < 4; col++) r.FillRect(off + col * 64, y0, off + col * 64 + 2, y0 + 32, dark);
+                    }
+                    for (int i = 0; i < 5; i++)
+                    {
+                        float x = 10 + i * 50;
+                        r.Line(x, h - 20, x + 14, h - 90, 3, g.line);
+                        r.Line(x + 14, h - 90, x - 4, h - 150, 2, g.line);
+                    }
+                    break;
+                case "crystal":
+                    for (int i = 0; i < 9; i++)
+                    {
+                        float x = i * 30;
+                        r.Line(x, 0, x + 60, h, 2, light);
+                        r.Line(x + 30, 0, x - 30, h, 1.5f, dark);
+                    }
+                    break;
+                case "swamp":
+                    for (int i = 0; i < 18; i++) r.Ring((i * 47) % w, (i * 71) % (h - 30), 5, 3, light);
+                    for (int x = 6; x < w; x += 22) r.FillRect(x, h - 14, x + 2, h - 44, dark);
+                    break;
+                case "cloud":
+                    for (int i = 0; i < 16; i++) r.FillEllipse((i * 53) % w, h - 30 - (i * 29) % 100, 22, 12, Raster.Lighten(g.body, 0.25f));
                     break;
                 default:
                     for (int i = 0; i < 24; i++)

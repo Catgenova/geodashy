@@ -16,6 +16,8 @@ namespace Geodashy.Rendering
 
         SpriteRenderer ground;
         SpriteRenderer line;
+        float pulse;
+        Color lineColor = Color.white;
         SpriteRenderer ceiling;
         SpriteRenderer ceilingLine;
 
@@ -70,8 +72,15 @@ namespace Geodashy.Rendering
 
         public void SetLineColor(Color c)
         {
+            lineColor = c;
             line.color = c;
             ceilingLine.color = c;
+        }
+
+        /// <summary>Beat pulse: thickens and brightens the ground line for a moment.</summary>
+        public void Pulse(float strength = 1f)
+        {
+            pulse = Mathf.Max(pulse, strength);
         }
 
         void LateUpdate()
@@ -89,8 +98,13 @@ namespace Geodashy.Rendering
             float left = camX - width / 2f + phase;
             // ground sprite pivot is top-centre
             ground.transform.position = new Vector3(left + width / 2f, groundY, 0f);
-            line.transform.position = new Vector3(camX, groundY, 0f);
-            line.transform.localScale = new Vector3(halfW * 2f + 2f, 0.05f, 1f);
+            pulse = Mathf.Max(0f, pulse - Time.deltaTime * 5f);
+            float lineH = 0.05f + 0.09f * pulse;
+            var lc = Color.Lerp(lineColor, Color.white, pulse * 0.7f);
+            line.color = lc;
+            ceilingLine.color = lc;
+            line.transform.position = new Vector3(camX, groundY + lineH / 2f, 0f);
+            line.transform.localScale = new Vector3(halfW * 2f + 2f, lineH, 1f);
 
             ceiling.enabled = showCeiling;
             ceilingLine.enabled = showCeiling;
@@ -100,8 +114,8 @@ namespace Geodashy.Rendering
                 // flipped sprite: pivot stays at top-centre of the unflipped sprite, i.e. bottom of the flipped one
                 ceiling.transform.position = new Vector3(left + width / 2f, ceilingY, 0f);
                 ceiling.transform.localScale = new Vector3(1f, -1f, 1f);
-                ceilingLine.transform.position = new Vector3(camX, ceilingY, 0f);
-                ceilingLine.transform.localScale = new Vector3(halfW * 2f + 2f, 0.05f, 1f);
+                ceilingLine.transform.position = new Vector3(camX, ceilingY - lineH / 2f, 0f);
+                ceilingLine.transform.localScale = new Vector3(halfW * 2f + 2f, lineH, 1f);
             }
         }
     }

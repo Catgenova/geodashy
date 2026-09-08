@@ -27,6 +27,7 @@ namespace Geodashy.Editing
         public EditorGrid grid;
         public ParallaxBackground background;
         public GroundRenderer ground;
+        public GroundProps groundProps;
         public EditorUI ui;
         public Transform objectsRoot;
 
@@ -53,6 +54,9 @@ namespace Geodashy.Editing
         /// <summary>Keep safe/danger edges drawn on every placed object while editing.</summary>
         public bool showHitboxes;
         HitboxOverlay hitboxOverlay;
+        /// <summary>Snap placed objects' x to the song's beat grid (see beatDivision).</summary>
+        public bool beatSnap;
+        public int beatDivision = 1;
         public int currentEditorLayer;
         public bool showAllLayers = true;
         public float nudgeStep = 1f;
@@ -112,6 +116,7 @@ namespace Geodashy.Editing
 
             background = ParallaxBackground.Create(transform, cam, level.settings);
             ground = GroundRenderer.Create(transform, cam, level.settings);
+            groundProps = GroundProps.Create(transform, cam, level.settings, x => GameSession.LevelObjectNear(level, x));
             grid = EditorGrid.Create(transform, editorCamera, this);
             editorCamera.minY = level.settings.groundY - 8f;
 
@@ -242,6 +247,9 @@ namespace Geodashy.Editing
         }
 
         public void NotifyViewOptionsChanged() => ViewOptionsChanged?.Invoke();
+
+        /// <summary>World distance travelled per beat at the level's starting speed.</summary>
+        public float BeatLength => MountCatalog.Speed(level.settings.startSpeed) * 60f / Mathf.Max(20f, level.settings.bpm);
 
         // =====================================================================
         // undo
@@ -771,6 +779,7 @@ namespace Geodashy.Editing
         {
             background.settings = level.settings;
             ground.settings = level.settings;
+            groundProps.settings = level.settings;
             background.ApplySettings();
             ground.ApplySettings();
             ground.showCeiling = false;
@@ -1205,6 +1214,11 @@ namespace Geodashy.Editing
             var size = BuildDef != null ? new Vector2(BuildDef.width * placeScale, BuildDef.height * placeScale) : Vector2.one;
             if (Mathf.Abs(Mathf.DeltaAngle(placeRotation, 90f)) < 1f || Mathf.Abs(Mathf.DeltaAngle(placeRotation, 270f)) < 1f) size = new Vector2(size.y, size.x);
             CursorSnapped = snapToGrid ? GeoMath.SnapCenter(CursorWorld, size, gridSize) : CursorWorld;
+            if (beatSnap)
+            {
+                float beat = BeatLength / Mathf.Max(1, beatDivision);
+                CursorSnapped = new Vector2(Mathf.Round(CursorWorld.x / beat) * beat, CursorSnapped.y);
+            }
 
             // zoom -------------------------------------------------------------
             float scroll = mouse.scroll.ReadValue().y;
