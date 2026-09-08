@@ -45,6 +45,19 @@ namespace Geodashy.Gameplay
         int lastBeat = -1;
         public GroundProps groundProps;
         bool introActive;
+
+        // ---- wisp trail ---------------------------------------------------------
+        struct TrailPoint
+        {
+            public Vector2 pos;
+            public float time;
+        }
+
+        const float TrailLife = 1.1f;
+        readonly List<TrailPoint> trail = new List<TrailPoint>();
+        HitboxOverlay trailRibbon;
+        float trailSparkleTimer;
+        Vector2 lastTrailDir;
         LevelObjectView pulsingPortal;
         float portalPulse;
         LevelStats stats;
@@ -111,6 +124,7 @@ namespace Geodashy.Gameplay
             hud = PlayHUD.Create(transform, () => TogglePause(), RestartFromStart, Exit, TogglePractice, PlaceCheckpoint, RemoveCheckpoint);
             deathOverlay = HitboxOverlay.Create(transform, "Death Overlay", 980);
             particles = ParticleBurst.Create(transform, "Particles", 40);
+            trailRibbon = HitboxOverlay.Create(transform, "Wisp Trail", -3);
             hud.SetExitTarget(exitTarget);
 
             ComputeStart(start);
@@ -229,6 +243,7 @@ namespace Geodashy.Gameplay
             lastBeat = -1;
             autoCheckpointTimer = 0f;
             lastCheckpointX = -100f;
+            ClearTrail();
             ResetWorld();
             player.Spawn(startPos, startMount, startSpeed, startFlipped, startMini);
             triggers.ResetForStart(startPos.x);
@@ -347,6 +362,7 @@ namespace Geodashy.Gameplay
             complete = false;
             paused = false;
             autoCheckpointTimer = 0f;
+            ClearTrail();
             elapsed = cp.elapsed;
             coins = cp.coins;
             gems = cp.gems;
@@ -401,6 +417,55 @@ namespace Geodashy.Gameplay
                 });
             }
             else if (!string.IsNullOrEmpty(level.settings.songId)) PlaySong(level.settings.songId, offset, false);
+        }
+
+        void UpdateTrail(float dt)
+        {
+            bool wisp = player.mount.id == "wisp" && !player.dead;
+            float now = Time.time;
+            if (wisp)
+            {
+                // sample the path: always when the direction changes (the zig-zag corners), otherwise every few frames
+                var dir = player.velocity.y >= 0f ? Vector2.up : Vector2.down;
+                bool corner = dir != lastTrailDir;
+                if (trail.Count == 0 || corner || (player.position - trail[trail.Count - 1].pos).sqrMagnitude > 0.09f)
+                {
+                    trail.Add(new TrailPoint { pos = player.position, time = now });
+                    lastTrailDir = dir;
+                }
+                trailSparkleTimer += dt;
+                var mc = player.mount.Color;
+                while (trailSparkleTimer > 0.025f)
+                {
+                    trailSparkleTimer -= 0.025f;
+                    var back = player.position - new Vector2(player.direction * 0.3f, 0f);
+                    particles.Emit(back, Color.Lerp(mc, Color.white, Random.value * 0.6f), 1, 1.2f, 0.45f, 0.07f, -0.5f, 180f, 60f);
+                }
+            }
+            trail.RemoveAll(tp => now - tp.time > TrailLife);
+            if (trail.Count > 200) trail.RemoveRange(0, trail.Count - 200);
+
+            trailRibbon.Begin();
+            if (trail.Count > 1)
+            {
+                var c = player.mount.Color;
+                for (int i = 1; i < trail.Count; i++)
+                {
+                    float age = now - trail[i].time;
+                    float a = Mathf.Clamp01(1f - age / TrailLife);
+                    trailRibbon.Segment(trail[i - 1].pos, trail[i].pos, new Color(c.r, c.g, c.b, 0.85f * a), 0.06f + 0.14f * a);
+                    if (i % 3 == 0) trailRibbon.Segment(trail[i - 1].pos, trail[i].pos, new Color(1f, 1f, 1f, 0.5f * a), 0.04f * a);
+                }
+                // live segment from the last sample to the rider
+                if (wisp) trailRibbon.Segment(trail[trail.Count - 1].pos, player.position, new Color(c.r, c.g, c.b, 0.85f), 0.2f);
+            }
+            trailRibbon.End();
+        }
+
+        void ClearTrail()
+        {
+            trail.Clear();
+            if (trailRibbon != null) trailRibbon.Clear();
         }
 
         void UpdateBeat()
@@ -562,6 +627,7 @@ namespace Geodashy.Gameplay
             elapsed += dt;
             player.SetInput(held, pressed);
             player.Tick(dt);
+            UpdateTrail(dt);
             UpdateAutoCheckpoint(dt);
             UpdateBeat();
             triggers.Update(dt);
