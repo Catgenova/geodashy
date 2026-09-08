@@ -35,6 +35,9 @@ namespace Geodashy.Gameplay
         public Vector2 deathPoint;
         public string deathEdge = "";
 
+        /// <summary>Visual squash-and-stretch multiplier, eased back to 1 every frame.</summary>
+        Vector2 squash = Vector2.one;
+
         // input
         bool held;
         bool pressedThisStep;
@@ -122,6 +125,7 @@ namespace Geodashy.Gameplay
             killer = null;
             finished = false;
             onGround = false;
+            squash = Vector2.one;
             rotationDeg = 0f;
             held = false;
             pressBuffer = 0f;
@@ -210,6 +214,7 @@ namespace Geodashy.Gameplay
                 Step(StepDt);
                 if (dead || finished) break;
             }
+            squash = Vector2.Lerp(squash, Vector2.one, 1f - Mathf.Exp(-11f * dt));
             ApplyVisual();
         }
 
@@ -279,6 +284,12 @@ namespace Geodashy.Gameplay
 
             if (pressBuffer > 0f) pressBuffer -= dt;
 
+            if (!wasGround && onGround)
+            {
+                squash = new Vector2(1.22f, 0.8f);
+                runner.OnLanded(position, Up, size);
+            }
+
             // triggers & finish ------------------------------------------------------------
             runner.triggers.PlayerAdvanced(this, prevPosition, position);
             if (position.x >= runner.finishX) finished = true;
@@ -309,6 +320,7 @@ namespace Geodashy.Gameplay
                         onGround = false;
                         pressBuffer = 0f;
                         jumps++;
+                Jumped();
                     }
                     velocity.y -= g * up * dt;
                     break;
@@ -320,6 +332,7 @@ namespace Geodashy.Gameplay
                         holdTime = 0f;
                         pressBuffer = 0f;
                         jumps++;
+                Jumped();
                     }
                     if (!onGround && held && holdTime < 0.32f) velocity.y += mount.holdAccel * up * dt;
                     velocity.y -= g * up * dt;
@@ -335,6 +348,7 @@ namespace Geodashy.Gameplay
                         pressBuffer = 0f;
                         onGround = false;
                         jumps++;
+                Jumped();
                     }
                     velocity.y -= g * up * dt;
                     velocity.y = Mathf.Clamp(velocity.y, -mount.maxFallSpeed, mount.maxRiseSpeed);
@@ -348,6 +362,7 @@ namespace Geodashy.Gameplay
                         velocity.y = 2f * up;
                         pressBuffer = 0f;
                         jumps++;
+                Jumped();
                     }
                     velocity.y -= g * up * dt;
                     break;
@@ -363,6 +378,7 @@ namespace Geodashy.Gameplay
                         TeleportToOppositeSurface();
                         pressBuffer = 0f;
                         jumps++;
+                Jumped();
                         up = Up;
                     }
                     velocity.y -= g * up * dt;
@@ -375,6 +391,12 @@ namespace Geodashy.Gameplay
         }
 
         /// <summary>Shadow cat / shadow rune: flip gravity and snap to the nearest surface in the new direction.</summary>
+        void Jumped()
+        {
+            squash = new Vector2(0.78f, 1.22f);
+            runner.OnJumped(position, Up);
+        }
+
         public void TeleportToOppositeSurface()
         {
             flipped = !flipped;
@@ -577,6 +599,7 @@ namespace Geodashy.Gameplay
             usedInteractables.Add(v.data.uid);
             pressBuffer = 0f;
             jumps++;
+                Jumped();
             float up = Up;
             switch (v.def.orbType)
             {
@@ -736,7 +759,7 @@ namespace Geodashy.Gameplay
             float s = mini ? 0.6f : 1f;
             float baseScale = 1f;
             if (sr.sprite != null) baseScale = mount.width / Mathf.Max(0.01f, sr.sprite.bounds.size.x);
-            transform.localScale = new Vector3(baseScale * s * direction, baseScale * s * (flipped ? -1f : 1f), 1f);
+            transform.localScale = new Vector3(baseScale * s * direction * squash.x, baseScale * s * (flipped ? -1f : 1f) * squash.y, 1f);
             sr.enabled = visible;
             // stay visible but ghosted at the death spot so the contact point can be read
             sr.color = dead ? new Color(1f, 1f, 1f, 0.45f) : Color.white;

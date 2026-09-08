@@ -29,6 +29,9 @@ namespace Geodashy.Gameplay
         Text deathText;
         Button pauseExitButton, completeExitButton;
         Text escHint;
+        Image flash;
+        float flashTimer, flashDuration;
+        Color flashColor;
         RectTransform checkpointButtons;
 
         public static PlayHUD Create(Transform parent, Action onResume, Action onRestart, Action onExit, Action onTogglePractice, Action onCheckpoint, Action onRemoveCheckpoint)
@@ -51,6 +54,13 @@ namespace Geodashy.Gameplay
 
             var root = UIFactory.Rect(transform, "Root");
             UIFactory.Stretch(root);
+
+            // full-screen flash (drawn first so everything else sits above it)
+            var flashRt = UIFactory.Rect(root, "Flash");
+            UIFactory.Stretch(flashRt);
+            flash = flashRt.gameObject.AddComponent<Image>();
+            flash.color = Color.clear;
+            flash.raycastTarget = false;
 
             // progress bar
             var barBg = UIFactory.Panel(root, "ProgressBg", new Color(0, 0, 0, 0.5f));
@@ -249,8 +259,22 @@ namespace Geodashy.Gameplay
 
         public void HideComplete() => completePanel.gameObject.SetActive(false);
 
+        public void Flash(Color color, float duration)
+        {
+            flashColor = color;
+            flashDuration = Mathf.Max(0.01f, duration);
+            flashTimer = flashDuration;
+        }
+
         void Update()
         {
+            if (flashTimer > 0f)
+            {
+                flashTimer -= Time.unscaledDeltaTime;
+                var c = flashColor;
+                c.a *= Mathf.Clamp01(flashTimer / flashDuration);
+                flash.color = c;
+            }
             if (hintTimer > 0f)
             {
                 hintTimer -= Time.unscaledDeltaTime;

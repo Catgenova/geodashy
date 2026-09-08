@@ -40,6 +40,10 @@ namespace Geodashy.Gameplay
         Transform worldRoot;
         HitboxOverlay deathOverlay;
         float deathTimer;
+        ParticleBurst particles;
+        float slowMo;
+        LevelObjectView pulsingPortal;
+        float portalPulse;
         LevelStats stats;
         readonly List<float> sessionDeaths = new List<float>();
         bool fullRun;
@@ -103,6 +107,7 @@ namespace Geodashy.Gameplay
             playCamera = new PlayCamera(cam, player, level.settings);
             hud = PlayHUD.Create(transform, () => TogglePause(), RestartFromStart, Exit, TogglePractice, PlaceCheckpoint, RemoveCheckpoint);
             deathOverlay = HitboxOverlay.Create(transform, "Death Overlay", 980);
+            particles = ParticleBurst.Create(transform, "Particles", 40);
             hud.SetExitTarget(exitTarget);
 
             ComputeStart(start);
@@ -449,6 +454,24 @@ namespace Geodashy.Gameplay
         {
             if (paused) return;
             float dt = Time.deltaTime;
+            if (slowMo > 0f)
+            {
+                slowMo -= Time.deltaTime;
+                dt *= 0.55f;
+            }
+            if (pulsingPortal != null)
+            {
+                portalPulse -= Time.deltaTime;
+                float k = 1f + 0.3f * Mathf.Sin(Mathf.Clamp01(portalPulse / 0.35f) * Mathf.PI);
+                pulsingPortal.ApplyTransform();
+                var sc = pulsingPortal.transform.localScale;
+                pulsingPortal.transform.localScale = new Vector3(sc.x * k, sc.y * k, 1f);
+                if (portalPulse <= 0f)
+                {
+                    pulsingPortal.ApplyTransform();
+                    pulsingPortal = null;
+                }
+            }
 
             // one-button input: mouse / touch / space / up arrow (ignored while the pointer is over HUD buttons)
             bool held = false, pressed = false;
@@ -493,6 +516,7 @@ namespace Geodashy.Gameplay
                 // the run stays frozen on the failure until the player asks to retry
                 player.Tick(dt);
                 deathTimer += dt;
+                playCamera.Update(dt); // keeps the shake alive during the freeze
                 DrawDeathOverlay();
                 if (deathTimer > 0.35f && (pressed || (kb != null && kb.enterKey.wasPressedThisFrame))) Retry();
                 return;
@@ -569,10 +593,27 @@ namespace Geodashy.Gameplay
             Respawn();
         }
 
+        public void OnJumped(Vector2 pos, float up)
+        {
+            var feet = pos - new Vector2(0f, up * player.Size.y * 0.45f);
+            particles.Emit(feet, new Color(0.9f, 0.85f, 0.75f, 0.7f), 4, 1.8f, 0.3f, 0.08f, 3f, up > 0 ? 270f : 90f, 120f);
+        }
+
+        public void OnLanded(Vector2 pos, float up, Vector2 size)
+        {
+            var feet = pos - new Vector2(0f, up * size.y * 0.5f);
+            particles.Emit(feet, new Color(0.85f, 0.8f, 0.7f, 0.75f), 7, 2.4f, 0.35f, 0.09f, 4f, up > 0 ? 90f : 270f, 150f);
+        }
+
         public void OnPlayerDied()
         {
             deathTimer = 0f;
             musicRequest++;
+            var c = player.mount.Color;
+            particles.Emit(player.position, c, 18, 9f, 0.8f, 0.17f, 22f);
+            particles.Emit(player.position, player.mount.Accent, 8, 6f, 0.6f, 0.12f, 18f);
+            playCamera.Shake(0.35f, 0.03f, 0.3f);
+            hud.Flash(new Color(1f, 0.25f, 0.15f, 0.45f), 0.18f);
             float progress = Mathf.Clamp01(finishX > 0f ? player.position.x / finishX : 0f);
             hud.SetProgress(progress, true);
             sessionDeaths.Add(progress);
@@ -588,6 +629,7 @@ namespace Geodashy.Gameplay
 
         public void OnCollect(LevelObjectView v)
         {
+            particles.Emit(v.WorldPosition, v.def.primaryColor, 12, 4f, 0.5f, 0.1f, 5f);
             if (v.def.id == "key")
             {
                 keys++;
@@ -610,7 +652,28 @@ namespace Geodashy.Gameplay
 
         public void OnInteract(LevelObjectView v)
         {
-            // hook for particles / sound
+            var col = v.def.primaryColor;
+            switch (v.def.kind)
+            {
+                case ObjectKind.Portal:
+                {
+                    bool mountGate = v.def.portalType == PortalType.Mount;
+                    particles.Emit(v.WorldPosition, col, mountGate ? 32 : 18, 6f, 0.6f, 0.14f, 0f);
+                    particles.Emit(player.position, Color.white, 10, 4f, 0.4f, 0.1f, 0f);
+                    hud.Flash(new Color(col.r, col.g, col.b, mountGate ? 0.45f : 0.25f), mountGate ? 0.3f : 0.18f);
+                    playCamera.Shake(mountGate ? 0.15f : 0.06f, 0.03f, 0.18f);
+                    if (mountGate) slowMo = 0.32f;
+                    pulsingPortal = v;
+                    portalPulse = 0.35f;
+                    break;
+                }
+                case ObjectKind.Orb:
+                    particles.Emit(v.WorldPosition, col, 10, 5f, 0.4f, 0.1f, 6f);
+                    break;
+                case ObjectKind.Pad:
+                    particles.Emit(v.WorldPosition, col, 8, 4f, 0.35f, 0.09f, 8f, player.flipped ? 270f : 90f, 90f);
+                    break;
+            }
         }
 
         public void OnPlayerStateChanged()
