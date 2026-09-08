@@ -97,7 +97,7 @@ namespace Geodashy.Editing
             Instance = this;
         }
 
-        public void Initialize(Camera camera)
+        public void Initialize(Camera camera, LevelData initial = null, string initialPath = null)
         {
             cam = camera;
             editorCamera = camera.gameObject.GetComponent<EditorCamera>();
@@ -107,8 +107,8 @@ namespace Geodashy.Editing
             objectsRoot = new GameObject("Level Objects").transform;
             objectsRoot.SetParent(transform, false);
 
-            level = LevelStorage.LoadAutosave() ?? CreateStarterLevel();
-            currentFilePath = null;
+            level = initial ?? LevelStorage.LoadAutosave() ?? CreateStarterLevel();
+            currentFilePath = initial != null ? initialPath : null;
 
             background = ParallaxBackground.Create(transform, cam, level.settings);
             ground = GroundRenderer.Create(transform, cam, level.settings);
@@ -1465,6 +1465,23 @@ namespace Geodashy.Editing
                 hitboxOverlay.DrawObject(BuildDef, CursorSnapped, placeRotation, size, placeFlipX, placeFlipY, 1f);
             }
             hitboxOverlay.End();
+        }
+
+        void OnDestroy()
+        {
+            StopSongPreview();
+            if (Instance == this) Instance = null;
+            if (level != null && Dirty)
+            {
+                try
+                {
+                    StoreEditorCamera();
+                    LevelStorage.SaveAutosave(level);
+                }
+                catch (Exception)
+                {
+                }
+            }
         }
 
         void OnApplicationQuit()

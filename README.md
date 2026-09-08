@@ -13,7 +13,10 @@ level can be tested immediately.
 
 1. Open the project in Unity 6000.4 or newer.
 2. Menu **Geodashy ▸ Open Level Editor Scene** (or open `Assets/Geodashy/Scenes/LevelEditor.unity`).
-3. Press Play. The whole interface is built from code at runtime, so there are no prefabs to wire up.
+3. Press Play. You land on the main menu: **Play** opens the level select (built-in and saved
+   quests with your best progress, attempts and clears, plus Play / Practice / Edit), **Level
+   Editor** opens the editor. Tick *Start In Editor* on the bootstrap object to skip the menu.
+   The whole interface is built from code at runtime, so there are no prefabs to wire up.
    Set the Game view to **Free Aspect** (or maximise it) so the interface fits your panel; a fixed
    1920x1080 at 1x scale in a smaller panel gets cropped and resampled. The interface size can be
    changed in the View dock (persisted between sessions).

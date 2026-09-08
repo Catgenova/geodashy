@@ -65,7 +65,7 @@ namespace Geodashy.Gameplay
         float lastCheckpointX = -100f;
         public int CheckpointCount => checkpoints.Count;
 
-        public void Begin(LevelData data, Camera camera_, ParallaxBackground bg, GroundRenderer gr, Vector2? start, Action exit, bool practiceMode = false)
+        public void Begin(LevelData data, Camera camera_, ParallaxBackground bg, GroundRenderer gr, Vector2? start, Action exit, bool practiceMode = false, string exitTarget = "editor")
         {
             practice = practiceMode;
             level = data;
@@ -95,6 +95,7 @@ namespace Geodashy.Gameplay
             playCamera = new PlayCamera(cam, player, level.settings);
             hud = PlayHUD.Create(transform, () => TogglePause(), RestartFromStart, Exit, TogglePractice, PlaceCheckpoint, RemoveCheckpoint);
             deathOverlay = HitboxOverlay.Create(transform, "Death Overlay", 980);
+            hud.SetExitTarget(exitTarget);
 
             ComputeStart(start);
             fullRun = start == null && !practice;

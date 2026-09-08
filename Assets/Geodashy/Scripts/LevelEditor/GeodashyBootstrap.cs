@@ -9,6 +9,9 @@ namespace Geodashy.Editing
         [Tooltip("Camera used by the editor and playtests. Uses Camera.main when empty.")]
         public Camera targetCamera;
 
+        [Tooltip("Skip the main menu and open the editor straight away.")]
+        public bool startInEditor;
+
         void Start()
         {
             var cam = targetCamera != null ? targetCamera : Camera.main;
@@ -27,9 +30,9 @@ namespace Geodashy.Editing
             if (Mathf.Abs(cam.transform.position.z) < 1f) cam.transform.position = new Vector3(cam.transform.position.x, cam.transform.position.y, -10f);
 
             Application.targetFrameRate = 144;
-            var go = new GameObject("Level Editor");
-            var editor = go.AddComponent<LevelEditor>();
-            editor.Initialize(cam);
+            var go = new GameObject("App");
+            var app = go.AddComponent<AppController>();
+            app.Initialize(cam, startInEditor);
         }
     }
 }

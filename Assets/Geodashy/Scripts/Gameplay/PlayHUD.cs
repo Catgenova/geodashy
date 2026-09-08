@@ -27,6 +27,8 @@ namespace Geodashy.Gameplay
         Button practiceToggle;
         RectTransform deathPanel;
         Text deathText;
+        Button pauseExitButton, completeExitButton;
+        Text escHint;
         RectTransform checkpointButtons;
 
         public static PlayHUD Create(Transform parent, Action onResume, Action onRestart, Action onExit, Action onTogglePractice, Action onCheckpoint, Action onRemoveCheckpoint)
@@ -85,8 +87,8 @@ namespace Geodashy.Gameplay
             UIFactory.Anchor(coinText.rectTransform, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-400, -60), new Vector2(-20, -14));
             hintText = UIFactory.Label(root, "", 18, TextAnchor.MiddleLeft, UIFactory.TextColor);
             UIFactory.Anchor(hintText.rectTransform, new Vector2(0, 0), new Vector2(0, 0), new Vector2(20, 16), new Vector2(900, 50));
-            var esc = UIFactory.Label(root, "Esc — pause / back to editor", 13, TextAnchor.MiddleRight, UIFactory.TextDim);
-            UIFactory.Anchor(esc.rectTransform, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-400, 16), new Vector2(-20, 40));
+            escHint = UIFactory.Label(root, "Esc — pause / back to editor", 13, TextAnchor.MiddleRight, UIFactory.TextDim);
+            UIFactory.Anchor(escHint.rectTransform, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-400, 16), new Vector2(-20, 40));
 
             // practice mode status + on-screen checkpoint buttons
             practiceText = UIFactory.Label(root, "", 16, TextAnchor.MiddleRight, new Color(0.4f, 1f, 0.5f, 1f), -1, -1, true);
@@ -115,7 +117,7 @@ namespace Geodashy.Gameplay
             UIFactory.Button(pw, "Resume", () => onResume(), -1, 40, UIFactory.Good, 16);
             practiceToggle = UIFactory.Button(pw, "Practice mode: off", () => onTogglePractice(), -1, 40, null, 16);
             UIFactory.Button(pw, "Restart from start", () => onRestart(), -1, 40, null, 16);
-            UIFactory.Button(pw, "Back to editor", () => onExit(), -1, 40, UIFactory.Danger, 16);
+            pauseExitButton = UIFactory.Button(pw, "Back to editor", () => onExit(), -1, 40, UIFactory.Danger, 16);
             pausePanel.gameObject.SetActive(false);
 
             // complete panel
@@ -126,7 +128,7 @@ namespace Geodashy.Gameplay
             UIFactory.Label(cw, "QUEST COMPLETE", 28, TextAnchor.MiddleCenter, UIFactory.Accent, -1, 44, true);
             completeStats = UIFactory.Label(cw, "", 16, TextAnchor.MiddleCenter, UIFactory.TextColor, -1, 96);
             UIFactory.Button(cw, "Play again", () => onRestart(), -1, 40, UIFactory.Good, 16);
-            UIFactory.Button(cw, "Back to editor", () => onExit(), -1, 40, null, 16);
+            completeExitButton = UIFactory.Button(cw, "Back to editor", () => onExit(), -1, 40, null, 16);
             completePanel.gameObject.SetActive(false);
         }
 
@@ -198,6 +200,14 @@ namespace Geodashy.Gameplay
             checkpointButtons.gameObject.SetActive(on);
             UIFactory.SetButtonLabel(practiceToggle, on ? "Practice mode: on (C)" : "Practice mode: off (C)");
             UIFactory.SetButtonActive(practiceToggle, on);
+        }
+
+        /// <summary>Names the place Exit returns to ("editor" or "menu").</summary>
+        public void SetExitTarget(string target)
+        {
+            UIFactory.SetButtonLabel(pauseExitButton, "Back to " + target);
+            UIFactory.SetButtonLabel(completeExitButton, "Back to " + target);
+            escHint.text = "Esc — pause / back to " + target;
         }
 
         public void ShowDeath(string cause, float progress)

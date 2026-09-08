@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Geodashy.Core;
+using Geodashy.Editing;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
@@ -217,6 +218,25 @@ namespace Geodashy.Editing.UI
         }
 
         public void OpenHelp() => HelpDialog.Open(this);
+
+        /// <summary>Leaves the editor for the main menu, asking to save first when there are changes.</summary>
+        public void ReturnToMenu()
+        {
+            if (AppController.Instance == null)
+            {
+                Toast("No main menu in this scene");
+                return;
+            }
+            if (editor.Dirty)
+            {
+                Confirm("Unsaved changes", "Save the quest before leaving? Unsaved work is kept in the autosave either way.", () =>
+                {
+                    if (editor.Save()) AppController.Instance.ShowMenu();
+                }, "Save & leave");
+                return;
+            }
+            AppController.Instance.ShowMenu();
+        }
         public void OpenFileDialog() => FileDialog.Open(this, editor);
         public void OpenSettings() => LevelSettingsDialog.Open(this, editor);
 

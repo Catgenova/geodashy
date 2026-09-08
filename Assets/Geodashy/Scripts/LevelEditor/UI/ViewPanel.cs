@@ -51,6 +51,7 @@ namespace Geodashy.Editing.UI
             UIFactory.Button(qr2, "Save as…", ui.PromptSaveAs, -1, 28, null, 13);
             UIFactory.Button(qr2, "Files", ui.OpenFileDialog, -1, 28, null, 13);
             savedLabel = UIFactory.Label(c, "", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 32);
+            UIFactory.Button(c, "◀ Main menu", ui.ReturnToMenu, -1, 26, null, 12);
 
             UIFactory.SectionHeader(c, "Grid");
             snapToggle = UIFactory.Toggle(c, "Snap to grid (G)", editor.snapToGrid, v =>

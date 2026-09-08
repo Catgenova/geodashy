@@ -15,6 +15,10 @@ namespace Geodashy.Core
         public int objectCount;
         public DateTime modified;
         public bool builtIn;
+        public string description;
+        public string startMount;
+        public float lengthSeconds;
+        public string backgroundTheme;
     }
 
     /// <summary>Saves and loads levels as JSON in the persistent data folder. Built-in levels live in Resources/Levels.</summary>
@@ -164,6 +168,16 @@ namespace Geodashy.Core
             if (File.Exists(path)) File.Delete(path);
         }
 
+        static LevelFileInfo Describe(LevelData d, string path, DateTime modified, bool builtIn)
+        {
+            return new LevelFileInfo
+            {
+                path = path, id = d.id, name = d.name, author = d.author, objectCount = d.objects.Count, modified = modified, builtIn = builtIn,
+                description = d.description, startMount = d.settings.startMount, backgroundTheme = d.settings.backgroundTheme,
+                lengthSeconds = d.GetFinishX() / MountCatalog.Speed(d.settings.startSpeed)
+            };
+        }
+
         public static List<LevelFileInfo> ListLevels()
         {
             var list = new List<LevelFileInfo>();
@@ -171,11 +185,7 @@ namespace Geodashy.Core
             {
                 if (LevelSerializer.TryFromJson(ta.text, out var d, out _))
                 {
-                    list.Add(new LevelFileInfo
-                    {
-                        path = "res:" + ta.name, id = d.id, name = d.name, author = d.author, objectCount = d.objects.Count,
-                        modified = DateTimeOffset.FromUnixTimeSeconds(d.modifiedUnix).DateTime, builtIn = true
-                    });
+                    list.Add(Describe(d, "res:" + ta.name, DateTimeOffset.FromUnixTimeSeconds(d.modifiedUnix).DateTime, true));
                 }
             }
             foreach (var file in Directory.GetFiles(LevelsDirectory, "*.json"))
@@ -183,11 +193,7 @@ namespace Geodashy.Core
                 try
                 {
                     var d = LevelSerializer.FromJson(File.ReadAllText(file));
-                    list.Add(new LevelFileInfo
-                    {
-                        path = file, id = d.id, name = d.name, author = d.author, objectCount = d.objects.Count,
-                        modified = File.GetLastWriteTime(file)
-                    });
+                    list.Add(Describe(d, file, File.GetLastWriteTime(file), false));
                 }
                 catch (Exception e)
                 {

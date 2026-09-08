@@ -43,6 +43,7 @@ namespace Geodashy.Editing.UI
             UIFactory.Button(parent, "Files", ui.OpenFileDialog, 70, 36);
             UIFactory.Button(parent, "Settings", ui.OpenSettings, 84, 36);
             UIFactory.Button(parent, "Help (F1)", ui.OpenHelp, 84, 36);
+            UIFactory.Button(parent, "Menu", ui.ReturnToMenu, 64, 36);
             UIFactory.Spacer(parent, 36, 10);
             nameInput = UIFactory.Input(parent, "Level name", editor.level.name, s =>
             {
