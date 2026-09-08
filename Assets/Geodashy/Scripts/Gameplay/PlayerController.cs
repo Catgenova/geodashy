@@ -776,7 +776,8 @@ namespace Geodashy.Gameplay
                 else if (anim.jump != null && anim.jump.Length > 0) sr.sprite = anim.jump[Mathf.Min(anim.jump.Length - 1, Mathf.FloorToInt(airTime * anim.jumpFps))];
             }
             else if (anim == null && sr.sprite != null) baseScale = mount.width / Mathf.Max(0.01f, sr.sprite.bounds.size.x);
-            transform.localScale = new Vector3(baseScale * s * direction * squash.x, baseScale * s * (flipped ? -1f : 1f) * squash.y, 1f);
+            float facing = SpriteLibrary.MountFacing(mount);
+            transform.localScale = new Vector3(baseScale * s * direction * facing * squash.x, baseScale * s * (flipped ? -1f : 1f) * squash.y, 1f);
             sr.enabled = visible;
             // stay visible but ghosted at the death spot so the contact point can be read
             sr.color = dead ? new Color(1f, 1f, 1f, 0.45f) : Color.white;

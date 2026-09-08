@@ -239,7 +239,8 @@ namespace Geodashy.Editing.UI
             UIFactory.Label(detailPane, "by " + (string.IsNullOrEmpty(info.author) ? "unknown" : info.author) + (info.builtIn ? "  ·  built-in" : ""), 13, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 20);
             if (!string.IsNullOrEmpty(info.description)) UIFactory.Label(detailPane, info.description, 13, TextAnchor.UpperLeft, UIFactory.TextColor, -1, 48);
             var row = UIFactory.Row(detailPane, 72, 12);
-            UIFactory.Icon(row, SpriteLibrary.ForMount(mount), 72);
+            var mountIcon = UIFactory.Icon(row, SpriteLibrary.ForMount(mount), 72);
+            mountIcon.rectTransform.localScale = new Vector3(SpriteLibrary.MountFacing(mount), 1f, 1f);
             var col = UIFactory.Column(row, -1, 2);
             UIFactory.Label(col, "Starts on the " + mount.name, 14, TextAnchor.MiddleLeft, UIFactory.TextColor, -1, 22, true);
             UIFactory.Label(col, mount.control, 12, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 20);

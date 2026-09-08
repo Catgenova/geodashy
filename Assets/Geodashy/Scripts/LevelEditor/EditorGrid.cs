@@ -115,7 +115,7 @@ namespace Geodashy.Editing
             sr.sprite = SpriteLibrary.ForMount(mount);
             float s = st.mini ? 0.6f : 1f;
             float baseScale = SpriteLibrary.MountIsAnimated(mount) ? 1f : (sr.sprite != null ? mount.width / Mathf.Max(0.01f, sr.sprite.bounds.size.x) : 1f);
-            sr.transform.localScale = new Vector3(baseScale * s, baseScale * s * (st.flipped ? -1f : 1f), 1f);
+            sr.transform.localScale = new Vector3(baseScale * s * SpriteLibrary.MountFacing(mount), baseScale * s * (st.flipped ? -1f : 1f), 1f);
             sr.transform.position = new Vector3(st.position.x, st.position.y, 0f);
             sr.color = new Color(tint.r, tint.g, tint.b, 0.75f);
             sr.enabled = true;

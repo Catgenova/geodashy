@@ -260,11 +260,12 @@ namespace Geodashy.Gameplay
             escHint.text = "Esc — pause / back to " + target;
         }
 
-        public void ShowIntro(string title, string description, Sprite mountSprite, string mountName, string control)
+        public void ShowIntro(string title, string description, Sprite mountSprite, string mountName, string control, float facing = 1f)
         {
             introTitle.text = title;
             introBody.text = string.IsNullOrEmpty(description) ? "Ride from the west gate to the finish. Do not touch anything red." : description;
             introMountIcon.sprite = mountSprite;
+            introMountIcon.rectTransform.localScale = new Vector3(facing, 1f, 1f);
             introMount.text = "You ride the " + mountName + ".\n" + control;
             introPanel.gameObject.SetActive(true);
         }

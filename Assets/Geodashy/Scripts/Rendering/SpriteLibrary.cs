@@ -130,6 +130,12 @@ namespace Geodashy.Rendering
         /// <summary>True when the mount uses real animation frames rather than a placeholder.</summary>
         public static bool MountIsAnimated(MountDefinition m) => ForMountAnimation(m) != null;
 
+        /// <summary>
+        /// Horizontal scale sign to make the mount face the direction of travel. Placeholders are drawn facing right;
+        /// animation sheets are, by convention, authored facing left (like the shipped knight) and are mirrored.
+        /// </summary>
+        public static float MountFacing(MountDefinition m) => MountIsAnimated(m) ? -1f : 1f;
+
         public static Sprite ForBackgroundLayer(BackgroundLayerDefinition layer)
         {
             var real = LoadResource("Backgrounds/" + layer.id);

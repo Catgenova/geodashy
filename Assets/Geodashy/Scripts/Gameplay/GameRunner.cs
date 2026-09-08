@@ -122,7 +122,7 @@ namespace Geodashy.Gameplay
             if (introActive)
             {
                 var m = MountCatalog.Get(startMount);
-                hud.ShowIntro(level.name, level.description, SpriteLibrary.ForMount(m), m.name, m.control);
+                hud.ShowIntro(level.name, level.description, SpriteLibrary.ForMount(m), m.name, m.control, SpriteLibrary.MountFacing(m));
                 playCamera.Update(0f);
             }
         }
