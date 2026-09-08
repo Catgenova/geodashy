@@ -57,12 +57,42 @@ namespace Geodashy.Rendering
             return null;
         }
 
+        /// <summary>Rows of fully transparent pixels at the bottom and top of the sheet (across all frames).</summary>
+        static void MeasurePadding(Texture2D tex, out int bottomPad, out int topPad)
+        {
+            bottomPad = 0;
+            topPad = 0;
+            try
+            {
+                var px = tex.GetPixels32();
+                int w = tex.width, h = tex.height;
+                int lowest = -1, highest = -1;
+                for (int y = 0; y < h && lowest < 0; y++)
+                for (int x = 0; x < w; x++)
+                    if (px[y * w + x].a > 8) { lowest = y; break; }
+                for (int y = h - 1; y >= 0 && highest < 0; y--)
+                for (int x = 0; x < w; x++)
+                    if (px[y * w + x].a > 8) { highest = y; break; }
+                if (lowest >= 0 && highest >= lowest)
+                {
+                    bottomPad = lowest;
+                    topPad = h - 1 - highest;
+                }
+            }
+            catch (UnityException)
+            {
+                // texture not readable (Read/Write disabled in the importer): fall back to the frame edge
+            }
+        }
+
         static Sprite[] Slice(Texture2D tex, int frames, float heightUnits)
         {
             float fw = tex.width / (float)frames;
-            float ppu = tex.height / heightUnits;
-            // pivot so the bottom of the art sits on the hitbox bottom (0.5 units below centre)
-            var pivot = new Vector2(0.5f, Mathf.Clamp01(0.5f / heightUnits));
+            MeasurePadding(tex, out var bottomPad, out var topPad);
+            float visible = Mathf.Max(1f, tex.height - bottomPad - topPad);
+            // the visible art is heightUnits tall, and its lowest opaque row sits on the hitbox bottom (0.5 units below centre)
+            float ppu = visible / heightUnits;
+            var pivot = new Vector2(0.5f, Mathf.Clamp01((bottomPad + 0.5f * ppu) / tex.height));
             var result = new Sprite[frames];
             for (int i = 0; i < frames; i++)
             {
