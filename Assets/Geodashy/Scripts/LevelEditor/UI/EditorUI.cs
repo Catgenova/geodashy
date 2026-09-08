@@ -220,6 +220,21 @@ namespace Geodashy.Editing.UI
         public void OpenFileDialog() => FileDialog.Open(this, editor);
         public void OpenSettings() => LevelSettingsDialog.Open(this, editor);
 
+        /// <summary>Saves; asks for a name first if the level has never been saved.</summary>
+        public void SaveWithPrompt()
+        {
+            if (!string.IsNullOrEmpty(editor.currentFilePath))
+            {
+                editor.Save();
+                return;
+            }
+            Prompt("Save quest", "Give your quest a name:", editor.level.name, name =>
+            {
+                if (!string.IsNullOrWhiteSpace(name)) editor.level.name = name.Trim();
+                editor.Save();
+            });
+        }
+
         public void PromptSaveAs()
         {
             Prompt("Save As", "Name for the copy:", editor.level.name, name => editor.SaveAs(name));

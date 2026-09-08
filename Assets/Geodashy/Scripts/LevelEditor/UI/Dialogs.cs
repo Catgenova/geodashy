@@ -238,7 +238,7 @@ namespace Geodashy.Editing.UI
                     ui.CloseModal(modal);
                 });
             }, 120, 32);
-            UIFactory.Button(top, "Save", () => editor.Save(), 90, 32, UIFactory.Good);
+            UIFactory.Button(top, "Save", ui.SaveWithPrompt, 90, 32, UIFactory.Good);
             UIFactory.Button(top, "Save as…", ui.PromptSaveAs, 100, 32);
             UIFactory.Button(top, "Export JSON", editor.ExportToClipboard, 120, 32);
             UIFactory.Button(top, "Import JSON", () =>

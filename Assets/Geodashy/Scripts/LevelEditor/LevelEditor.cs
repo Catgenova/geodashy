@@ -128,6 +128,7 @@ namespace Geodashy.Editing
             SetBuildDef(ObjectCatalog.Get("castle_stone"));
             ApplySettings();
             Dirty = false;
+            ui.Toast("Welcome. P tests the quest, Ctrl+S saves it, F1 lists every shortcut.", 6f);
         }
 
         static LevelData CreateStarterLevel()
@@ -1039,7 +1040,7 @@ namespace Geodashy.Editing
                 if (kb[Key.S].wasPressedThisFrame)
                 {
                     if (shift) ui.PromptSaveAs();
-                    else Save();
+                    else ui.SaveWithPrompt();
                 }
                 if (kb[Key.O].wasPressedThisFrame) ui.OpenFileDialog();
                 if (kb[Key.G].wasPressedThisFrame)

@@ -38,7 +38,7 @@ namespace Geodashy.Editing.UI
             UIFactory.Button(parent, "▶ Marker", () => editor.StartPlaytest(true), 92, 36, UIFactory.Good);
             UIFactory.Button(parent, "⚑ Set", () => editor.SetPlaytestMarker(editor.editorCamera.Position), 64, 36);
             UIFactory.Spacer(parent, 36, 10);
-            UIFactory.Button(parent, "Save", () => editor.Save(), 70, 36);
+            UIFactory.Button(parent, "Save", ui.SaveWithPrompt, 70, 36);
             UIFactory.Button(parent, "Files", ui.OpenFileDialog, 70, 36);
             UIFactory.Button(parent, "Settings", ui.OpenSettings, 84, 36);
             UIFactory.Button(parent, "Help (F1)", ui.OpenHelp, 84, 36);

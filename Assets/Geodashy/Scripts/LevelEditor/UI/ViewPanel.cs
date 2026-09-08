@@ -12,7 +12,8 @@ namespace Geodashy.Editing.UI
         Toggle snapToggle, gridToggle, guideToggle, bpmToggle, allLayersToggle;
         Button[] gridButtons;
         readonly float[] gridSizes = { 0.25f, 0.5f, 1f, 2f };
-        Text layerLabel, zoomLabel, posLabel, uiScaleLabel;
+        Text layerLabel, zoomLabel, posLabel, uiScaleLabel, savedLabel;
+        InputField nameInput;
         Slider zoomSlider, posSlider;
         bool suppress;
 
@@ -33,6 +34,22 @@ namespace Geodashy.Editing.UI
             UIFactory.Stretch(scroll.GetComponent<RectTransform>());
             UIFactory.VLayout(c, 5, 8);
             UIFactory.Fitter(c, true, false);
+
+            UIFactory.SectionHeader(c, "Quest");
+            nameInput = UIFactory.Input(c, "Quest name", editor.level.name, v =>
+            {
+                if (string.IsNullOrWhiteSpace(v)) return;
+                editor.level.name = v.Trim();
+                editor.MarkDirty();
+            }, -1, 30);
+            var qr1 = UIFactory.Row(c, 34, 4);
+            UIFactory.Button(qr1, "▶ Test", () => editor.StartPlaytest(false), -1, 32, UIFactory.Good, 14);
+            UIFactory.Button(qr1, "▶ Marker", () => editor.StartPlaytest(true), -1, 32, UIFactory.Good, 13);
+            var qr2 = UIFactory.Row(c, 30, 4);
+            UIFactory.Button(qr2, "Save", ui.SaveWithPrompt, -1, 28, UIFactory.ButtonActive, 13);
+            UIFactory.Button(qr2, "Save as…", ui.PromptSaveAs, -1, 28, null, 13);
+            UIFactory.Button(qr2, "Files", ui.OpenFileDialog, -1, 28, null, 13);
+            savedLabel = UIFactory.Label(c, "", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 32);
 
             UIFactory.SectionHeader(c, "Grid");
             snapToggle = UIFactory.Toggle(c, "Snap to grid (G)", editor.snapToGrid, v =>
@@ -103,7 +120,17 @@ namespace Geodashy.Editing.UI
 
             editor.ViewOptionsChanged += Refresh;
             ui.UIScaleChanged += Refresh;
+            editor.LevelChanged += RefreshQuest;
             Refresh();
+            RefreshQuest();
+        }
+
+        void RefreshQuest()
+        {
+            if (nameInput == null) return;
+            if (!nameInput.isFocused) nameInput.SetTextWithoutNotify(editor.level.name);
+            string state = string.IsNullOrEmpty(editor.currentFilePath) ? "Not saved yet" : (editor.Dirty ? "Unsaved changes" : "Saved");
+            savedLabel.text = state + " · P tests, Ctrl+S saves, Esc returns from a test";
         }
 
         void Refresh()
