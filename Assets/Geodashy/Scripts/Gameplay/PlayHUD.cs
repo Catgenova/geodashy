@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Geodashy.Editing.UI;
 using UnityEngine;
 using UnityEngine.UI;
@@ -9,7 +10,15 @@ namespace Geodashy.Gameplay
     public class PlayHUD : MonoBehaviour
     {
         Image progressFill;
+        RectTransform barRoot, markerLayer;
+        Image bestMarker;
+        Text bestLabel;
+        readonly List<Image> tickPool = new List<Image>();
         Text attemptText, coinText, hintText, progressText;
+
+        public static readonly Color AllTimeDeathColor = new Color(1f, 0.25f, 0.25f, 1f);
+        public static readonly Color SessionDeathColor = new Color(1f, 0.6f, 0.15f, 1f);
+        public static readonly Color BestColor = new Color(1f, 0.85f, 0.3f, 1f);
         RectTransform pausePanel, completePanel;
         Text completeStats;
         float hintTimer;
@@ -39,11 +48,28 @@ namespace Geodashy.Gameplay
             var barBg = UIFactory.Panel(root, "ProgressBg", new Color(0, 0, 0, 0.5f));
             UIFactory.Anchor(barBg, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(-300, -34), new Vector2(300, -14));
             barBg.GetComponent<Image>().raycastTarget = false;
+            barRoot = barBg;
             var fillRt = UIFactory.Rect(barBg, "Fill");
             progressFill = fillRt.gameObject.AddComponent<Image>();
             progressFill.color = UIFactory.Accent;
             progressFill.raycastTarget = false;
             UIFactory.Anchor(fillRt, new Vector2(0, 0), new Vector2(0, 1), new Vector2(2, 2), new Vector2(2, -2));
+
+            // overlay for death ticks and the personal-best marker
+            markerLayer = UIFactory.Rect(barBg, "Markers");
+            UIFactory.Stretch(markerLayer, 2, 0, 2, 0);
+            var bestRt = UIFactory.Rect(barBg, "Best");
+            bestMarker = bestRt.gameObject.AddComponent<Image>();
+            bestMarker.color = BestColor;
+            bestMarker.raycastTarget = false;
+            UIFactory.Anchor(bestRt, new Vector2(0, 0), new Vector2(0, 1), new Vector2(-2, -4), new Vector2(2, 4));
+            bestLabel = UIFactory.Label(bestRt, "", 12, TextAnchor.LowerCenter, BestColor, -1, -1, true);
+            bestLabel.horizontalOverflow = HorizontalWrapMode.Overflow;
+            UIFactory.Anchor(bestLabel.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(-60, 2), new Vector2(60, 18));
+            bestRt.gameObject.SetActive(false);
+            var legend = UIFactory.Label(root, "", 11, TextAnchor.MiddleCenter, UIFactory.TextDim);
+            legend.text = "red = past deaths   orange = this session   gold = personal best";
+            UIFactory.Anchor(legend.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(-300, -76), new Vector2(300, -60));
             progressText = UIFactory.Label(root, "0%", 14, TextAnchor.MiddleCenter, UIFactory.TextColor);
             UIFactory.Anchor(progressText.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(-60, -60), new Vector2(60, -36));
 
@@ -89,6 +115,58 @@ namespace Geodashy.Gameplay
             progressText.text = precise ? (t * 100f).ToString("0.000") + "%" : Mathf.RoundToInt(t * 100f) + "%";
         }
 
+        /// <summary>Redraws the death ticks and personal-best marker. Clustered deaths render brighter.</summary>
+        public void SetMarkers(List<float> allTimeDeaths, List<float> sessionDeaths, float bestProgress)
+        {
+            int needed = (allTimeDeaths?.Count ?? 0) + (sessionDeaths?.Count ?? 0);
+            while (tickPool.Count < needed)
+            {
+                var rt = UIFactory.Rect(markerLayer, "Tick");
+                var img = rt.gameObject.AddComponent<Image>();
+                img.raycastTarget = false;
+                UIFactory.Anchor(rt, new Vector2(0, 0), new Vector2(0, 1), new Vector2(-1, 3), new Vector2(1, -3));
+                tickPool.Add(img);
+            }
+            int used = 0;
+            PlaceTicks(allTimeDeaths, AllTimeDeathColor, 0.35f, 3f, ref used);
+            PlaceTicks(sessionDeaths, SessionDeathColor, 0.9f, 1f, ref used);
+            for (int i = used; i < tickPool.Count; i++) tickPool[i].gameObject.SetActive(false);
+
+            bool showBest = bestProgress > 0.001f;
+            bestMarker.gameObject.SetActive(showBest);
+            if (showBest)
+            {
+                var rt = bestMarker.rectTransform;
+                rt.anchorMin = new Vector2(Mathf.Clamp01(bestProgress), 0);
+                rt.anchorMax = new Vector2(Mathf.Clamp01(bestProgress), 1);
+                rt.offsetMin = new Vector2(-2, -4);
+                rt.offsetMax = new Vector2(2, 4);
+                bestLabel.text = bestProgress >= 0.9995f ? "PB 100%" : "PB " + (bestProgress * 100f).ToString("0.0") + "%";
+            }
+        }
+
+        void PlaceTicks(List<float> deaths, Color color, float baseAlpha, float boostPer, ref int used)
+        {
+            if (deaths == null) return;
+            // alpha grows with how many other deaths sit within 1% of this one
+            for (int i = 0; i < deaths.Count; i++)
+            {
+                float d = deaths[i];
+                int neighbours = 0;
+                for (int j = 0; j < deaths.Count; j++) if (j != i && Mathf.Abs(deaths[j] - d) < 0.01f) neighbours++;
+                var img = tickPool[used++];
+                img.gameObject.SetActive(true);
+                var rt = img.rectTransform;
+                rt.anchorMin = new Vector2(Mathf.Clamp01(d), 0);
+                rt.anchorMax = new Vector2(Mathf.Clamp01(d), 1);
+                rt.offsetMin = new Vector2(-1, 3);
+                rt.offsetMax = new Vector2(1, -3);
+                var c = color;
+                c.a = Mathf.Clamp01(baseAlpha + neighbours * 0.08f * boostPer);
+                img.color = c;
+            }
+        }
+
         public void SetAttempt(int n) => attemptText.text = "Attempt " + n;
         public void SetCoins(int n, int total) => coinText.text = total > 0 ? "Loot " + n + " / " + total : "";
 
@@ -101,9 +179,9 @@ namespace Geodashy.Gameplay
 
         public void ShowPause(bool on) => pausePanel.gameObject.SetActive(on);
 
-        public void ShowComplete(int attempts, float seconds, int jumps, int coins, int totalCoins)
+        public void ShowComplete(int attempts, float seconds, int jumps, int coins, int totalCoins, int totalAttempts = 0, int completions = 0)
         {
-            completeStats.text = string.Format("Progress: 100.000%\nAttempts: {0}\nTime: {1:0.0}s   Jumps: {2}\nLoot: {3} / {4}", attempts, seconds, jumps, coins, totalCoins);
+            completeStats.text = string.Format("Progress: 100.000%\nAttempts: {0}   (all time: {5}, cleared {6}x)\nTime: {1:0.0}s   Jumps: {2}\nLoot: {3} / {4}", attempts, seconds, jumps, coins, totalCoins, totalAttempts, completions);
             completePanel.gameObject.SetActive(true);
         }
 

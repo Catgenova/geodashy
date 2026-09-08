@@ -38,6 +38,10 @@ namespace Geodashy.Gameplay
         AudioSource music;
         bool wasHeld;
         Transform worldRoot;
+        LevelStats stats;
+        readonly List<float> sessionDeaths = new List<float>();
+        bool fullRun;
+        float attemptBest;
 
         public void Begin(LevelData data, Camera camera_, ParallaxBackground bg, GroundRenderer gr, Vector2? start, Action exit)
         {
@@ -69,6 +73,8 @@ namespace Geodashy.Gameplay
             hud = PlayHUD.Create(transform, () => TogglePause(), RestartFromStart, Exit);
 
             ComputeStart(start);
+            fullRun = start == null;
+            stats = LevelStatsStorage.Load(level.id);
             attempts = 0;
             Respawn();
         }
@@ -167,8 +173,11 @@ namespace Geodashy.Gameplay
             player.Spawn(startPos, startMount, startSpeed, startFlipped, startMini);
             triggers.ResetForStart(startPos.x);
             playCamera.Reset(startPos.x);
+            attemptBest = 0f;
+            if (fullRun) stats.attempts++;
             hud.SetAttempt(attempts);
             hud.SetCoins(0, totalCoins);
+            hud.SetMarkers(stats.deaths, sessionDeaths, stats.bestProgress);
             hud.HideComplete();
             hud.ShowPause(false);
             hud.ShowHint(player.mount.name + " — " + player.mount.control);
@@ -275,13 +284,27 @@ namespace Geodashy.Gameplay
             world.FlushDirty();
             ground.showCeiling = player.mount.flying || player.flipped;
             playCamera.Update(dt);
-            hud.SetProgress(finishX > 0f ? player.position.x / finishX : 0f);
+            float progress = finishX > 0f ? player.position.x / finishX : 0f;
+            hud.SetProgress(progress);
+            if (progress > attemptBest) attemptBest = progress;
+            if (fullRun && progress > stats.bestProgress + 0.002f)
+            {
+                stats.bestProgress = Mathf.Clamp01(progress);
+                hud.SetMarkers(stats.deaths, sessionDeaths, stats.bestProgress);
+            }
 
             if (player.finished)
             {
                 complete = true;
                 hud.SetProgress(1f, true);
-                hud.ShowComplete(attempts, elapsed, player.jumps, coins, totalCoins);
+                if (fullRun)
+                {
+                    stats.bestProgress = 1f;
+                    stats.completions++;
+                    LevelStatsStorage.Save(stats);
+                }
+                hud.SetMarkers(stats.deaths, sessionDeaths, stats.bestProgress);
+                hud.ShowComplete(attempts, elapsed, player.jumps, coins, totalCoins, stats.attempts, stats.completions);
                 if (music != null && level.settings.fadeOut) music.Stop();
             }
         }
@@ -290,7 +313,16 @@ namespace Geodashy.Gameplay
         {
             respawnTimer = 0.8f;
             musicRequest++;
-            hud.SetProgress(finishX > 0f ? player.position.x / finishX : 0f, true);
+            float progress = Mathf.Clamp01(finishX > 0f ? player.position.x / finishX : 0f);
+            hud.SetProgress(progress, true);
+            sessionDeaths.Add(progress);
+            if (fullRun)
+            {
+                stats.RecordDeath(progress);
+                if (progress > stats.bestProgress) stats.bestProgress = progress;
+                LevelStatsStorage.Save(stats);
+            }
+            hud.SetMarkers(stats.deaths, sessionDeaths, stats.bestProgress);
             if (music != null) music.Stop();
         }
 
@@ -375,6 +407,7 @@ namespace Geodashy.Gameplay
 
         public void Shutdown()
         {
+            if (stats != null && fullRun) LevelStatsStorage.Save(stats);
             musicRequest++;
             if (music != null) music.Stop();
             if (world != null) world.Destroy();

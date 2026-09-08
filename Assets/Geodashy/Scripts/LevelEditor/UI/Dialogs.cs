@@ -39,6 +39,15 @@ namespace Geodashy.Editing.UI
                 editor.MarkDirty();
             }, 140);
 
+            UIFactory.Button(c, "Reset play stats (deaths, personal best)", () =>
+            {
+                ui.Confirm("Reset play stats?", "Death markers and the personal best for this quest will be cleared.", () =>
+                {
+                    LevelStatsStorage.Reset(level.id);
+                    ui.Toast("Play stats reset");
+                }, "Reset");
+            }, -1, 28, null, 12);
+
             UIFactory.SectionHeader(c, "Start");
             var mountIds = MountCatalog.Ids;
             var mountNames = new string[mountIds.Length];
