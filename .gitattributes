@@ -173,5 +173,7 @@ LightingData.asset     binary
 # Geodashy: small assets that ship with the game stay as plain git blobs so clones
 # do not spend LFS bandwidth. Big source files (WAV masters, PSDs) can still use LFS elsewhere.
 Assets/Geodashy/Resources/Songs/*.ogg   -filter -diff -merge -text
+Assets/Geodashy/Resources/SFX/*.wav     -filter -diff -merge -text
+Assets/Geodashy/Resources/SFX/*.ogg     -filter -diff -merge -text
 Assets/Geodashy/Resources/Sprites/*.png -filter -diff -merge -text
 Assets/Geodashy/Resources/Backgrounds/*.png -filter -diff -merge -text

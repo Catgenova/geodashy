@@ -16,7 +16,8 @@ namespace Geodashy.Editing.UI
         ParallaxBackground background;
         GroundRenderer ground;
         LevelSettings backdropSettings;
-        RectTransform root, titleScreen, levelScreen, heraldryScreen;
+        RectTransform root, titleScreen, levelScreen, heraldryScreen, optionsScreen;
+        AudioSource menuMusic;
         Image titleCrest, heraldryCrestPreview, heraldryMountPreview;
         readonly List<Button> crestButtons = new List<Button>();
         RectTransform listContent, detailPane;
@@ -45,12 +46,12 @@ namespace Geodashy.Editing.UI
                 if (all.Length == 0) return;
                 clip = all[UnityEngine.Random.Range(0, all.Length)];
             }
-            var src = gameObject.AddComponent<AudioSource>();
-            src.clip = clip;
-            src.loop = true;
-            src.volume = 0.45f;
-            src.playOnAwake = false;
-            src.Play();
+            menuMusic = gameObject.AddComponent<AudioSource>();
+            menuMusic.clip = clip;
+            menuMusic.loop = true;
+            menuMusic.volume = Sfx.MusicVolume * 0.7f;
+            menuMusic.playOnAwake = false;
+            menuMusic.Play();
         }
 
         void BuildBackdrop()
@@ -89,7 +90,7 @@ namespace Geodashy.Editing.UI
             titleScreen = UIFactory.Rect(root, "Title");
             UIFactory.Stretch(titleScreen);
             var titleCard = UIFactory.Panel(titleScreen, "Card", new Color(0.11f, 0.09f, 0.14f, 0.82f));
-            UIFactory.Anchor(titleCard, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-300, -300), new Vector2(300, 300));
+            UIFactory.Anchor(titleCard, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-300, -330), new Vector2(300, 330));
             UIFactory.VLayout(titleCard, 12, 32, true, true, TextAnchor.UpperCenter);
             var crestRow = UIFactory.Row(titleCard, 64, 0, TextAnchor.MiddleCenter);
             titleCrest = UIFactory.Icon(crestRow, PlaceholderSpriteFactory.Crest(PlayerProfile.Crest, PlayerProfile.Primary, PlayerProfile.Secondary), 64);
@@ -100,6 +101,7 @@ namespace Geodashy.Editing.UI
             UIFactory.Button(titleCard, "Play", ShowLevelSelect, -1, 54, UIFactory.Good, 22);
             UIFactory.Button(titleCard, "Level Editor", () => app.OpenEditor(null, null), -1, 54, UIFactory.ButtonActive, 22);
             UIFactory.Button(titleCard, "Heraldry", ShowHeraldry, -1, 44, null, 18);
+            UIFactory.Button(titleCard, "Options", ShowOptions, -1, 44, null, 18);
             UIFactory.Button(titleCard, "Quit", app.Quit, -1, 44, UIFactory.Danger, 18);
             UIFactory.Spacer(titleCard, 6);
             UIFactory.Label(titleCard, "Click or Space to ride · Esc pauses", 13, TextAnchor.MiddleCenter, UIFactory.TextDim, -1, 24);
@@ -134,6 +136,7 @@ namespace Geodashy.Editing.UI
             titleScreen.gameObject.SetActive(true);
             levelScreen.gameObject.SetActive(false);
             if (heraldryScreen != null) heraldryScreen.gameObject.SetActive(false);
+            if (optionsScreen != null) optionsScreen.gameObject.SetActive(false);
             titleCrest.sprite = PlaceholderSpriteFactory.Crest(PlayerProfile.Crest, PlayerProfile.Primary, PlayerProfile.Secondary);
         }
 
@@ -142,15 +145,62 @@ namespace Geodashy.Editing.UI
             titleScreen.gameObject.SetActive(false);
             levelScreen.gameObject.SetActive(true);
             if (heraldryScreen != null) heraldryScreen.gameObject.SetActive(false);
+            if (optionsScreen != null) optionsScreen.gameObject.SetActive(false);
             RefreshLevels();
         }
 
         // ---- heraldry -----------------------------------------------------------
 
+        void ShowOptions()
+        {
+            titleScreen.gameObject.SetActive(false);
+            levelScreen.gameObject.SetActive(false);
+            if (heraldryScreen != null) heraldryScreen.gameObject.SetActive(false);
+            if (optionsScreen == null) BuildOptions();
+            optionsScreen.gameObject.SetActive(true);
+        }
+
+        void BuildOptions()
+        {
+            optionsScreen = UIFactory.Rect(root, "Options");
+            UIFactory.Stretch(optionsScreen);
+            var frame = UIFactory.Panel(optionsScreen, "Frame", new Color(0.11f, 0.09f, 0.14f, 0.92f));
+            UIFactory.Anchor(frame, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-320, -220), new Vector2(320, 220));
+            UIFactory.VLayout(frame, 12, 24, true, true, TextAnchor.UpperLeft);
+            var header = UIFactory.Row(frame, 40, 10);
+            UIFactory.Button(header, "◀ Back", ShowTitle, 100, 40);
+            UIFactory.Label(header, "Options", 26, TextAnchor.MiddleLeft, UIFactory.Accent, -1, 40, true);
+
+            UIFactory.SectionHeader(frame, "Music volume");
+            var musicLabel = UIFactory.Label(frame, "", 13, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 18);
+            UIFactory.Slider(frame, 0f, 1f, Sfx.MusicVolume, v =>
+            {
+                Sfx.MusicVolume = v;
+                if (menuMusic != null) menuMusic.volume = v * 0.7f;
+                musicLabel.text = Mathf.RoundToInt(v * 100f) + "%";
+            }, false, 26);
+            musicLabel.text = Mathf.RoundToInt(Sfx.MusicVolume * 100f) + "%";
+
+            UIFactory.SectionHeader(frame, "Sound effects volume");
+            var sfxLabel = UIFactory.Label(frame, "", 13, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 18);
+            UIFactory.Slider(frame, 0f, 1f, Sfx.Volume, v =>
+            {
+                Sfx.Volume = v;
+                sfxLabel.text = Mathf.RoundToInt(v * 100f) + "%";
+            }, false, 26);
+            sfxLabel.text = Mathf.RoundToInt(Sfx.Volume * 100f) + "%";
+            var testRow = UIFactory.Row(frame, 34, 6);
+            UIFactory.Button(testRow, "Test jump", () => Sfx.Play("jump_horse"), -1, 32, null, 13);
+            UIFactory.Button(testRow, "Test rune", () => Sfx.Play("rune"), -1, 32, null, 13);
+            UIFactory.Button(testRow, "Test death", () => Sfx.Play("death"), -1, 32, null, 13);
+            UIFactory.Label(frame, "Effects live in Assets/Geodashy/Resources/SFX; replace any file to change a sound.", 12, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 30);
+        }
+
         void ShowHeraldry()
         {
             titleScreen.gameObject.SetActive(false);
             levelScreen.gameObject.SetActive(false);
+            if (optionsScreen != null) optionsScreen.gameObject.SetActive(false);
             if (heraldryScreen == null) BuildHeraldry();
             heraldryScreen.gameObject.SetActive(true);
             RefreshHeraldry();

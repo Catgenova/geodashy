@@ -109,6 +109,13 @@ Starter songs live in `Assets/Geodashy/Resources/Songs/`. Commit mp3/ogg/wav fil
 they appear in the *Starter song* dropdown in Level Settings and can be named by Song triggers.
 Songs a player imports from disk stay outside the project, so campaign maps must use starter songs.
 
+## Sound effects
+
+`Assets/Geodashy/Resources/SFX/` holds a synthesized starter pack of 27 effects: per-mount jumps,
+landing, death, five rune types, two pads, five portal types, coin/gem/key, gate, waystone,
+completion fanfare, horn and UI click. Replace any file with real audio of the same name. Music
+and effect volumes are on the main menu under Options and persist.
+
 ## Adding real art
 
 Everything currently drawn is a procedural placeholder so the editor is usable today.

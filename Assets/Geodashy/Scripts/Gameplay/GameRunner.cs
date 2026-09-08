@@ -280,6 +280,7 @@ namespace Geodashy.Gameplay
             };
             foreach (var c in level.colors) cp.colors.Add(c.Clone());
             cp.marker = CreateCheckpointMarker(player.position);
+            Sfx.Play("waystone", 0.7f);
             checkpoints.Add(cp);
             currentCheckpoint = checkpoints.Count - 1;
             lastCheckpointX = player.position.x;
@@ -531,6 +532,7 @@ namespace Geodashy.Gameplay
                     introActive = false;
                     hud.HideIntro();
                     hud.Flash(new Color(1f, 0.95f, 0.8f, 0.4f), 0.25f);
+                    Sfx.Play("horn", 0.8f);
                     StartMusic();
                 }
                 return;
@@ -578,6 +580,7 @@ namespace Geodashy.Gameplay
             if (player.finished)
             {
                 complete = true;
+                Sfx.Play("complete");
                 hud.SetProgress(1f, true);
                 if (fullRun)
                 {
@@ -631,12 +634,14 @@ namespace Geodashy.Gameplay
 
         public void OnJumped(Vector2 pos, float up)
         {
+            Sfx.Play("jump_" + player.mount.id, 0.8f, 1f, 0.05f, "jump");
             var feet = pos - new Vector2(0f, up * player.Size.y * 0.45f);
             particles.Emit(feet, new Color(0.9f, 0.85f, 0.75f, 0.7f), 4, 1.8f, 0.3f, 0.08f, 3f, up > 0 ? 270f : 90f, 120f);
         }
 
         public void OnLanded(Vector2 pos, float up, Vector2 size)
         {
+            Sfx.Play("land", 0.5f, 1f, 0.08f);
             var feet = pos - new Vector2(0f, up * size.y * 0.5f);
             particles.Emit(feet, new Color(0.85f, 0.8f, 0.7f, 0.75f), 7, 2.4f, 0.35f, 0.09f, 4f, up > 0 ? 90f : 270f, 150f);
         }
@@ -645,6 +650,7 @@ namespace Geodashy.Gameplay
         {
             deathTimer = 0f;
             musicRequest++;
+            Sfx.Play("death", 1f, 1f, 0.03f);
             var c = player.mount.Color;
             particles.Emit(player.position, c, 18, 9f, 0.8f, 0.17f, 22f);
             particles.Emit(player.position, player.mount.Accent, 8, 6f, 0.6f, 0.12f, 18f);
@@ -669,6 +675,7 @@ namespace Geodashy.Gameplay
             if (v.def.id == "key")
             {
                 keys++;
+                Sfx.Play("key", 0.9f);
                 int id = v.data.GetInt("itemId", 1);
                 triggers.OnItemCollected(id);
                 int opened = 0;
@@ -680,9 +687,18 @@ namespace Geodashy.Gameplay
                     opened++;
                 }
                 hud.ShowHint(opened > 0 ? "The key turns. " + (opened == 1 ? "A gate" : opened + " gates") + " swing open!" : "Picked up a dungeon key.", 3f);
+                if (opened > 0) Sfx.Play("gate");
             }
-            else if (v.def.id == "gem") gems++;
-            else coins++;
+            else if (v.def.id == "gem")
+            {
+                gems++;
+                Sfx.Play("gem", 0.8f);
+            }
+            else
+            {
+                coins++;
+                Sfx.Play("coin", 0.7f, 1f, 0.06f);
+            }
             hud.SetLoot(coins, totalCoins, gems, totalGems, keys);
         }
 
@@ -694,6 +710,15 @@ namespace Geodashy.Gameplay
                 case ObjectKind.Portal:
                 {
                     bool mountGate = v.def.portalType == PortalType.Mount;
+                    switch (v.def.portalType)
+                    {
+                        case PortalType.Mount: Sfx.Play("portal_mount"); break;
+                        case PortalType.GravityFlip:
+                        case PortalType.GravityNormal: Sfx.Play("portal_gravity", 0.9f); break;
+                        case PortalType.Speed: Sfx.Play("portal_speed", 0.9f); break;
+                        case PortalType.Teleport: Sfx.Play("teleport"); break;
+                        default: Sfx.Play("portal", 0.8f); break;
+                    }
                     particles.Emit(v.WorldPosition, col, mountGate ? 32 : 18, 6f, 0.6f, 0.14f, 0f);
                     particles.Emit(player.position, Color.white, 10, 4f, 0.4f, 0.1f, 0f);
                     hud.Flash(new Color(col.r, col.g, col.b, mountGate ? 0.45f : 0.25f), mountGate ? 0.3f : 0.18f);
@@ -704,9 +729,21 @@ namespace Geodashy.Gameplay
                     break;
                 }
                 case ObjectKind.Orb:
+                    switch (v.def.orbType)
+                    {
+                        case OrbType.GravityFlip:
+                        case OrbType.GravityJump: Sfx.Play("rune_gravity", 0.9f); break;
+                        case OrbType.BigJump: Sfx.Play("rune_big", 0.9f); break;
+                        case OrbType.Dash:
+                        case OrbType.DashFlip: Sfx.Play("rune_dash", 0.9f); break;
+                        case OrbType.Slam: Sfx.Play("rune_void", 0.9f); break;
+                        case OrbType.Teleport: Sfx.Play("teleport", 0.8f); break;
+                        default: Sfx.Play("rune", 0.9f, 1f, 0.08f); break;
+                    }
                     particles.Emit(v.WorldPosition, col, 10, 5f, 0.4f, 0.1f, 6f);
                     break;
                 case ObjectKind.Pad:
+                    Sfx.Play(v.def.padType == PadType.GravityFlip ? "pad_gravity" : "pad", 0.8f, v.def.padType == PadType.BigJump ? 0.85f : 1f, 0.06f);
                     particles.Emit(v.WorldPosition, col, 8, 4f, 0.35f, 0.09f, 8f, player.flipped ? 270f : 90f, 90f);
                     break;
             }
@@ -775,6 +812,7 @@ namespace Geodashy.Gameplay
             }
             music.clip = clip;
             music.loop = loop;
+            music.volume = Sfx.MusicVolume;
             music.time = Mathf.Clamp(offset, 0f, Mathf.Max(0f, clip.length - 0.1f));
             music.Play();
         }

@@ -237,6 +237,7 @@ namespace Geodashy.Editing.UI
             colors.disabledColor = new Color(0.5f, 0.5f, 0.5f, 0.5f);
             b.colors = colors;
             if (onClick != null) b.onClick.AddListener(onClick);
+            b.onClick.AddListener(() => Geodashy.Core.Sfx.Play("click", 0.5f, 1f, 0.1f));
             var t = Label(rt, label, fontSize, TextAnchor.MiddleCenter);
             Stretch(t.rectTransform, 4, 2, 4, 2);
             t.horizontalOverflow = HorizontalWrapMode.Overflow;

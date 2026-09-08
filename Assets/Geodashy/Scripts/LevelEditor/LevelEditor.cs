@@ -915,6 +915,7 @@ namespace Geodashy.Editing
                 previewSource.playOnAwake = false;
             }
             previewSource.clip = clip;
+            previewSource.volume = Sfx.MusicVolume;
             previewSource.time = Mathf.Clamp(fromSeconds, 0f, Mathf.Max(0f, clip.length - 0.1f));
             previewSource.Play();
             ui.Toast(string.Format("Previewing {0} ({1:0}:{2:00})", clip.name, Mathf.Floor(clip.length / 60f), clip.length % 60f));
