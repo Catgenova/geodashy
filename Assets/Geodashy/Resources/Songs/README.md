@@ -14,6 +14,10 @@ Current pack (Ogg Vorbis, about quality 6, 44.1 kHz, committed as plain git blob
 darkness_falls, final_stand, hillside_clash, le_pharaon, legends_begin, sandswept_siege,
 serenity, starfall_orchestral, the_kingdom, the_old_ways, winters_hymn.
 
+Also `iron_wobble` (140 BPM, 104 s): a procedurally synthesized "medieval dubstep" demo generated in
+code (lute, war drums, wobble bass, drone, riser and drops). It is a placeholder to judge the idea, not a
+produced track. Because it was generated, its beat grid is exact: set a level to 140 BPM, offset 0.
+
 The pack is about 46 MB in total. The original 16-bit WAV masters (about 320 MB) were pushed
 through Git LFS once and then replaced; they remain in the repository's LFS history. Ogg files in
 this folder are deliberately excluded from LFS in .gitattributes so clones need no LFS bandwidth.
