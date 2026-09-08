@@ -94,6 +94,21 @@ format is easy to diff and forward compatible. Export/Import via the clipboard i
 file dialog. A bundled tutorial level is in `Resources/Levels/tutorial.json`. Autosave
 writes every minute and is restored on the next launch.
 
+## Campaign maps and starter songs
+
+Anything in `Assets/Geodashy/Resources/Levels/*.json` ships with the game as a ★ campaign map,
+ordered by the level's *Campaign order* setting. To turn a map you built into a campaign map:
+
+1. In the editor open **Files ▸ Export as campaign map**. Inside the Unity editor this writes
+   the JSON straight into `Resources/Levels` (and copies an imported song into
+   `Resources/Songs`, switching the map to reference it as a starter song). In a build it writes
+   to `<persistentDataPath>/geodashy/campaign-exports/` for you to copy over.
+2. Commit the JSON (and any song) to git. Levels are plain text and diff cleanly.
+
+Starter songs live in `Assets/Geodashy/Resources/Songs/`. Commit mp3/ogg/wav files there and
+they appear in the *Starter song* dropdown in Level Settings and can be named by Song triggers.
+Songs a player imports from disk stay outside the project, so campaign maps must use starter songs.
+
 ## Adding real art
 
 Everything currently drawn is a procedural placeholder so the editor is usable today.

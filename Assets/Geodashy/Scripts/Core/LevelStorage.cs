@@ -19,6 +19,7 @@ namespace Geodashy.Core
         public string startMount;
         public float lengthSeconds;
         public string backgroundTheme;
+        public int campaignOrder;
     }
 
     /// <summary>Saves and loads levels as JSON in the persistent data folder. Built-in levels live in Resources/Levels.</summary>
@@ -174,7 +175,7 @@ namespace Geodashy.Core
             {
                 path = path, id = d.id, name = d.name, author = d.author, objectCount = d.objects.Count, modified = modified, builtIn = builtIn,
                 description = d.description, startMount = d.settings.startMount, backgroundTheme = d.settings.backgroundTheme,
-                lengthSeconds = d.GetFinishX() / MountCatalog.Speed(d.settings.startSpeed)
+                lengthSeconds = d.GetFinishX() / MountCatalog.Speed(d.settings.startSpeed), campaignOrder = d.campaignOrder
             };
         }
 
@@ -202,10 +203,72 @@ namespace Geodashy.Core
             }
             list.Sort((a, b) =>
             {
-                if (a.builtIn != b.builtIn) return a.builtIn ? 1 : -1;
+                if (a.builtIn != b.builtIn) return a.builtIn ? -1 : 1;
+                if (a.builtIn)
+                {
+                    int c = a.campaignOrder.CompareTo(b.campaignOrder);
+                    return c != 0 ? c : string.Compare(a.name, b.name, StringComparison.OrdinalIgnoreCase);
+                }
                 return b.modified.CompareTo(a.modified);
             });
             return list;
+        }
+
+        // ---- starter songs & campaign export ---------------------------------------
+
+        /// <summary>Names of every clip in Resources/Songs (the ids used by songId and Song triggers).</summary>
+        public static string[] StarterSongIds()
+        {
+            var clips = Resources.LoadAll<AudioClip>("Songs");
+            var ids = new List<string>();
+            foreach (var c in clips) ids.Add(c.name);
+            ids.Sort(StringComparer.OrdinalIgnoreCase);
+            return ids.ToArray();
+        }
+
+        /// <summary>Where campaign levels live inside the Unity project (editor only).</summary>
+        public static string CampaignLevelsFolder => Path.Combine(Application.dataPath, "Geodashy", "Resources", "Levels");
+        public static string CampaignSongsFolder => Path.Combine(Application.dataPath, "Geodashy", "Resources", "Songs");
+
+        /// <summary>
+        /// Writes the level as a campaign map. In the Unity editor it lands in Resources/Levels (and an imported song
+        /// is copied into Resources/Songs); in a build it goes to a folder you can commit by hand. Returns the file path.
+        /// </summary>
+        public static string ExportToCampaign(LevelData source)
+        {
+            var copy = source.DeepClone();
+            var fileName = SafeFileName(string.IsNullOrWhiteSpace(copy.name) ? "level" : copy.name.Trim().ToLowerInvariant().Replace(' ', '_')) + ".json";
+            string folder;
+            if (Application.isEditor)
+            {
+                folder = CampaignLevelsFolder;
+                Directory.CreateDirectory(folder);
+                if (!string.IsNullOrEmpty(copy.settings.songFile))
+                {
+                    var src = AssetPath(source.id, copy.settings.songFile);
+                    if (src != null && File.Exists(src))
+                    {
+                        Directory.CreateDirectory(CampaignSongsFolder);
+                        var songName = SafeFileName(Path.GetFileNameWithoutExtension(copy.settings.songFile).ToLowerInvariant().Replace(' ', '_'));
+                        File.Copy(src, Path.Combine(CampaignSongsFolder, songName + Path.GetExtension(src).ToLowerInvariant()), true);
+                        copy.settings.songId = songName;
+                    }
+                    copy.settings.songFile = "";
+                }
+            }
+            else
+            {
+                folder = Path.Combine(Application.persistentDataPath, "geodashy", "campaign-exports");
+                Directory.CreateDirectory(folder);
+            }
+            copy.playtestX = -1f;
+            copy.playtestY = -1f;
+            var path = Path.Combine(folder, fileName);
+            File.WriteAllText(path, LevelSerializer.ToJson(copy, true));
+#if UNITY_EDITOR
+            UnityEditor.AssetDatabase.Refresh();
+#endif
+            return path;
         }
     }
 }

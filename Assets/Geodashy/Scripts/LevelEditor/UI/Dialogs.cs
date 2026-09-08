@@ -39,6 +39,12 @@ namespace Geodashy.Editing.UI
                 editor.MarkDirty();
             }, 140);
 
+            NumberField.Create(c, "Campaign order", level.campaignOrder, 1, 0, 9999, v =>
+            {
+                level.campaignOrder = Mathf.RoundToInt(v);
+                editor.MarkDirty();
+            }, true, 140);
+            UIFactory.Label(c, "Sort position in the level select once the map ships as a campaign map (lower comes first).", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 18);
             UIFactory.Button(c, "Reset play stats (deaths, personal best)", () =>
             {
                 ui.Confirm("Reset play stats?", "Death markers and the personal best for this quest will be cleared.", () =>
@@ -270,12 +276,19 @@ namespace Geodashy.Editing.UI
                 RefreshSongLabel();
             }, -1, 30, UIFactory.Danger, 13);
             RefreshSongLabel();
-            TextField.Create(c, "Built-in song ID", s.songId, v =>
+            var starterIds = new List<string> { "" };
+            starterIds.AddRange(LevelStorage.StarterSongIds());
+            var starterNames = new List<string> { "(none)" };
+            for (int i = 1; i < starterIds.Count; i++) starterNames.Add(starterIds[i]);
+            DropdownField.Create(c, "Starter song", starterIds.ToArray(), Mathf.Max(0, starterIds.IndexOf(s.songId)), i =>
             {
-                s.songId = v;
+                s.songId = starterIds[i];
+                s.songFile = "";
                 editor.MarkDirty();
                 RefreshSongLabel();
-            }, 140, 28, "file name in Resources/Songs (used when nothing is imported)");
+                if (!string.IsNullOrEmpty(s.songId)) editor.PreviewSong(s.songOffset);
+            }, 140, 28, starterNames.ToArray());
+            UIFactory.Label(c, "Starter songs ship with the game from Assets/Geodashy/Resources/Songs. Campaign maps must use one of these.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 30);
             NumberField.Create(c, "Song offset (s)", s.songOffset, 0.5f, 0, 6000, v =>
             {
                 s.songOffset = v;
@@ -336,6 +349,23 @@ namespace Geodashy.Editing.UI
                 }, "Import");
             }, 120, 32);
             UIFactory.Label(c, "Folder: " + LevelStorage.LevelsDirectory, 11, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 18);
+            var camp = UIFactory.Row(c, 34, 6);
+            UIFactory.Button(camp, "Export as campaign map", () =>
+            {
+                try
+                {
+                    var path = LevelStorage.ExportToCampaign(editor.level);
+                    ui.Toast("Campaign map written: " + path, 5f);
+                    Debug.Log("Geodashy: campaign map exported to " + path);
+                }
+                catch (Exception e)
+                {
+                    ui.Toast("Export failed: " + e.Message);
+                }
+            }, 200, 32, UIFactory.ButtonActive);
+            UIFactory.Label(camp, Application.isEditor
+                ? "Writes the JSON into Assets/Geodashy/Resources/Levels so it ships with the game. Commit it to git and it becomes a ★ campaign map."
+                : "Writes the JSON into the campaign-exports folder next to your saves. Copy it into Assets/Geodashy/Resources/Levels in the project and commit.", 11, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 34);
 
             var scroll = UIFactory.ScrollView(c, "List", out var list, true, false);
             UIFactory.VLayout(list, 3, 4);
