@@ -500,7 +500,7 @@ namespace Geodashy.Gameplay
                 {
                     trailSparkleTimer -= 0.025f;
                     var back = player.position - new Vector2(player.direction * 0.3f, 0f);
-                    particles.Emit(back, Color.Lerp(mc, Color.white, Random.value * 0.6f), 1, 1.2f, 0.45f, 0.07f, -0.5f, 180f, 60f);
+                    particles.Emit(back, Color.Lerp(mc, Color.white, UnityEngine.Random.value * 0.6f), 1, 1.2f, 0.45f, 0.07f, -0.5f, 180f, 60f);
                 }
             }
             trail.RemoveAll(tp => now - tp.time > TrailLife);
