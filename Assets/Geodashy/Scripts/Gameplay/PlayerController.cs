@@ -365,7 +365,7 @@ namespace Geodashy.Gameplay
                         flipped = !flipped;
                         up = Up;
                         onGround = false;
-                        velocity.y = 2f * up;
+                        velocity.y = 2.5f * -up; // leave the surface toward the new floor
                         pressBuffer = 0f;
                         jumps++;
                 Jumped();
@@ -614,11 +614,11 @@ namespace Geodashy.Gameplay
                 case OrbType.BigJump: velocity.y = 26f * up; break;
                 case OrbType.GravityFlip:
                     flipped = !flipped;
-                    velocity.y = 11f * Up;
+                    velocity.y = 11f * -Up; // toward the new floor
                     break;
                 case OrbType.GravityJump:
                     flipped = !flipped;
-                    velocity.y = 19.4f * Up;
+                    velocity.y = 19.4f * -Up;
                     break;
                 case OrbType.Slam: velocity.y = -30f * up; break;
                 case OrbType.Dash:
@@ -656,7 +656,7 @@ namespace Geodashy.Gameplay
                 case PadType.BigJump: velocity.y = 27f * up; break;
                 case PadType.GravityFlip:
                     flipped = !flipped;
-                    velocity.y = 12f * Up;
+                    velocity.y = 12f * -Up; // away from the old floor, toward the new one
                     break;
                 case PadType.Teleport: TeleportToOppositeSurface(); break;
             }
