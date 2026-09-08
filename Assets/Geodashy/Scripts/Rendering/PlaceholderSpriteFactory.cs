@@ -225,15 +225,48 @@ namespace Geodashy.Rendering
             return s;
         }
 
+        /// <summary>A heraldic shield: banner colour field, trim border and the crest glyph.</summary>
+        public static Sprite Crest(int crest, Color primary, Color secondary, int size = 64)
+        {
+            string key = "crest:" + crest + ":" + ColorUtility.ToHtmlStringRGB(primary) + ":" + ColorUtility.ToHtmlStringRGB(secondary) + ":" + size;
+            if (cache.TryGetValue(key, out var s) && s != null) return s;
+            var r = new Raster(size, size);
+            r.Clear(new Color(0, 0, 0, 0));
+            float w = size, h = size;
+            var border = Raster.Darken(secondary, 0.35f);
+            // shield: flat top, curved sides, pointed bottom
+            r.FillPolygon(new[] { new Vector2(w * 0.08f, h * 0.92f), new Vector2(w * 0.92f, h * 0.92f), new Vector2(w * 0.92f, h * 0.5f), new Vector2(w * 0.5f, h * 0.05f), new Vector2(w * 0.08f, h * 0.5f) }, border);
+            r.FillPolygon(new[] { new Vector2(w * 0.16f, h * 0.85f), new Vector2(w * 0.84f, h * 0.85f), new Vector2(w * 0.84f, h * 0.5f), new Vector2(w * 0.5f, h * 0.13f), new Vector2(w * 0.16f, h * 0.5f) }, primary);
+            r.FillRect(w * 0.16f, h * 0.5f, w * 0.84f, h * 0.55f, Raster.Alpha(secondary, 0.35f));
+            var glyphRaster = new Raster(size, size);
+            glyphRaster.Clear(new Color(0, 0, 0, 0));
+            BitmapFont.DrawCentered(glyphRaster, PlayerProfile.CrestGlyphs[Mathf.Clamp(crest, 0, PlayerProfile.CrestGlyphs.Length - 1)], secondary, 0.3f);
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+                r.Plot(x, y - Mathf.RoundToInt(h * 0.06f), glyphRaster.pixels[y * size + x]);
+            s = r.ToSprite(size, null, null, FilterMode.Point);
+            s.name = "crest";
+            cache[key] = s;
+            return s;
+        }
+
+        /// <summary>Drops cached mount and crest art so it regenerates with new heraldry.</summary>
+        public static void ClearHeraldryArt()
+        {
+            var keys = new List<string>(cache.Keys);
+            foreach (var k in keys) if (k.StartsWith("mount:") || k.StartsWith("crest:")) cache.Remove(k);
+        }
+
         public static Sprite ForMount(MountDefinition m)
         {
-            string key = "mount:" + m.id;
+            string key = "mount:" + m.id + ":" + PlayerProfile.Signature;
             if (cache.TryGetValue(key, out var s) && s != null) return s;
             var r = new Raster(96, 96);
             var body = m.Color;
             var accent = m.Accent;
             var dark = Raster.Darken(body, 0.35f);
-            var rider = new Color(0.35f, 0.75f, 0.35f);
+            var rider = PlayerProfile.Primary;
+            var trim = PlayerProfile.Secondary;
             switch (m.id)
             {
                 case "dragon":
@@ -333,6 +366,12 @@ namespace Geodashy.Rendering
                     r.FillCircle(44, 78, 7, rider);
                     r.FillRect(36, 78, 52, 83, Raster.Darken(rider, 0.35f)); // helmet brim
                     r.FillRect(46, 50, 50, 58, rider); // leg
+                    r.FillRect(38, 72, 50, 74, trim); // belt
+                    // heraldic shield on the rider's arm
+                    r.FillPolygon(new[] { new Vector2(30, 70), new Vector2(40, 70), new Vector2(40, 62), new Vector2(35, 57), new Vector2(30, 62) }, Raster.Darken(trim, 0.3f));
+                    r.FillPolygon(new[] { new Vector2(31.5f, 68.5f), new Vector2(38.5f, 68.5f), new Vector2(38.5f, 62.5f), new Vector2(35, 59), new Vector2(31.5f, 62.5f) }, rider);
+                    r.FillRect(34, 61, 36, 67, trim);
+                    r.FillRect(32, 63, 38, 65, trim);
                     break;
                 }
             }

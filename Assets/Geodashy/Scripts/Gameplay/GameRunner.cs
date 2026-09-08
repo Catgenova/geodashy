@@ -44,6 +44,7 @@ namespace Geodashy.Gameplay
         float slowMo;
         int lastBeat = -1;
         public GroundProps groundProps;
+        bool introActive;
         LevelObjectView pulsingPortal;
         float portalPulse;
         LevelStats stats;
@@ -116,7 +117,14 @@ namespace Geodashy.Gameplay
             fullRun = start == null && !practice;
             stats = LevelStatsStorage.Load(level.id);
             attempts = 0;
+            introActive = exitTarget == "menu";
             Respawn();
+            if (introActive)
+            {
+                var m = MountCatalog.Get(startMount);
+                hud.ShowIntro(level.name, level.description, SpriteLibrary.ForMount(m), m.name, m.control);
+                playCamera.Update(0f);
+            }
         }
 
         /// <summary>Resolved spawn state: where the rider appears and with what mount/speed/gravity/size.</summary>
@@ -233,7 +241,7 @@ namespace Geodashy.Gameplay
             hud.ShowPause(false);
             hud.SetPractice(practice, checkpoints.Count, autoCheckpoints, currentCheckpoint);
             hud.ShowHint(player.mount.name + " — " + player.mount.control + (practice ? "   ·   Z raises a waystone, X removes it, ← → scrub between them" : ""));
-            StartMusic();
+            if (!introActive) StartMusic();
         }
 
         // ---- practice mode -----------------------------------------------------------
@@ -515,6 +523,17 @@ namespace Geodashy.Gameplay
                 if (kb.cKey.wasPressedThisFrame) TogglePractice();
                 if (practice && kb.leftArrowKey.wasPressedThisFrame) ScrubCheckpoint(-1);
                 if (practice && kb.rightArrowKey.wasPressedThisFrame) ScrubCheckpoint(1);
+            }
+            if (introActive)
+            {
+                if (pressed || (kb != null && kb.enterKey.wasPressedThisFrame))
+                {
+                    introActive = false;
+                    hud.HideIntro();
+                    hud.Flash(new Color(1f, 0.95f, 0.8f, 0.4f), 0.25f);
+                    StartMusic();
+                }
+                return;
             }
             if (pressed) triggers.OnPress();
             if (wasHeld && !held) triggers.OnRelease();

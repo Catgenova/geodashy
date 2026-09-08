@@ -396,8 +396,8 @@ namespace Geodashy.Core
                 case ColorChannelIds.Ground: return settings.groundColor;
                 case ColorChannelIds.Line: return settings.lineColor;
                 case ColorChannelIds.Object: return settings.objectColor;
-                case ColorChannelIds.Player1: return new Color(0.4f, 1f, 0.4f);
-                case ColorChannelIds.Player2: return new Color(0.4f, 0.8f, 1f);
+                case ColorChannelIds.Player1: return PlayerProfile.Primary;
+                case ColorChannelIds.Player2: return PlayerProfile.Secondary;
                 case ColorChannelIds.Detail: return Color.white;
             }
             var ch = GetColorChannel(channelId);

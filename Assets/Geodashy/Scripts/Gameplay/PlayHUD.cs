@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using Geodashy.Core;
 using Geodashy.Editing.UI;
+using Geodashy.Rendering;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -32,6 +34,13 @@ namespace Geodashy.Gameplay
         Image flash;
         float flashTimer, flashDuration;
         Color flashColor;
+        Image crestIcon, sealCrest;
+        RectTransform introPanel;
+        Text introTitle, introBody, introMount;
+        Image introMountIcon;
+
+        static readonly Color Parchment = new Color(0.93f, 0.86f, 0.68f, 0.98f);
+        static readonly Color Ink = new Color(0.28f, 0.17f, 0.08f, 1f);
         RectTransform checkpointButtons;
 
         public static PlayHUD Create(Transform parent, Action onResume, Action onRestart, Action onExit, Action onTogglePractice, Action onCheckpoint, Action onRemoveCheckpoint)
@@ -91,8 +100,10 @@ namespace Geodashy.Gameplay
             progressText = UIFactory.Label(root, "0%", 14, TextAnchor.MiddleCenter, UIFactory.TextColor);
             UIFactory.Anchor(progressText.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(-60, -60), new Vector2(60, -36));
 
+            crestIcon = UIFactory.Icon(root, PlaceholderSpriteFactory.Crest(PlayerProfile.Crest, PlayerProfile.Primary, PlayerProfile.Secondary), 44);
+            UIFactory.Anchor(crestIcon.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(16, -60), new Vector2(60, -16));
             attemptText = UIFactory.Label(root, "Attempt 1", 22, TextAnchor.MiddleLeft, UIFactory.TextColor, -1, -1, true);
-            UIFactory.Anchor(attemptText.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(20, -60), new Vector2(400, -14));
+            UIFactory.Anchor(attemptText.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(68, -60), new Vector2(440, -14));
             coinText = UIFactory.Label(root, "", 18, TextAnchor.MiddleRight, UIFactory.Accent);
             UIFactory.Anchor(coinText.rectTransform, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-400, -60), new Vector2(-20, -14));
             hintText = UIFactory.Label(root, "", 18, TextAnchor.MiddleLeft, UIFactory.TextColor);
@@ -130,13 +141,41 @@ namespace Geodashy.Gameplay
             pauseExitButton = UIFactory.Button(pw, "Back to editor", () => onExit(), -1, 40, UIFactory.Danger, 16);
             pausePanel.gameObject.SetActive(false);
 
+            // quest scroll (intro card)
+            introPanel = UIFactory.Panel(root, "Intro", new Color(0, 0, 0, 0.55f));
+            var scrollCard = UIFactory.Panel(introPanel, "Scroll", Parchment);
+            UIFactory.Anchor(scrollCard, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-330, -210), new Vector2(330, 210));
+            var scrollEdgeTop = UIFactory.Panel(scrollCard, "EdgeTop", new Color(0.55f, 0.38f, 0.2f, 1f));
+            UIFactory.Anchor(scrollEdgeTop, new Vector2(0, 1), new Vector2(1, 1), new Vector2(-12, -14), new Vector2(12, 0));
+            var scrollEdgeBottom = UIFactory.Panel(scrollCard, "EdgeBottom", new Color(0.55f, 0.38f, 0.2f, 1f));
+            UIFactory.Anchor(scrollEdgeBottom, new Vector2(0, 0), new Vector2(1, 0), new Vector2(-12, 0), new Vector2(12, 14));
+            var scrollBody = UIFactory.Rect(scrollCard, "Body");
+            UIFactory.Stretch(scrollBody, 28, 24, 28, 24);
+            UIFactory.VLayout(scrollBody, 8, 0, true, true, TextAnchor.UpperCenter);
+            UIFactory.Label(scrollBody, "A QUEST IS OFFERED", 13, TextAnchor.MiddleCenter, new Color(0.5f, 0.32f, 0.12f), -1, 20, true);
+            introTitle = UIFactory.Label(scrollBody, "", 30, TextAnchor.MiddleCenter, Ink, -1, 44, true);
+            introBody = UIFactory.Label(scrollBody, "", 15, TextAnchor.UpperCenter, Ink, -1, 74);
+            introBody.horizontalOverflow = HorizontalWrapMode.Wrap;
+            var mountRow = UIFactory.Row(scrollBody, 70, 12, TextAnchor.MiddleCenter);
+            introMountIcon = UIFactory.Icon(mountRow, null, 70);
+            introMount = UIFactory.Label(mountRow, "", 15, TextAnchor.MiddleLeft, Ink, 380, 70);
+            UIFactory.Label(scrollBody, "Click or press Space to ride out", 14, TextAnchor.MiddleCenter, new Color(0.5f, 0.32f, 0.12f), -1, 26, true);
+            introPanel.gameObject.SetActive(false);
+
             // complete panel
             completePanel = UIFactory.Panel(root, "Complete", new Color(0, 0, 0, 0.6f));
-            var cw = UIFactory.Panel(completePanel, "Window", UIFactory.PanelBg2);
-            UIFactory.Anchor(cw, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-240, -175), new Vector2(240, 175));
-            UIFactory.VLayout(cw, 10, 20);
-            UIFactory.Label(cw, "QUEST COMPLETE", 28, TextAnchor.MiddleCenter, UIFactory.Accent, -1, 44, true);
-            completeStats = UIFactory.Label(cw, "", 16, TextAnchor.MiddleCenter, UIFactory.TextColor, -1, 96);
+            var cw = UIFactory.Panel(completePanel, "Window", Parchment);
+            UIFactory.Anchor(cw, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-260, -215), new Vector2(260, 215));
+            UIFactory.VLayout(cw, 10, 20, true, true, TextAnchor.UpperCenter);
+            var sealRow = UIFactory.Row(cw, 84, 0, TextAnchor.MiddleCenter);
+            var seal = UIFactory.Icon(sealRow, PlaceholderSpriteFactory.Circle(), 84, new Color(0.62f, 0.12f, 0.1f, 1f));
+            var sealInner = UIFactory.Icon(seal.transform, PlaceholderSpriteFactory.Circle(), 70, new Color(0.72f, 0.16f, 0.13f, 1f));
+            UIFactory.Anchor(sealInner.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-35, -35), new Vector2(35, 35));
+            sealCrest = UIFactory.Icon(seal.transform, PlaceholderSpriteFactory.Crest(PlayerProfile.Crest, PlayerProfile.Primary, PlayerProfile.Secondary), 46);
+            UIFactory.Anchor(sealCrest.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-23, -23), new Vector2(23, 23));
+            sealCrest.color = new Color(1f, 0.85f, 0.7f, 0.9f);
+            UIFactory.Label(cw, "QUEST COMPLETE", 28, TextAnchor.MiddleCenter, Ink, -1, 44, true);
+            completeStats = UIFactory.Label(cw, "", 16, TextAnchor.MiddleCenter, Ink, -1, 96);
             UIFactory.Button(cw, "Play again", () => onRestart(), -1, 40, UIFactory.Good, 16);
             completeExitButton = UIFactory.Button(cw, "Back to editor", () => onExit(), -1, 40, null, 16);
             completePanel.gameObject.SetActive(false);
@@ -220,6 +259,17 @@ namespace Geodashy.Gameplay
             UIFactory.SetButtonLabel(completeExitButton, "Back to " + target);
             escHint.text = "Esc — pause / back to " + target;
         }
+
+        public void ShowIntro(string title, string description, Sprite mountSprite, string mountName, string control)
+        {
+            introTitle.text = title;
+            introBody.text = string.IsNullOrEmpty(description) ? "Ride from the west gate to the finish. Do not touch anything red." : description;
+            introMountIcon.sprite = mountSprite;
+            introMount.text = "You ride the " + mountName + ".\n" + control;
+            introPanel.gameObject.SetActive(true);
+        }
+
+        public void HideIntro() => introPanel.gameObject.SetActive(false);
 
         public void ShowDeath(string cause, float progress)
         {

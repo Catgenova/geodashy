@@ -16,7 +16,9 @@ namespace Geodashy.Editing.UI
         ParallaxBackground background;
         GroundRenderer ground;
         LevelSettings backdropSettings;
-        RectTransform root, titleScreen, levelScreen;
+        RectTransform root, titleScreen, levelScreen, heraldryScreen;
+        Image titleCrest, heraldryCrestPreview, heraldryMountPreview;
+        readonly List<Button> crestButtons = new List<Button>();
         RectTransform listContent, detailPane;
         Canvas canvas;
         float drift;
@@ -69,14 +71,17 @@ namespace Geodashy.Editing.UI
             titleScreen = UIFactory.Rect(root, "Title");
             UIFactory.Stretch(titleScreen);
             var titleCard = UIFactory.Panel(titleScreen, "Card", new Color(0.11f, 0.09f, 0.14f, 0.82f));
-            UIFactory.Anchor(titleCard, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-300, -250), new Vector2(300, 250));
+            UIFactory.Anchor(titleCard, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-300, -300), new Vector2(300, 300));
             UIFactory.VLayout(titleCard, 12, 32, true, true, TextAnchor.UpperCenter);
+            var crestRow = UIFactory.Row(titleCard, 64, 0, TextAnchor.MiddleCenter);
+            titleCrest = UIFactory.Icon(crestRow, PlaceholderSpriteFactory.Crest(PlayerProfile.Crest, PlayerProfile.Primary, PlayerProfile.Secondary), 64);
             var title = UIFactory.Label(titleCard, "GEODASHY", 64, TextAnchor.MiddleCenter, UIFactory.Accent, -1, 90, true);
             title.horizontalOverflow = HorizontalWrapMode.Overflow;
             UIFactory.Label(titleCard, "One button. Seven mounts. A kingdom of spikes.", 16, TextAnchor.MiddleCenter, UIFactory.TextDim, -1, 28);
             UIFactory.Spacer(titleCard, 10);
             UIFactory.Button(titleCard, "Play", ShowLevelSelect, -1, 54, UIFactory.Good, 22);
             UIFactory.Button(titleCard, "Level Editor", () => app.OpenEditor(null, null), -1, 54, UIFactory.ButtonActive, 22);
+            UIFactory.Button(titleCard, "Heraldry", ShowHeraldry, -1, 44, null, 18);
             UIFactory.Button(titleCard, "Quit", app.Quit, -1, 44, UIFactory.Danger, 18);
             UIFactory.Spacer(titleCard, 6);
             UIFactory.Label(titleCard, "Click or Space to ride · Esc pauses", 13, TextAnchor.MiddleCenter, UIFactory.TextDim, -1, 24);
@@ -110,13 +115,93 @@ namespace Geodashy.Editing.UI
         {
             titleScreen.gameObject.SetActive(true);
             levelScreen.gameObject.SetActive(false);
+            if (heraldryScreen != null) heraldryScreen.gameObject.SetActive(false);
+            titleCrest.sprite = PlaceholderSpriteFactory.Crest(PlayerProfile.Crest, PlayerProfile.Primary, PlayerProfile.Secondary);
         }
 
         void ShowLevelSelect()
         {
             titleScreen.gameObject.SetActive(false);
             levelScreen.gameObject.SetActive(true);
+            if (heraldryScreen != null) heraldryScreen.gameObject.SetActive(false);
             RefreshLevels();
+        }
+
+        // ---- heraldry -----------------------------------------------------------
+
+        void ShowHeraldry()
+        {
+            titleScreen.gameObject.SetActive(false);
+            levelScreen.gameObject.SetActive(false);
+            if (heraldryScreen == null) BuildHeraldry();
+            heraldryScreen.gameObject.SetActive(true);
+            RefreshHeraldry();
+        }
+
+        void BuildHeraldry()
+        {
+            heraldryScreen = UIFactory.Rect(root, "Heraldry");
+            UIFactory.Stretch(heraldryScreen);
+            var frame = UIFactory.Panel(heraldryScreen, "Frame", new Color(0.11f, 0.09f, 0.14f, 0.92f));
+            UIFactory.Anchor(frame, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-460, -320), new Vector2(460, 320));
+            UIFactory.VLayout(frame, 10, 20, true, true, TextAnchor.UpperLeft);
+            var header = UIFactory.Row(frame, 40, 10);
+            UIFactory.Button(header, "◀ Back", ShowTitle, 100, 40);
+            UIFactory.Label(header, "Your heraldry", 26, TextAnchor.MiddleLeft, UIFactory.Accent, -1, 40, true);
+            UIFactory.Label(frame, "Your crest marks your scroll and your seal. Banner and trim colour your rider and the P1 / P2 colour channels that level makers can use.", 13, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 36);
+
+            var previewRow = UIFactory.Row(frame, 150, 24, TextAnchor.MiddleCenter);
+            heraldryCrestPreview = UIFactory.Icon(previewRow, null, 150);
+            heraldryMountPreview = UIFactory.Icon(previewRow, null, 150);
+
+            UIFactory.SectionHeader(frame, "Crest");
+            var crestRow = UIFactory.Row(frame, 44, 6);
+            crestButtons.Clear();
+            for (int i = 0; i < PlayerProfile.CrestNames.Length; i++)
+            {
+                int idx = i;
+                crestButtons.Add(UIFactory.Button(crestRow, PlayerProfile.CrestNames[i], () =>
+                {
+                    PlayerProfile.Crest = idx;
+                    RefreshHeraldry();
+                }, -1, 40, null, 13));
+            }
+            UIFactory.SectionHeader(frame, "Banner colour");
+            BuildSwatches(frame, c =>
+            {
+                PlayerProfile.Primary = c;
+                RefreshHeraldry();
+            });
+            UIFactory.SectionHeader(frame, "Trim colour");
+            BuildSwatches(frame, c =>
+            {
+                PlayerProfile.Secondary = c;
+                RefreshHeraldry();
+            });
+        }
+
+        void BuildSwatches(Transform parent, Action<Color> onPick)
+        {
+            var row = UIFactory.Row(parent, 40, 6);
+            foreach (var hex in PlayerProfile.Palette)
+            {
+                var c = ObjectCatalog.Hex(hex);
+                var sw = UIFactory.Swatch(row, c, 36);
+                UIFactory.Layout(sw.gameObject, -1, 36, 1);
+                var b = sw.gameObject.AddComponent<Button>();
+                b.targetGraphic = sw;
+                b.onClick.AddListener(() => onPick(c));
+            }
+        }
+
+        void RefreshHeraldry()
+        {
+            PlaceholderSpriteFactory.ClearHeraldryArt();
+            var crest = PlaceholderSpriteFactory.Crest(PlayerProfile.Crest, PlayerProfile.Primary, PlayerProfile.Secondary, 128);
+            heraldryCrestPreview.sprite = crest;
+            heraldryMountPreview.sprite = PlaceholderSpriteFactory.ForMount(MountCatalog.Get("dragon"));
+            titleCrest.sprite = crest;
+            for (int i = 0; i < crestButtons.Count; i++) UIFactory.SetButtonActive(crestButtons[i], i == PlayerProfile.Crest);
         }
 
         void RefreshLevels()
