@@ -69,13 +69,13 @@ namespace Geodashy.Editing
             editor.Initialize(cam, level, path);
         }
 
-        public void PlayLevel(LevelData level, bool practice)
+        public void PlayLevel(LevelData level, Difficulty difficulty)
         {
             CloseAll();
             var go = new GameObject("Game Session");
             go.transform.SetParent(transform, false);
             session = go.AddComponent<GameSession>();
-            session.Begin(level, cam, practice, ShowMenu);
+            session.Begin(level, cam, difficulty, ShowMenu);
         }
 
         public void Quit()

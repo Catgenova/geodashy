@@ -14,7 +14,7 @@ namespace Geodashy.Gameplay
         GroundRenderer ground;
         Action onExit;
 
-        public void Begin(LevelData level, Camera cam, bool practice, Action exit)
+        public void Begin(LevelData level, Camera cam, Difficulty difficulty, Action exit)
         {
             onExit = exit;
             var data = level.DeepClone();
@@ -25,7 +25,7 @@ namespace Geodashy.Gameplay
             var go = new GameObject("Game Runner");
             go.transform.SetParent(transform, false);
             runner = go.AddComponent<GameRunner>();
-            runner.Begin(data, cam, background, ground, null, () => onExit?.Invoke(), practice, "menu");
+            runner.Begin(data, cam, background, ground, null, () => onExit?.Invoke(), difficulty, "menu");
         }
 
         public static bool LevelObjectNear(LevelData data, float x)

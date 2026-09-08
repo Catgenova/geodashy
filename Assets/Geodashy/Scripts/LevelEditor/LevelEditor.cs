@@ -1007,9 +1007,18 @@ namespace Geodashy.Editing
             LevelChanged?.Invoke();
         }
 
-        public void StartPlaytest(bool fromMarker) => StartPlaytest(fromMarker, false);
+        public const string TestDifficultyPref = "geodashy.testDifficulty";
+        public Difficulty TestDifficulty
+        {
+            get => (Difficulty)Mathf.Clamp(PlayerPrefs.GetInt(TestDifficultyPref, (int)Difficulty.Checkpoints), 0, 2);
+            set => PlayerPrefs.SetInt(TestDifficultyPref, (int)value);
+        }
 
-        public void StartPlaytest(bool fromMarker, bool practiceMode)
+        public void StartPlaytest(bool fromMarker) => StartPlaytest(fromMarker, TestDifficulty);
+
+        public void StartPlaytest(bool fromMarker, bool training) => StartPlaytest(fromMarker, training ? Difficulty.Training : TestDifficulty);
+
+        public void StartPlaytest(bool fromMarker, Difficulty difficulty)
         {
             if (IsPlaying) return;
             StopSongPreview();
@@ -1033,7 +1042,7 @@ namespace Geodashy.Editing
             var go = new GameObject("Game Runner");
             go.transform.SetParent(transform, false);
             runner = go.AddComponent<GameRunner>();
-            runner.Begin(level.DeepClone(), cam, background, ground, start, StopPlaytest, practiceMode);
+            runner.Begin(level.DeepClone(), cam, background, ground, start, StopPlaytest, difficulty);
         }
 
         public void StopPlaytest()

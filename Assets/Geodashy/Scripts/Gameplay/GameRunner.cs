@@ -79,17 +79,21 @@ namespace Geodashy.Gameplay
             public GameObject marker;
         }
 
-        public bool practice;
+        public Difficulty difficulty = Difficulty.Checkpoints;
+        /// <summary>Training difficulty (player-placed waystones).</summary>
+        public bool practice => difficulty == Difficulty.Training;
         public bool autoCheckpoints = true;
+        readonly List<LevelObjectView> authoredWaystones = new List<LevelObjectView>();
+        int nextAuthored;
         readonly List<Checkpoint> checkpoints = new List<Checkpoint>();
         int currentCheckpoint = -1;
         float autoCheckpointTimer;
         float lastCheckpointX = -100f;
         public int CheckpointCount => checkpoints.Count;
 
-        public void Begin(LevelData data, Camera camera_, ParallaxBackground bg, GroundRenderer gr, Vector2? start, Action exit, bool practiceMode = false, string exitTarget = "editor")
+        public void Begin(LevelData data, Camera camera_, ParallaxBackground bg, GroundRenderer gr, Vector2? start, Action exit, Difficulty mode = Difficulty.Checkpoints, string exitTarget = "editor")
         {
-            practice = practiceMode;
+            difficulty = mode;
             level = data;
             pristine = data.DeepClone();
             cam = camera_;
@@ -108,6 +112,8 @@ namespace Geodashy.Gameplay
             finishX = level.GetFinishX();
             totalCoins = 0;
             totalGems = 0;
+            foreach (var v in world.all) if (v.def.id == "checkpoint") authoredWaystones.Add(v);
+            authoredWaystones.Sort((a, b) => a.data.x.CompareTo(b.data.x));
             foreach (var v in world.all)
             {
                 if (v.def.kind != ObjectKind.Collectible) continue;
@@ -128,7 +134,7 @@ namespace Geodashy.Gameplay
             hud.SetExitTarget(exitTarget);
 
             ComputeStart(start);
-            fullRun = start == null && !practice;
+            fullRun = start == null && difficulty == Difficulty.Champion;
             stats = LevelStatsStorage.Load(level.id);
             attempts = 0;
             introActive = exitTarget == "menu";
@@ -136,7 +142,7 @@ namespace Geodashy.Gameplay
             if (introActive)
             {
                 var m = MountCatalog.Get(startMount);
-                hud.ShowIntro(level.name, level.description, SpriteLibrary.ForMount(m), m.name, m.control, SpriteLibrary.MountFacing(m));
+                hud.ShowIntro(level.name, level.description, SpriteLibrary.ForMount(m), m.name, m.control + "\n" + DifficultyInfo.Name(difficulty) + ": " + DifficultyInfo.Describe(difficulty), SpriteLibrary.MountFacing(m));
                 playCamera.Update(0f);
             }
         }
@@ -227,7 +233,7 @@ namespace Geodashy.Gameplay
         {
             deathOverlay.Clear();
             hud.HideDeath();
-            if (practice && checkpoints.Count > 0)
+            if (difficulty != Difficulty.Champion && checkpoints.Count > 0)
             {
                 if (currentCheckpoint < 0 || currentCheckpoint >= checkpoints.Count) currentCheckpoint = checkpoints.Count - 1;
                 RespawnAtCheckpoint(checkpoints[currentCheckpoint]);
@@ -254,9 +260,53 @@ namespace Geodashy.Gameplay
             hud.SetMarkers(stats.deaths, sessionDeaths, stats.bestProgress);
             hud.HideComplete();
             hud.ShowPause(false);
-            hud.SetPractice(practice, checkpoints.Count, autoCheckpoints, currentCheckpoint);
+            RefreshAuthoredWaystones();
+            RefreshHudMode();
             hud.ShowHint(player.mount.name + " — " + player.mount.control + (practice ? "   ·   Z raises a waystone, X removes it, ← → scrub between them" : ""));
             if (!introActive) StartMusic();
+        }
+
+        /// <summary>Marks author-placed waystones behind the rider as reached, and dims them all on Champion.</summary>
+        void RefreshAuthoredWaystones()
+        {
+            nextAuthored = 0;
+            while (nextAuthored < authoredWaystones.Count && authoredWaystones[nextAuthored].data.x <= player.position.x) nextAuthored++;
+            for (int i = 0; i < authoredWaystones.Count; i++)
+            {
+                var v = authoredWaystones[i];
+                if (difficulty == Difficulty.Champion) v.renderer2D.color = new Color(0.6f, 0.6f, 0.6f, 0.35f);
+                else v.renderer2D.color = i < nextAuthored ? new Color(0.75f, 1f, 0.8f, 1f) : new Color(0.55f, 0.6f, 0.58f, 0.9f);
+            }
+        }
+
+        void UpdateAuthoredWaystones()
+        {
+            while (nextAuthored < authoredWaystones.Count && player.position.x >= authoredWaystones[nextAuthored].data.x)
+            {
+                var v = authoredWaystones[nextAuthored++];
+                if (difficulty != Difficulty.Checkpoints) continue;
+                v.renderer2D.color = new Color(0.75f, 1f, 0.8f, 1f);
+                particles.Emit(v.WorldPosition, new Color(0.5f, 1f, 0.6f), 14, 3f, 0.6f, 0.1f, 2f);
+                Sfx.Play("waystone", 0.7f);
+                PlaceCheckpoint(false);
+                hud.ShowHint("Waystone reached — you will return here if you fall.", 2.5f);
+            }
+        }
+
+        void RefreshHudMode()
+        {
+            switch (difficulty)
+            {
+                case Difficulty.Training:
+                    hud.SetMode("TRAINING", checkpoints.Count > 0 && currentCheckpoint >= 0 ? "waystone " + (currentCheckpoint + 1) + "/" + checkpoints.Count : "no waystones yet", true, autoCheckpoints);
+                    break;
+                case Difficulty.Checkpoints:
+                    hud.SetMode("CHECKPOINTS", checkpoints.Count > 0 ? checkpoints.Count + " waystone" + (checkpoints.Count == 1 ? "" : "s") + " reached" : "no waystone reached yet", false, false);
+                    break;
+                default:
+                    hud.SetMode("CHAMPION", "one life · sets your record", false, false);
+                    break;
+            }
         }
 
         // ---- practice mode -----------------------------------------------------------
@@ -269,16 +319,21 @@ namespace Geodashy.Gameplay
         public void SetPractice(bool on)
         {
             if (practice == on) return;
-            practice = on;
-            fullRun = false; // a run that touched practice never counts for stats
+            fullRun = false; // a run that touched training never counts for the record
+            difficulty = on ? Difficulty.Training : Difficulty.Checkpoints;
             if (!on) ClearCheckpoints();
-            hud.SetPractice(practice, checkpoints.Count, autoCheckpoints, currentCheckpoint);
-            hud.ShowHint(on ? "Squire mode: Z raises a waystone, X removes the last one, ← → jump between waystones. Deaths return you to the last waystone." : "Knight mode: deaths return you to the start.", 5f);
+            RefreshAuthoredWaystones();
+            RefreshHudMode();
+            hud.ShowHint(on ? "Training: Z raises a waystone, X removes the last one, ← → jump between waystones." : "Checkpoints: you fall back to the last author-placed waystone.", 5f);
         }
 
-        public void PlaceCheckpoint()
+        public void PlaceCheckpoint() => PlaceCheckpoint(true);
+
+        void PlaceCheckpoint(bool manual)
         {
-            if (!practice || player.dead || complete || paused) return;
+            if (player.dead || complete || paused) return;
+            if (manual && !practice) return;
+            if (difficulty == Difficulty.Champion) return;
             var cp = new Checkpoint
             {
                 player = player.Capture(),
@@ -294,13 +349,16 @@ namespace Geodashy.Gameplay
                 ceiling = ground.showCeiling
             };
             foreach (var c in level.colors) cp.colors.Add(c.Clone());
-            cp.marker = CreateCheckpointMarker(player.position);
-            Sfx.Play("waystone", 0.7f);
+            if (manual)
+            {
+                cp.marker = CreateCheckpointMarker(player.position);
+                Sfx.Play("waystone", 0.7f);
+            }
             checkpoints.Add(cp);
             currentCheckpoint = checkpoints.Count - 1;
             lastCheckpointX = player.position.x;
             autoCheckpointTimer = 0f;
-            hud.SetPractice(practice, checkpoints.Count, autoCheckpoints, currentCheckpoint);
+            RefreshHudMode();
         }
 
         public void RemoveCheckpoint()
@@ -311,7 +369,7 @@ namespace Geodashy.Gameplay
             if (cp.marker != null) Destroy(cp.marker);
             lastCheckpointX = checkpoints.Count > 0 ? checkpoints[checkpoints.Count - 1].player.position.x : -100f;
             if (currentCheckpoint >= checkpoints.Count) currentCheckpoint = checkpoints.Count - 1;
-            hud.SetPractice(practice, checkpoints.Count, autoCheckpoints, currentCheckpoint);
+            RefreshHudMode();
         }
 
         /// <summary>Scrubs to an earlier (-1) or later (+1) waystone and respawns there.</summary>
@@ -397,7 +455,8 @@ namespace Geodashy.Gameplay
             hud.SetLoot(coins, totalCoins, gems, totalGems, keys);
             hud.HideComplete();
             hud.ShowPause(false);
-            hud.SetPractice(practice, checkpoints.Count, autoCheckpoints, currentCheckpoint);
+            RefreshAuthoredWaystones();
+            RefreshHudMode();
 
             // music: resume from the checkpoint's position in the song
             float offset = level.settings.songOffset + startPos.x / MountCatalog.Speed(startSpeed) + elapsed;
@@ -628,6 +687,7 @@ namespace Geodashy.Gameplay
             player.SetInput(held, pressed);
             player.Tick(dt);
             UpdateTrail(dt);
+            UpdateAuthoredWaystones();
             UpdateAutoCheckpoint(dt);
             UpdateBeat();
             triggers.Update(dt);
@@ -654,8 +714,13 @@ namespace Geodashy.Gameplay
                     stats.completions++;
                     LevelStatsStorage.Save(stats);
                 }
+                else if (difficulty == Difficulty.Checkpoints && startPos.x <= 0.01f)
+                {
+                    stats.checkpointCompletions++;
+                    LevelStatsStorage.Save(stats);
+                }
                 hud.SetMarkers(stats.deaths, sessionDeaths, stats.bestProgress);
-                hud.ShowComplete(attempts, elapsed, player.jumps, coins, totalCoins, stats.attempts, stats.completions, gems, totalGems);
+                hud.ShowComplete(attempts, elapsed, player.jumps, coins, totalCoins, stats.attempts, stats.completions, gems, totalGems, DifficultyInfo.Name(difficulty));
                 if (music != null && level.settings.fadeOut) music.Stop();
             }
         }

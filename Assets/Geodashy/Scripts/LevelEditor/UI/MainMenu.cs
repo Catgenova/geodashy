@@ -110,7 +110,7 @@ namespace Geodashy.Editing.UI
             levelScreen = UIFactory.Rect(root, "LevelSelect");
             UIFactory.Stretch(levelScreen);
             var frame = UIFactory.Panel(levelScreen, "Frame", new Color(0.11f, 0.09f, 0.14f, 0.9f));
-            UIFactory.Anchor(frame, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-620, -360), new Vector2(620, 360));
+            UIFactory.Anchor(frame, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-620, -400), new Vector2(620, 400));
             var header = UIFactory.Rect(frame, "Header");
             UIFactory.Anchor(header, new Vector2(0, 1), new Vector2(1, 1), new Vector2(16, -56), new Vector2(-16, -8));
             UIFactory.HLayout(header, 10, 0, false, TextAnchor.MiddleLeft);
@@ -316,11 +316,15 @@ namespace Geodashy.Editing.UI
             UIFactory.Label(col, mount.control, 12, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 20);
             UIFactory.Label(col, ThemeCatalog.GetBackground(info.backgroundTheme).name + " · " + info.objectCount + " objects · ~" + Mathf.RoundToInt(info.lengthSeconds) + "s", 12, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 20);
             UIFactory.SectionHeader(detailPane, "Your record");
-            string best = stats.completions > 0 ? "Cleared " + stats.completions + "×" : (stats.bestProgress > 0f ? "Best " + (stats.bestProgress * 100f).ToString("0.0") + "%" : "Not attempted");
-            UIFactory.Label(detailPane, best + "  ·  " + stats.attempts + " attempts  ·  " + stats.deaths.Count + " recorded deaths", 13, TextAnchor.MiddleLeft, UIFactory.TextColor, -1, 22);
-            UIFactory.Spacer(detailPane, 6);
-            UIFactory.Button(detailPane, "▶ Play", () => Launch(info, false), -1, 50, UIFactory.Good, 20);
-            UIFactory.Button(detailPane, "▶ Squire mode (waystones)", () => Launch(info, true), -1, 42, null, 16);
+            string best = stats.completions > 0 ? "Champion: cleared " + stats.completions + "×" : (stats.bestProgress > 0f ? "Champion best " + (stats.bestProgress * 100f).ToString("0.0") + "%" : "Champion: not attempted");
+            UIFactory.Label(detailPane, best + "  ·  " + stats.attempts + " attempts" + (stats.checkpointCompletions > 0 ? "  ·  Checkpoints: cleared " + stats.checkpointCompletions + "×" : ""), 13, TextAnchor.MiddleLeft, UIFactory.TextColor, -1, 22);
+            UIFactory.SectionHeader(detailPane, "Ride out");
+            UIFactory.Button(detailPane, "▶ Training", () => Launch(info, Difficulty.Training), -1, 40, null, 16);
+            UIFactory.Label(detailPane, DifficultyInfo.Describe(Difficulty.Training), 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 30);
+            UIFactory.Button(detailPane, "▶ Checkpoints", () => Launch(info, Difficulty.Checkpoints), -1, 40, UIFactory.ButtonActive, 16);
+            UIFactory.Label(detailPane, DifficultyInfo.Describe(Difficulty.Checkpoints), 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 30);
+            UIFactory.Button(detailPane, "▶ Champion", () => Launch(info, Difficulty.Champion), -1, 40, UIFactory.Good, 16);
+            UIFactory.Label(detailPane, DifficultyInfo.Describe(Difficulty.Champion), 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 30);
             UIFactory.Button(detailPane, "Edit in level editor", () =>
             {
                 try
@@ -334,11 +338,11 @@ namespace Geodashy.Editing.UI
             }, -1, 42, UIFactory.ButtonActive, 16);
         }
 
-        void Launch(LevelFileInfo info, bool practice)
+        void Launch(LevelFileInfo info, Difficulty difficulty)
         {
             try
             {
-                app.PlayLevel(LevelStorage.Load(info.path), practice);
+                app.PlayLevel(LevelStorage.Load(info.path), difficulty);
             }
             catch (Exception e)
             {

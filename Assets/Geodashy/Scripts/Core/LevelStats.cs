@@ -15,7 +15,10 @@ namespace Geodashy.Core
         /// <summary>Best progress (0..1) reached from the level start.</summary>
         public float bestProgress;
         public int attempts;
+        /// <summary>Champion clears.</summary>
         public int completions;
+        /// <summary>Clears on the Checkpoints difficulty.</summary>
+        public int checkpointCompletions;
         /// <summary>Progress fractions (0..1) of recent deaths from full runs, oldest first.</summary>
         public List<float> deaths = new List<float>();
 

@@ -136,7 +136,7 @@ namespace Geodashy.Gameplay
             UIFactory.VLayout(pw, 10, 20);
             UIFactory.Label(pw, "PAUSED", 26, TextAnchor.MiddleCenter, UIFactory.Accent, -1, 40, true);
             UIFactory.Button(pw, "Resume", () => onResume(), -1, 40, UIFactory.Good, 16);
-            practiceToggle = UIFactory.Button(pw, "Squire mode (waystones): off", () => onTogglePractice(), -1, 40, null, 16);
+            practiceToggle = UIFactory.Button(pw, "Switch to Training (C)", () => onTogglePractice(), -1, 40, null, 16);
             UIFactory.Button(pw, "Restart from start", () => onRestart(), -1, 40, null, 16);
             pauseExitButton = UIFactory.Button(pw, "Back to editor", () => onExit(), -1, 40, UIFactory.Danger, 16);
             pausePanel.gameObject.SetActive(false);
@@ -158,7 +158,7 @@ namespace Geodashy.Gameplay
             introBody.horizontalOverflow = HorizontalWrapMode.Wrap;
             var mountRow = UIFactory.Row(scrollBody, 70, 12, TextAnchor.MiddleCenter);
             introMountIcon = UIFactory.Icon(mountRow, null, 70);
-            introMount = UIFactory.Label(mountRow, "", 15, TextAnchor.MiddleLeft, Ink, 380, 70);
+            introMount = UIFactory.Label(mountRow, "", 13, TextAnchor.MiddleLeft, Ink, 420, 70);
             UIFactory.Label(scrollBody, "Click or press Space to ride out", 14, TextAnchor.MiddleCenter, new Color(0.5f, 0.32f, 0.12f), -1, 26, true);
             introPanel.gameObject.SetActive(false);
 
@@ -243,13 +243,12 @@ namespace Geodashy.Gameplay
             }
         }
 
-        public void SetPractice(bool on, int checkpoints, bool auto, int current = -1)
+        public void SetMode(string title, string detail, bool training, bool auto)
         {
-            string pos = checkpoints > 0 && current >= 0 ? (current + 1) + "/" + checkpoints : checkpoints.ToString();
-            practiceText.text = on ? "SQUIRE MODE  ·  waystone " + pos + (auto ? "  ·  auto" : "") + "  ·  ← → scrub" : "";
-            checkpointButtons.gameObject.SetActive(on);
-            UIFactory.SetButtonLabel(practiceToggle, on ? "Squire mode (waystones): on (C)" : "Squire mode (waystones): off (C)");
-            UIFactory.SetButtonActive(practiceToggle, on);
+            practiceText.text = title + "  ·  " + detail + (training && auto ? "  ·  auto" : "") + (training ? "  ·  ← → scrub" : "");
+            checkpointButtons.gameObject.SetActive(training);
+            UIFactory.SetButtonLabel(practiceToggle, training ? "Training mode: on (C)" : "Switch to Training (C)");
+            UIFactory.SetButtonActive(practiceToggle, training);
         }
 
         /// <summary>Names the place Exit returns to ("editor" or "menu").</summary>
@@ -266,7 +265,7 @@ namespace Geodashy.Gameplay
             introBody.text = string.IsNullOrEmpty(description) ? "Ride from the west gate to the finish. Do not touch anything red." : description;
             introMountIcon.sprite = mountSprite;
             introMountIcon.rectTransform.localScale = new Vector3(facing, 1f, 1f);
-            introMount.text = "You ride the " + mountName + ".\n" + control;
+            introMount.text = "You ride the " + mountName + ". " + control;
             introPanel.gameObject.SetActive(true);
         }
 
@@ -301,10 +300,10 @@ namespace Geodashy.Gameplay
 
         public void ShowPause(bool on) => pausePanel.gameObject.SetActive(on);
 
-        public void ShowComplete(int attempts, float seconds, int jumps, int coins, int totalCoins, int totalAttempts = 0, int completions = 0, int gems = 0, int totalGems = 0)
+        public void ShowComplete(int attempts, float seconds, int jumps, int coins, int totalCoins, int totalAttempts = 0, int completions = 0, int gems = 0, int totalGems = 0, string difficultyName = "")
         {
             string loot = "Gold " + coins + "/" + totalCoins + (totalGems > 0 ? "   Gems " + gems + "/" + totalGems : "");
-            completeStats.text = string.Format("Progress: 100.000%\nAttempts: {0}   (all time: {4}, cleared {5}x)\nTime: {1:0.0}s   Jumps: {2}\n{3}", attempts, seconds, jumps, loot, totalAttempts, completions);
+            completeStats.text = string.Format("{6}   ·   Progress: 100.000%\nAttempts: {0}   (champion runs: {4}, cleared {5}x)\nTime: {1:0.0}s   Jumps: {2}\n{3}", attempts, seconds, jumps, loot, totalAttempts, completions, difficultyName);
             completePanel.gameObject.SetActive(true);
         }
 

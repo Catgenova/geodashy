@@ -180,6 +180,37 @@ namespace Geodashy.Core
         Fastest = 4
     }
 
+    /// <summary>How forgiving a run is. Only Champion runs count for the personal best.</summary>
+    public enum Difficulty
+    {
+        Training,     // squire mode: place your own waystones, auto waystones, scrubbing
+        Checkpoints,  // respawn at the waystones the level author placed
+        Champion      // no checkpoints at all
+    }
+
+    public static class DifficultyInfo
+    {
+        public static string Name(Difficulty d)
+        {
+            switch (d)
+            {
+                case Difficulty.Training: return "Training";
+                case Difficulty.Checkpoints: return "Checkpoints";
+                default: return "Champion";
+            }
+        }
+
+        public static string Describe(Difficulty d)
+        {
+            switch (d)
+            {
+                case Difficulty.Training: return "Raise your own waystones (Z), remove them (X), scrub between them (← →). Nothing is recorded.";
+                case Difficulty.Checkpoints: return "Fall back to the last waystone the level author placed. Clears are recorded separately.";
+                default: return "One life from the gate to the finish. Waystones are ignored. Sets your personal best.";
+            }
+        }
+    }
+
     public enum EditorMode
     {
         Build,

@@ -463,9 +463,10 @@ namespace Geodashy.Editing.UI
             "PLAYTEST\n" +
             "P or Enter — play from the start   ·   Shift+P or Ctrl+Enter — play from the marker\n" +
             "M — set marker at cursor   ·   Shift+M — clear marker\n" +
-            "Alt+P or ▶ Squire — squire mode: training with waystones (checkpoints)\n" +
+            "Alt+P or ▶ Train — Training difficulty (your own waystones). Test as… in the View dock picks Checkpoints or Champion for ▶ Play.\n" +
             "In play: click / Space — action   ·   Esc — pause   ·   R — restart\n" +
-            "Squire mode: Z — raise a waystone   ·   X — remove the last one   ·   ← → — scrub between waystones   ·   C — toggle\n" +
+            "Difficulties: Training (place your own waystones), Checkpoints (respawn at Waystone objects you placed in the level), Champion (no checkpoints; sets the record)\n" +
+            "Training: Z — raise a waystone   ·   X — remove the last one   ·   ← → — scrub between waystones   ·   C — toggle\n" +
             "Waystones restore everything: mount, gravity, speed, moved objects, colours, loot. Auto waystones rise every few seconds on solid ground.\n\n" +
             "FILES\n" +
             "Ctrl+S — save   ·   Ctrl+Shift+S — save as   ·   Ctrl+O — files\n" +

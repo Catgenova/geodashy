@@ -439,8 +439,8 @@ namespace Geodashy.Core
             Add("text", "Text", CatSpecial, ObjectKind.Text).Size(3, 1).Shape(PlaceholderShape.Text).Collider(ColliderShape.None).Colors("ffffff", "000000").Z(3).Tags("text", "sign", "label")
                 .Prop(new PropDef("text", "Text", PropType.Text, "HUZZAH"))
                 .Prop(new PropDef("size", "Size", PropType.Float, "1").Range(0.25f, 8, 0.25f));
-            Add("checkpoint", "Waystone", CatSpecial, ObjectKind.Decoration).Size(1, 1.5f).Shape(PlaceholderShape.Rune).Collider(ColliderShape.None).Colors("5fff7a", "1a6a2a").Z(2).Tags("checkpoint", "practice")
-                .Desc("Decorative waystone. Squire mode raises real ones where you place checkpoints.");
+            Add("checkpoint", "Waystone (checkpoint)", CatSpecial, ObjectKind.Decoration).Size(1, 1.5f).Shape(PlaceholderShape.Rune).Collider(ColliderShape.None).Colors("5fff7a", "1a6a2a").Z(2).Tags("checkpoint", "waystone", "respawn", "midpoint")
+                .Desc("A respawn point for the Checkpoints difficulty: passing it saves the run here. Ignored on Champion, dimmed to show it. Place one at each midpoint you want players to fall back to.");
         }
     }
 }

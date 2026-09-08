@@ -84,6 +84,11 @@ and a ceiling for flying mounts. Starting from the marker pre-applies every port
 left of it so the mount and speed are correct. Esc pauses; the pause menu restarts or
 returns to the editor with the camera exactly where it was.
 
+Three difficulties: **Training** (place your own waystones, auto waystones, scrub between them),
+**Checkpoints** (respawn at Waystone objects the author placed; clears are recorded separately) and
+**Champion** (no checkpoints; the only mode that sets the personal best and death markers). Put a
+Waystone from the Special category at every midpoint you want players to fall back to.
+
 Not simulated yet: dual (twin) riders. The portals exist so levels can be authored for it.
 
 ## Level format
