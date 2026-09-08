@@ -23,6 +23,8 @@ namespace Geodashy.Gameplay
         public PlayHUD hud;
         public float finishX;
         public bool orbHoldActivates = true;
+        /// <summary>Raised on every death: rider position, contact point, and what killed the rider.</summary>
+        public event Action<Vector2, Vector2, string> DeathRecorded;
 
         Action onExit;
         Vector2 startPos;

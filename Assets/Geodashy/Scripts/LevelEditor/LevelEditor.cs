@@ -63,6 +63,68 @@ namespace Geodashy.Editing
         public bool beatSnap;
         public int beatDivision = 1;
 
+        // ---- defeat heatmap -----------------------------------------------------
+        public struct DeathRecord
+        {
+            public Vector2 position;
+            public Vector2 contact;
+            public string killer;
+            public float time;
+        }
+
+        /// <summary>Every death from playtests started in this editing session.</summary>
+        public readonly List<DeathRecord> sessionDeaths = new List<DeathRecord>();
+        public bool showDeathHeatmap;
+        HitboxOverlay heatmapOverlay;
+        readonly List<SpriteRenderer> heatmapPool = new List<SpriteRenderer>();
+        public event Action DeathsChanged;
+
+        void RecordDeath(Vector2 position, Vector2 contact, string killer)
+        {
+            sessionDeaths.Add(new DeathRecord { position = position, contact = contact, killer = killer, time = Time.unscaledTime });
+            DeathsChanged?.Invoke();
+        }
+
+        public void ClearSessionDeaths()
+        {
+            sessionDeaths.Clear();
+            DeathsChanged?.Invoke();
+        }
+
+        void DrawDeathHeatmap()
+        {
+            int used = 0;
+            if (showDeathHeatmap && !IsPlaying)
+            {
+                var view = GeoMath.Expand(editorCamera.ViewRect, 2f);
+                heatmapOverlay.thickness = Mathf.Clamp(0.05f / editorCamera.zoom, 0.03f, 0.25f);
+                heatmapOverlay.Begin();
+                foreach (var d in sessionDeaths)
+                {
+                    if (!view.Contains(d.position)) continue;
+                    // translucent heat blob: overlapping deaths stack into a brighter spot
+                    SpriteRenderer sr;
+                    if (used < heatmapPool.Count) sr = heatmapPool[used];
+                    else
+                    {
+                        sr = SpriteLibrary.CreateRenderer("heat", heatmapOverlay.transform, PlaceholderSpriteFactory.Circle(), 955);
+                        heatmapPool.Add(sr);
+                    }
+                    used++;
+                    sr.enabled = true;
+                    sr.transform.position = new Vector3(d.position.x, d.position.y, 0f);
+                    sr.transform.localScale = new Vector3(1.4f, 1.4f, 1f);
+                    sr.color = new Color(1f, 0.15f, 0.1f, 0.22f);
+                    // contact point and a short line from the rider to it
+                    heatmapOverlay.Segment(d.position, d.contact, new Color(1f, 0.4f, 0.3f, 0.6f));
+                    heatmapOverlay.Dot(d.contact, 0.09f, new Color(1f, 0.9f, 0.9f, 0.95f));
+                }
+                heatmapOverlay.End();
+            }
+            else heatmapOverlay.Clear();
+            for (int i = used; i < heatmapPool.Count; i++) heatmapPool[i].enabled = false;
+        }
+
         // ---- transform gizmo -------------------------------------------------
         public const string GizmoPref = "geodashy.gizmo";
         TransformGizmo gizmo;
@@ -150,6 +212,7 @@ namespace Geodashy.Editing
             ghost.sortingOrder = 940;
             ghost.enabled = false;
             hitboxOverlay = HitboxOverlay.Create(transform, "Hitbox Overlay", 960);
+            heatmapOverlay = HitboxOverlay.Create(transform, "Defeat Heatmap", 956);
             gizmo = TransformGizmo.Create(transform);
 
             RebuildViews();
@@ -1042,6 +1105,7 @@ namespace Geodashy.Editing
             var go = new GameObject("Game Runner");
             go.transform.SetParent(transform, false);
             runner = go.AddComponent<GameRunner>();
+            runner.DeathRecorded += RecordDeath;
             runner.Begin(level.DeepClone(), cam, background, ground, start, StopPlaytest, difficulty);
         }
 
@@ -1665,6 +1729,7 @@ namespace Geodashy.Editing
                 hitboxOverlay.DrawObject(BuildDef, CursorSnapped, placeRotation, size, placeFlipX, placeFlipY, 1f);
             }
             hitboxOverlay.End();
+            DrawDeathHeatmap();
 
             if (gizmo != null)
             {

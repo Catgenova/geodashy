@@ -450,7 +450,8 @@ namespace Geodashy.Editing.UI
             "Ctrl+C / X / V / D — copy / cut / paste at cursor / duplicate\n" +
             "Ctrl+Z / Ctrl+Y — undo / redo\n" +
             "X — transform gizmo: drag corners to scale (edges for one axis), the ring to rotate, the centre to move; Shift = fine steps\n" +
-            "Ctrl + / Ctrl − — scale selection\n\n" +
+            "Ctrl + / Ctrl − — scale selection\n" +
+            "Edit dock ▸ Defeat heatmap — overlay of every death from this session's playtests\n\n" +
             "VIEW\n" +
             "W A S D — pan   ·   Mouse wheel — zoom   ·   Middle / right drag or Space+drag — pan\n" +
             "+ / − — zoom   ·   Ctrl+0 — reset zoom   ·   Home / End — level start / end\n" +

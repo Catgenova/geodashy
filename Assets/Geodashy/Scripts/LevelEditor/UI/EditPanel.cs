@@ -9,7 +9,8 @@ namespace Geodashy.Editing.UI
     {
         EditorUI ui;
         LevelEditor editor;
-        Text selInfo;
+        Text selInfo, heatLabel;
+        Toggle heatToggle;
         InputField groupInput;
         Button[] stepButtons;
         readonly float[] steps = { 0.125f, 0.5f, 1f, 5f };
@@ -134,8 +135,47 @@ namespace Geodashy.Editing.UI
             UIFactory.Button(a3, "Center Y", () => editor.AlignSelection("centerY"), -1, 28, null, 12);
             UIFactory.Label(align, "Drag to move · Shift+click adds · drag on empty space box-selects", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 48);
 
+            // defeat heatmap ------------------------------------------------------------
+            var heat = Col(rt, "Defeat heatmap", 190);
+            heatToggle = UIFactory.Toggle(heat, "Show where I died", editor.showDeathHeatmap, v =>
+            {
+                editor.showDeathHeatmap = v;
+                editor.NotifyViewOptionsChanged();
+            }, 26);
+            heatLabel = UIFactory.Label(heat, "", 12, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 54);
+            UIFactory.Button(heat, "Clear session deaths", () =>
+            {
+                editor.ClearSessionDeaths();
+                ui.Toast("Defeat heatmap cleared");
+            }, -1, 26, null, 12);
+            UIFactory.Label(heat, "Red blobs stack where tests ended; dots mark the contact points.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 34);
+
             editor.SelectionChanged += RefreshInfo;
+            editor.DeathsChanged += RefreshHeat;
+            editor.ViewOptionsChanged += RefreshHeat;
             RefreshInfo();
+            RefreshHeat();
+        }
+
+        void RefreshHeat()
+        {
+            if (heatLabel == null) return;
+            heatToggle.SetIsOnWithoutNotify(editor.showDeathHeatmap);
+            int n = editor.sessionDeaths.Count;
+            if (n == 0)
+            {
+                heatLabel.text = "No deaths recorded yet this session.";
+                return;
+            }
+            var counts = new System.Collections.Generic.Dictionary<string, int>();
+            foreach (var d in editor.sessionDeaths)
+            {
+                var k = string.IsNullOrEmpty(d.killer) ? "world" : d.killer;
+                counts[k] = counts.TryGetValue(k, out var c) ? c + 1 : 1;
+            }
+            string worst = ""; int worstN = 0;
+            foreach (var kv in counts) if (kv.Value > worstN) { worst = kv.Key; worstN = kv.Value; }
+            heatLabel.text = n + " death" + (n == 1 ? "" : "s") + " this session\nMost by: " + worst + " (" + worstN + ")";
         }
 
         void SetStep(int idx)
