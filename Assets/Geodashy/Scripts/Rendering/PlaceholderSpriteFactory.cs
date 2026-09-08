@@ -234,20 +234,50 @@ namespace Geodashy.Rendering
                     r.FillCircle(44, 62, 9, rider);
                     r.FillRect(38, 50, 50, 62, rider);
                     break;
-                default: // horse
-                    r.FillEllipse(46, 36, 36, 18, body);
-                    r.FillRect(70, 40, 84, 70, body);
-                    r.FillEllipse(84, 68, 12, 8, body);
-                    r.FillRect(20, 6, 28, 30, dark);
-                    r.FillRect(60, 6, 68, 30, dark);
-                    r.FillRect(30, 6, 38, 30, dark);
-                    r.FillRect(50, 6, 58, 30, dark);
-                    r.FillCircle(90, 72, 2, Color.black);
-                    r.FillRect(72, 56, 78, 76, accent);
-                    r.FillCircle(44, 64, 10, rider);
-                    r.FillRect(38, 48, 50, 64, rider);
-                    r.FillRect(36, 44, 52, 50, Raster.Darken(rider, 0.3f));
+                default: // horse, side view facing right
+                {
+                    var mane = Raster.Darken(body, 0.45f);
+                    var hoof = Raster.Darken(body, 0.6f);
+                    // tail: curved dark strokes off the rump
+                    r.Line(20, 52, 12, 36, 5, mane);
+                    r.Line(20, 52, 8, 44, 4, mane);
+                    // legs: two pairs, slight stride, hooves at the bottom
+                    void Leg(float topX, float bottomX, Color c)
+                    {
+                        r.FillPolygon(new[] { new Vector2(topX - 3.5f, 44), new Vector2(topX + 3.5f, 44), new Vector2(bottomX + 3f, 14), new Vector2(bottomX - 3f, 14) }, c);
+                        r.FillRect(bottomX - 3.5f, 10, bottomX + 3.5f, 15, hoof);
+                    }
+                    Leg(30, 24, Raster.Darken(body, 0.18f)); // far rear
+                    Leg(60, 66, Raster.Darken(body, 0.18f)); // far front
+                    Leg(34, 36, body);                      // near rear
+                    Leg(64, 60, body);                      // near front
+                    // body
+                    r.FillEllipse(46, 50, 28, 14, body);
+                    r.FillEllipse(24, 52, 10, 11, body); // rump
+                    r.FillEllipse(66, 52, 11, 12, body); // chest
+                    // neck rising forward to the head
+                    r.FillPolygon(new[] { new Vector2(60, 58), new Vector2(74, 52), new Vector2(86, 74), new Vector2(72, 78) }, body);
+                    // mane along the top of the neck
+                    r.FillPolygon(new[] { new Vector2(62, 60), new Vector2(72, 78), new Vector2(78, 82), new Vector2(66, 62) }, mane);
+                    // head + muzzle, ears, eye
+                    r.FillEllipse(82, 78, 11, 7, body);
+                    r.FillEllipse(91, 76, 5, 4, Raster.Lighten(body, 0.2f));
+                    r.FillTriangle(new Vector2(76, 82), new Vector2(80, 82), new Vector2(77, 90), body);
+                    r.FillTriangle(new Vector2(81, 83), new Vector2(85, 82), new Vector2(84, 90), body);
+                    r.FillCircle(85, 80, 1.6f, Color.black);
+                    r.FillCircle(94, 74, 1, hoof);
+                    // bridle + reins
+                    r.Line(88, 74, 82, 84, 1.5f, accent);
+                    r.Line(84, 74, 52, 62, 1, accent);
+                    // saddle and rider
+                    r.FillEllipse(44, 60, 11, 4, accent);
+                    r.FillRect(38, 56, 50, 72, rider);
+                    r.FillRect(36, 60, 40, 70, rider); // arm
+                    r.FillCircle(44, 78, 7, rider);
+                    r.FillRect(36, 78, 52, 83, Raster.Darken(rider, 0.35f)); // helmet brim
+                    r.FillRect(46, 50, 50, 58, rider); // leg
                     break;
+                }
             }
             s = r.ToSprite(96f);
             s.name = "mount_" + m.id;
