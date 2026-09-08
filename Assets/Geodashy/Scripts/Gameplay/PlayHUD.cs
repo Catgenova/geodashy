@@ -25,6 +25,8 @@ namespace Geodashy.Gameplay
 
         Text practiceText;
         Button practiceToggle;
+        RectTransform deathPanel;
+        Text deathText;
         RectTransform checkpointButtons;
 
         public static PlayHUD Create(Transform parent, Action onResume, Action onRestart, Action onExit, Action onTogglePractice, Action onCheckpoint, Action onRemoveCheckpoint)
@@ -95,6 +97,14 @@ namespace Geodashy.Gameplay
             UIFactory.Button(checkpointButtons, "+ Checkpoint (Z)", () => onCheckpoint(), -1, 40, UIFactory.Good, 14);
             UIFactory.Button(checkpointButtons, "− Remove (X)", () => onRemoveCheckpoint(), -1, 40, UIFactory.Danger, 14);
             checkpointButtons.gameObject.SetActive(false);
+
+            // death panel (bottom centre so the crash site stays visible)
+            deathPanel = UIFactory.Panel(root, "Death", new Color(0.35f, 0.05f, 0.05f, 0.85f));
+            UIFactory.Anchor(deathPanel, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(-330, 60), new Vector2(330, 128));
+            deathPanel.GetComponent<Image>().raycastTarget = false;
+            deathText = UIFactory.Label(deathPanel, "", 17, TextAnchor.MiddleCenter, UIFactory.TextColor);
+            UIFactory.Stretch(deathText.rectTransform, 10, 4, 10, 4);
+            deathPanel.gameObject.SetActive(false);
 
             // pause panel
             pausePanel = UIFactory.Panel(root, "Pause", new Color(0, 0, 0, 0.6f));
@@ -189,6 +199,14 @@ namespace Geodashy.Gameplay
             UIFactory.SetButtonLabel(practiceToggle, on ? "Practice mode: on (C)" : "Practice mode: off (C)");
             UIFactory.SetButtonActive(practiceToggle, on);
         }
+
+        public void ShowDeath(string cause, float progress)
+        {
+            deathText.text = string.Format("Struck {0} at {1:0.000}%\nRed = the edge that killed you · dot = contact point · yellow = your hurt box\nClick, Space or Enter to retry · R restarts", cause, progress * 100f);
+            deathPanel.gameObject.SetActive(true);
+        }
+
+        public void HideDeath() => deathPanel.gameObject.SetActive(false);
 
         public void SetAttempt(int n) => attemptText.text = "Attempt " + n;
         public void SetCoins(int n, int total) => coinText.text = total > 0 ? "Loot " + n + " / " + total : "";

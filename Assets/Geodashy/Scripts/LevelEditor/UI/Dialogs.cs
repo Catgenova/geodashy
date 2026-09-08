@@ -413,7 +413,7 @@ namespace Geodashy.Editing.UI
             "W A S D — pan   ·   Mouse wheel — zoom   ·   Middle / right drag or Space+drag — pan\n" +
             "+ / − — zoom   ·   Ctrl+0 — reset zoom   ·   Home / End — level start / end\n" +
             "G — toggle grid snap   ·   Ctrl+G — toggle grid   ·   [ ] — editor layer   ·   \\ — show all layers\n" +
-            "H — hide interface\n\n" +
+            "H — hide interface   ·   B — hitbox edges on every object (green safe, red kills, blue interacts)\n\n" +
             "SPAWN\n" +
             "The green ghost rider marks where you spawn: x 0 on the ground, or the right-most enabled Start Position object.\n" +
             "Place a Start Position (Special category) to move it and to override the mount, speed and gravity.\n" +

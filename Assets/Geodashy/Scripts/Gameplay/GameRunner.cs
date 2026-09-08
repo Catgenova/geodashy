@@ -38,6 +38,9 @@ namespace Geodashy.Gameplay
         AudioSource music;
         bool wasHeld;
         Transform worldRoot;
+        HitboxOverlay deathOverlay;
+        float deathTimer;
+        bool awaitingRetry;
         LevelStats stats;
         readonly List<float> sessionDeaths = new List<float>();
         bool fullRun;
@@ -94,6 +97,7 @@ namespace Geodashy.Gameplay
             triggers = new TriggerSystem(world, this);
             playCamera = new PlayCamera(cam, player, level.settings);
             hud = PlayHUD.Create(transform, () => TogglePause(), RestartFromStart, Exit, TogglePractice, PlaceCheckpoint, RemoveCheckpoint);
+            deathOverlay = HitboxOverlay.Create(transform, "Death Overlay", 980);
 
             ComputeStart(start);
             fullRun = start == null && !practice;
@@ -186,6 +190,8 @@ namespace Geodashy.Gameplay
 
         void Respawn()
         {
+            deathOverlay.Clear();
+            hud.HideDeath();
             if (practice && checkpoints.Count > 0)
             {
                 RespawnAtCheckpoint(checkpoints[checkpoints.Count - 1]);
@@ -398,6 +404,8 @@ namespace Geodashy.Gameplay
         public void RestartFromStart()
         {
             paused = false;
+            deathOverlay.Clear();
+            hud.HideDeath();
             ClearCheckpoints();
             Respawn();
         }
@@ -457,9 +465,11 @@ namespace Geodashy.Gameplay
 
             if (player.dead)
             {
+                // the run stays frozen on the failure until the player asks to retry
                 player.Tick(dt);
-                respawnTimer -= dt;
-                if (respawnTimer <= 0f) Respawn();
+                deathTimer += dt;
+                DrawDeathOverlay();
+                if (deathTimer > 0.35f && (pressed || (kb != null && kb.enterKey.wasPressedThisFrame))) Retry();
                 return;
             }
 
@@ -497,9 +507,49 @@ namespace Geodashy.Gameplay
             }
         }
 
+        void DrawDeathOverlay()
+        {
+            deathOverlay.Begin();
+            float pulse = 0.75f + 0.25f * Mathf.Sin(Time.time * 8f);
+            float w = 0.07f;
+            // rider hitboxes: outer (landing/side collision) and inner (hazards)
+            deathOverlay.Rect(player.Bounds, new Color(1f, 1f, 1f, 0.5f), 0.03f);
+            deathOverlay.Rect(player.InnerBounds, new Color(1f, 0.9f, 0.3f, 0.9f), 0.03f);
+            var k = player.killer;
+            if (k != null)
+            {
+                var red = HitboxOverlay.DangerColor;
+                red.a = pulse;
+                if (player.deathEdge == "hitbox" || k.def.kind == ObjectKind.Hazard)
+                {
+                    deathOverlay.DrawViewKind(k, EdgeKind.Danger, red, w);
+                    if (k.def.kind == ObjectKind.Slope) deathOverlay.DrawViewKind(k, EdgeKind.Safe, red, w);
+                }
+                else
+                {
+                    var bounds = k.Bounds;
+                    var e = Hitboxes.AabbEdge(bounds, player.deathEdge, EdgeKind.Danger);
+                    deathOverlay.Segment(e.a, e.b, red, w);
+                }
+            }
+            // contact point: white dot with a red ring
+            deathOverlay.Dot(player.deathPoint, 0.13f, new Color(1f, 0.2f, 0.2f, pulse));
+            deathOverlay.Dot(player.deathPoint, 0.07f, Color.white);
+            deathOverlay.End();
+        }
+
+        void Retry()
+        {
+            awaitingRetry = false;
+            deathOverlay.Clear();
+            hud.HideDeath();
+            Respawn();
+        }
+
         public void OnPlayerDied()
         {
-            respawnTimer = 0.8f;
+            awaitingRetry = true;
+            deathTimer = 0f;
             musicRequest++;
             float progress = Mathf.Clamp01(finishX > 0f ? player.position.x / finishX : 0f);
             hud.SetProgress(progress, true);

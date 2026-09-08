@@ -50,6 +50,9 @@ namespace Geodashy.Editing
         public bool swipeBuild = true;
         public bool swipeDelete = true;
         public bool deleteOnlyBuildType;
+        /// <summary>Keep safe/danger edges drawn on every placed object while editing.</summary>
+        public bool showHitboxes;
+        HitboxOverlay hitboxOverlay;
         public int currentEditorLayer;
         public bool showAllLayers = true;
         public float nudgeStep = 1f;
@@ -118,6 +121,7 @@ namespace Geodashy.Editing
             SpriteLibrary.ApplyMaterial(ghost);
             ghost.sortingOrder = 940;
             ghost.enabled = false;
+            hitboxOverlay = HitboxOverlay.Create(transform, "Hitbox Overlay", 960);
 
             RebuildViews();
             editorCamera.Position = new Vector2(Mathf.Max(level.editorCameraX, 6f), Mathf.Max(level.editorCameraY, level.settings.groundY + 4f));
@@ -1166,6 +1170,12 @@ namespace Geodashy.Editing
                 uiHidden = !uiHidden;
                 ui.SetHidden(uiHidden);
             }
+            if (kb[Key.B].wasPressedThisFrame)
+            {
+                showHitboxes = !showHitboxes;
+                ui.Toast("Hitbox edges " + (showHitboxes ? "shown" : "hidden"));
+                ViewOptionsChanged?.Invoke();
+            }
             if (kb[Key.F1].wasPressedThisFrame) ui.OpenHelp();
             if (kb[Key.T].wasPressedThisFrame && selection.Count == 1)
             {
@@ -1427,6 +1437,34 @@ namespace Geodashy.Editing
             }
             grid.SetSelectionBox(null);
             drag = DragState.None;
+        }
+
+        void LateUpdate()
+        {
+            if (hitboxOverlay == null) return;
+            if (IsPlaying)
+            {
+                hitboxOverlay.Clear();
+                return;
+            }
+            hitboxOverlay.thickness = Mathf.Clamp(0.05f / editorCamera.zoom, 0.03f, 0.25f);
+            hitboxOverlay.Begin();
+            if (showHitboxes)
+            {
+                var view = GeoMath.Expand(editorCamera.ViewRect, 2f);
+                foreach (var v in viewList)
+                {
+                    if (!IsLayerVisible(v.data)) continue;
+                    if (!GeoMath.RectsOverlap(view, v.Bounds)) continue;
+                    hitboxOverlay.DrawView(v, 0.85f);
+                }
+            }
+            if (ghost != null && ghost.enabled && BuildDef != null)
+            {
+                var size = new Vector2(BuildDef.width * placeScale, BuildDef.height * placeScale);
+                hitboxOverlay.DrawObject(BuildDef, CursorSnapped, placeRotation, size, placeFlipX, placeFlipY, 1f);
+            }
+            hitboxOverlay.End();
         }
 
         void OnApplicationQuit()

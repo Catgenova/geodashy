@@ -9,7 +9,7 @@ namespace Geodashy.Editing.UI
     {
         EditorUI ui;
         LevelEditor editor;
-        Toggle snapToggle, gridToggle, guideToggle, bpmToggle, allLayersToggle;
+        Toggle snapToggle, gridToggle, guideToggle, bpmToggle, allLayersToggle, hitboxToggle;
         Button[] gridButtons;
         readonly float[] gridSizes = { 0.25f, 0.5f, 1f, 2f };
         Text layerLabel, zoomLabel, posLabel, uiScaleLabel, savedLabel;
@@ -69,6 +69,12 @@ namespace Geodashy.Editing.UI
             }
 
             UIFactory.SectionHeader(c, "Guides");
+            hitboxToggle = UIFactory.Toggle(c, "Hitbox edges on all objects (B)", editor.showHitboxes, v =>
+            {
+                editor.showHitboxes = v;
+                editor.NotifyViewOptionsChanged();
+            });
+            UIFactory.Label(c, "Green = safe to land on, red = kills, blue = interacts. The brush preview always shows them.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 36);
             guideToggle = UIFactory.Toggle(c, "Camera frame", editor.grid.showCameraGuide, v => editor.grid.showCameraGuide = v);
             bpmToggle = UIFactory.Toggle(c, "BPM beat lines", editor.grid.showBpmGuide, v => editor.grid.showBpmGuide = v);
 
@@ -140,6 +146,7 @@ namespace Geodashy.Editing.UI
             if (uiScaleLabel != null) uiScaleLabel.text = string.Format("Interface size {0:0}%", EditorUI.UIScale * 100f);
             snapToggle.SetIsOnWithoutNotify(editor.snapToGrid);
             gridToggle.SetIsOnWithoutNotify(editor.grid.showGrid);
+            hitboxToggle.SetIsOnWithoutNotify(editor.showHitboxes);
             allLayersToggle.SetIsOnWithoutNotify(editor.showAllLayers);
             for (int i = 0; i < gridSizes.Length; i++) UIFactory.SetButtonActive(gridButtons[i], Mathf.Approximately(gridSizes[i], editor.gridSize));
             layerLabel.text = "Layer " + editor.currentEditorLayer + (editor.showAllLayers ? " (all shown)" : "");

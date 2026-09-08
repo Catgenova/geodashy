@@ -30,6 +30,11 @@ namespace Geodashy.Gameplay
         public float rotationDeg;
         public int jumps;
 
+        /// <summary>What killed the rider, where the contact happened and which edge ("left", "right", "top", "bottom" or "hitbox").</summary>
+        public LevelObjectView killer;
+        public Vector2 deathPoint;
+        public string deathEdge = "";
+
         // input
         bool held;
         bool pressedThisStep;
@@ -114,6 +119,7 @@ namespace Geodashy.Gameplay
             mini = isMini;
             direction = 1;
             dead = false;
+            killer = null;
             finished = false;
             onGround = false;
             rotationDeg = 0f;
@@ -153,6 +159,7 @@ namespace Geodashy.Gameplay
         public void Restore(Snapshot s)
         {
             dead = false;
+            killer = null;
             finished = false;
             deathBurst.enabled = false;
             position = s.position;
@@ -425,7 +432,7 @@ namespace Geodashy.Gameplay
                     {
                         // gravity points up: hitting a block's top is a head bump
                         if (mount.flying || mount.id == "wisp") velocity.y = Mathf.Max(0f, velocity.y);
-                        else if (velocity.y < -0.01f) Die();
+                        else if (velocity.y < -0.01f) Die(v, new Vector2(Mathf.Clamp(position.x, b.xMin, b.xMax), b.yMax), "top");
                     }
                 }
                 else
@@ -439,14 +446,16 @@ namespace Geodashy.Gameplay
                     else
                     {
                         if (mount.flying) velocity.y = Mathf.Min(0f, velocity.y);
-                        else if (velocity.y > 0.01f) Die();
+                        else if (velocity.y > 0.01f) Die(v, new Vector2(Mathf.Clamp(position.x, b.xMin, b.xMax), b.yMin), "bottom");
                         else velocity.y = 0f;
                     }
                 }
             }
             else
             {
-                Die();
+                bool hitLeftFace = direction > 0 ? dxLeft <= dxRight : dxLeft > dxRight;
+                float faceX = hitLeftFace ? b.xMin : b.xMax;
+                Die(v, new Vector2(faceX, Mathf.Clamp(position.y, b.yMin, b.yMax)), hitLeftFace ? "left" : "right");
             }
         }
 
@@ -480,7 +489,7 @@ namespace Geodashy.Gameplay
                 {
                     if (flipped)
                     {
-                        if (position.y - size.y / 2f < surface - 0.3f) Die();
+                        if (position.y - size.y / 2f < surface - 0.3f) Die(v, new Vector2(position.x, surface), "hitbox");
                         return;
                     }
                     position.y = surface + size.y / 2f;
@@ -498,7 +507,7 @@ namespace Geodashy.Gameplay
                 {
                     if (!flipped)
                     {
-                        if (position.y + size.y / 2f > surface + 0.3f) Die();
+                        if (position.y + size.y / 2f > surface + 0.3f) Die(v, new Vector2(position.x, surface), "hitbox");
                         return;
                     }
                     position.y = surface - size.y / 2f;
@@ -515,25 +524,18 @@ namespace Geodashy.Gameplay
             var inner = InnerBounds;
             if (!GeoMath.RectsOverlap(inner, v.Bounds)) return;
             var size = v.Size;
-            Vector2 half;
-            Vector2 localOffset = Vector2.zero;
-            switch (v.def.collider)
+            var shape = Hitboxes.Hazard(v.def, size);
+            if (shape.circle)
             {
-                case ColliderShape.Triangle:
-                    half = new Vector2(size.x * 0.18f, size.y * 0.35f);
-                    localOffset = new Vector2(0f, -size.y * 0.1f);
-                    break;
-                case ColliderShape.Circle:
+                var c = v.WorldPosition;
+                float nx = Mathf.Clamp(c.x, inner.xMin, inner.xMax), ny = Mathf.Clamp(c.y, inner.yMin, inner.yMax);
+                var nearest = new Vector2(nx, ny);
+                if ((nearest - c).sqrMagnitude <= shape.radius * shape.radius)
                 {
-                    float r = Mathf.Min(size.x, size.y) * 0.5f * v.def.hitboxScale;
-                    var c = v.WorldPosition;
-                    float nx = Mathf.Clamp(c.x, inner.xMin, inner.xMax), ny = Mathf.Clamp(c.y, inner.yMin, inner.yMax);
-                    if ((new Vector2(nx, ny) - c).sqrMagnitude <= r * r) Die();
-                    return;
+                    var dir = (nearest - c).sqrMagnitude > 0.0001f ? (nearest - c).normalized : Vector2.up;
+                    Die(v, c + dir * shape.radius, "hitbox");
                 }
-                default:
-                    half = size * 0.5f * v.def.hitboxScale;
-                    break;
+                return;
             }
             // test inner box corners + centre in the hazard's local space
             Vector2[] pts =
@@ -544,16 +546,16 @@ namespace Geodashy.Gameplay
             foreach (var pt in pts)
             {
                 var local = GeoMath.WorldToLocal(pt, v.WorldPosition, v.WorldRotation);
-                local = new Vector2(local.x * sx, local.y * sy) - localOffset;
-                if (Mathf.Abs(local.x) <= half.x && Mathf.Abs(local.y) <= half.y)
+                local = new Vector2(local.x * sx, local.y * sy) - shape.offset;
+                if (Mathf.Abs(local.x) <= shape.half.x && Mathf.Abs(local.y) <= shape.half.y)
                 {
-                    Die();
+                    Die(v, pt, "hitbox");
                     return;
                 }
             }
             // also catch the case where the hazard box is fully inside the player's inner box
-            var hz = GeoMath.LocalToWorld(localOffset, v.WorldPosition, v.WorldRotation);
-            if (inner.Contains(hz)) Die();
+            var hz = GeoMath.LocalToWorld(new Vector2(shape.offset.x * sx, shape.offset.y * sy), v.WorldPosition, v.WorldRotation);
+            if (inner.Contains(hz)) Die(v, hz, "hitbox");
         }
 
         bool CircleTouch(LevelObjectView v)
@@ -709,15 +711,20 @@ namespace Geodashy.Gameplay
             if (!onSlope) slopeSlope = 0f;
         }
 
-        public void Die()
+        public void Die() => Die(null, position, "");
+
+        public void Die(LevelObjectView by, Vector2 point, string edge)
         {
             if (dead) return;
             dead = true;
+            killer = by;
+            deathPoint = point;
+            deathEdge = edge ?? "";
             deathTimer = 0f;
             deathBurst.enabled = true;
             deathBurst.transform.position = new Vector3(position.x, position.y, 0f);
             deathBurst.transform.localScale = Vector3.one * 0.5f;
-            sr.enabled = false;
+            ApplyVisual();
             runner.OnPlayerDied();
         }
 
@@ -730,7 +737,9 @@ namespace Geodashy.Gameplay
             float baseScale = 1f;
             if (sr.sprite != null) baseScale = mount.width / Mathf.Max(0.01f, sr.sprite.bounds.size.x);
             transform.localScale = new Vector3(baseScale * s * direction, baseScale * s * (flipped ? -1f : 1f), 1f);
-            sr.enabled = visible && !dead;
+            sr.enabled = visible;
+            // stay visible but ghosted at the death spot so the contact point can be read
+            sr.color = dead ? new Color(1f, 1f, 1f, 0.45f) : Color.white;
         }
     }
 }
