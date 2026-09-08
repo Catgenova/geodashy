@@ -53,7 +53,7 @@
    "b": 1.0,
    "a": 1.0
   },
-  "songId": "",
+  "songId": "legends_begin",
   "songOffset": 0.0,
   "bpm": 120.0,
   "fadeIn": true,
@@ -1540,5 +1540,6 @@
     }
    ]
   }
- ]
+ ],
+ "campaignOrder": 1
 }

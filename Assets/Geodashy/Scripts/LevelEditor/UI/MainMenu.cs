@@ -33,6 +33,24 @@ namespace Geodashy.Editing.UI
             BuildBackdrop();
             BuildUI();
             ShowTitle();
+            StartMenuMusic();
+        }
+
+        void StartMenuMusic()
+        {
+            var clip = Resources.Load<AudioClip>("Songs/the_kingdom");
+            if (clip == null)
+            {
+                var all = Resources.LoadAll<AudioClip>("Songs");
+                if (all.Length == 0) return;
+                clip = all[UnityEngine.Random.Range(0, all.Length)];
+            }
+            var src = gameObject.AddComponent<AudioSource>();
+            src.clip = clip;
+            src.loop = true;
+            src.volume = 0.45f;
+            src.playOnAwake = false;
+            src.Play();
         }
 
         void BuildBackdrop()
