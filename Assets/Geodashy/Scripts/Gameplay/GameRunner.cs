@@ -31,7 +31,6 @@ namespace Geodashy.Gameplay
         bool startFlipped, startMini;
         int attempts;
         int coins, totalCoins;
-        float respawnTimer = -1f;
         bool paused;
         bool complete;
         float elapsed;
@@ -40,11 +39,9 @@ namespace Geodashy.Gameplay
         Transform worldRoot;
         HitboxOverlay deathOverlay;
         float deathTimer;
-        bool awaitingRetry;
         LevelStats stats;
         readonly List<float> sessionDeaths = new List<float>();
         bool fullRun;
-        float attemptBest;
 
         // ---- practice mode ---------------------------------------------------
         class Checkpoint
@@ -202,14 +199,12 @@ namespace Geodashy.Gameplay
             paused = false;
             elapsed = 0f;
             coins = 0;
-            respawnTimer = -1f;
             autoCheckpointTimer = 0f;
             lastCheckpointX = -100f;
             ResetWorld();
             player.Spawn(startPos, startMount, startSpeed, startFlipped, startMini);
             triggers.ResetForStart(startPos.x);
             playCamera.Reset(startPos.x);
-            attemptBest = 0f;
             if (fullRun) stats.attempts++;
             hud.SetAttempt(attempts);
             hud.SetCoins(0, totalCoins);
@@ -307,7 +302,6 @@ namespace Geodashy.Gameplay
             attempts++;
             complete = false;
             paused = false;
-            respawnTimer = -1f;
             autoCheckpointTimer = 0f;
             elapsed = cp.elapsed;
             coins = cp.coins;
@@ -484,7 +478,6 @@ namespace Geodashy.Gameplay
             playCamera.Update(dt);
             float progress = finishX > 0f ? player.position.x / finishX : 0f;
             hud.SetProgress(progress);
-            if (progress > attemptBest) attemptBest = progress;
             if (fullRun && progress > stats.bestProgress + 0.002f)
             {
                 stats.bestProgress = Mathf.Clamp01(progress);
@@ -540,7 +533,6 @@ namespace Geodashy.Gameplay
 
         void Retry()
         {
-            awaitingRetry = false;
             deathOverlay.Clear();
             hud.HideDeath();
             Respawn();
@@ -548,7 +540,6 @@ namespace Geodashy.Gameplay
 
         public void OnPlayerDied()
         {
-            awaitingRetry = true;
             deathTimer = 0f;
             musicRequest++;
             float progress = Mathf.Clamp01(finishX > 0f ? player.position.x / finishX : 0f);
