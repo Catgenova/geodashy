@@ -8,10 +8,89 @@ namespace Geodashy.Rendering
     /// Resolves art for objects, mounts, backgrounds and ground. Looks in Resources first
     /// (so artists can drop in real sprites) and falls back to procedural placeholders.
     /// </summary>
+    /// <summary>Frame sets for a mount: a run cycle used on the ground and a jump cycle used in the air.</summary>
+    public class MountAnimation
+    {
+        public Sprite[] run;
+        public Sprite[] jump;
+        public float runFps = 14f;
+        public float jumpFps = 20f;
+    }
+
     public static class SpriteLibrary
     {
         static readonly Dictionary<string, Sprite> resourceCache = new Dictionary<string, Sprite>();
+        static readonly Dictionary<string, MountAnimation> mountAnimations = new Dictionary<string, MountAnimation>();
+        static Dictionary<string, Texture2D> spriteTextures;
         static Material spriteMaterial;
+
+        /// <summary>Art height of an animated mount frame in world units (the hitbox stays 1x1).</summary>
+        public const float MountFrameHeightUnits = 1.3f;
+
+        static Dictionary<string, Texture2D> SpriteTextures
+        {
+            get
+            {
+                if (spriteTextures != null) return spriteTextures;
+                spriteTextures = new Dictionary<string, Texture2D>();
+                foreach (var t in Resources.LoadAll<Texture2D>("Sprites")) spriteTextures[t.name] = t;
+                return spriteTextures;
+            }
+        }
+
+        /// <summary>Finds a sheet named {prefix}_{frames} (e.g. mount_horse_run_9) and returns its frame count, or 0.</summary>
+        static Texture2D FindSheet(string prefix, out int frames)
+        {
+            frames = 0;
+            foreach (var kv in SpriteTextures)
+            {
+                if (!kv.Key.StartsWith(prefix + "_")) continue;
+                var tail = kv.Key.Substring(prefix.Length + 1);
+                if (int.TryParse(tail, out var n) && n > 0)
+                {
+                    frames = n;
+                    return kv.Value;
+                }
+            }
+            return null;
+        }
+
+        static Sprite[] Slice(Texture2D tex, int frames, float heightUnits)
+        {
+            float fw = tex.width / (float)frames;
+            float ppu = tex.height / heightUnits;
+            // pivot so the bottom of the art sits on the hitbox bottom (0.5 units below centre)
+            var pivot = new Vector2(0.5f, Mathf.Clamp01(0.5f / heightUnits));
+            var result = new Sprite[frames];
+            for (int i = 0; i < frames; i++)
+            {
+                result[i] = Sprite.Create(tex, new Rect(i * fw, 0, fw, tex.height), pivot, ppu, 0, SpriteMeshType.FullRect);
+                result[i].name = tex.name + "_" + i;
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Animation sheets for a mount, or null when none exist. Drop horizontal strips into
+        /// Resources/Sprites named mount_{id}_run_{frames}.png and mount_{id}_jump_{frames}.png.
+        /// </summary>
+        public static MountAnimation ForMountAnimation(MountDefinition m)
+        {
+            if (mountAnimations.TryGetValue(m.id, out var cached)) return cached;
+            MountAnimation anim = null;
+            var runTex = FindSheet("mount_" + m.id + "_run", out var runFrames);
+            var jumpTex = FindSheet("mount_" + m.id + "_jump", out var jumpFrames);
+            if (runTex != null || jumpTex != null)
+            {
+                anim = new MountAnimation();
+                if (runTex != null) anim.run = Slice(runTex, runFrames, MountFrameHeightUnits);
+                if (jumpTex != null) anim.jump = Slice(jumpTex, jumpFrames, MountFrameHeightUnits);
+                if (anim.run == null) anim.run = anim.jump;
+                if (anim.jump == null) anim.jump = anim.run;
+            }
+            mountAnimations[m.id] = anim;
+            return anim;
+        }
 
         /// <summary>Unlit sprite material that works under URP 2D without lights.</summary>
         public static Material SpriteMaterial
@@ -42,9 +121,14 @@ namespace Geodashy.Rendering
 
         public static Sprite ForMount(MountDefinition m)
         {
+            var anim = ForMountAnimation(m);
+            if (anim != null && anim.run != null && anim.run.Length > 0) return anim.run[0];
             var real = LoadResource("Sprites/mount_" + m.id);
             return real != null ? real : PlaceholderSpriteFactory.ForMount(m);
         }
+
+        /// <summary>True when the mount uses real animation frames rather than a placeholder.</summary>
+        public static bool MountIsAnimated(MountDefinition m) => ForMountAnimation(m) != null;
 
         public static Sprite ForBackgroundLayer(BackgroundLayerDefinition layer)
         {

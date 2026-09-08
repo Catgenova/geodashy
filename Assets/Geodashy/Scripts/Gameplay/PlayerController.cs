@@ -37,6 +37,9 @@ namespace Geodashy.Gameplay
 
         /// <summary>Visual squash-and-stretch multiplier, eased back to 1 every frame.</summary>
         Vector2 squash = Vector2.one;
+        MountAnimation anim;
+        float animTime;
+        float airTime;
 
         // input
         bool held;
@@ -107,6 +110,7 @@ namespace Geodashy.Gameplay
         public void SetMount(string id)
         {
             mount = MountCatalog.Get(id);
+            anim = SpriteLibrary.ForMountAnimation(mount);
             sr.sprite = SpriteLibrary.ForMount(mount);
             dashing = false;
             ApplyVisual();
@@ -215,6 +219,8 @@ namespace Geodashy.Gameplay
                 if (dead || finished) break;
             }
             squash = Vector2.Lerp(squash, Vector2.one, 1f - Mathf.Exp(-11f * dt));
+            animTime += dt * (Speed / 10.4f);
+            airTime = onGround ? 0f : airTime + dt;
             ApplyVisual();
         }
 
@@ -707,6 +713,12 @@ namespace Geodashy.Gameplay
         void UpdateRotation(float dt, bool wasGround)
         {
             float up = Up;
+            if (anim != null && mount.rotationMode == 1)
+            {
+                // real riders do not cartwheel: settle upright instead of spinning
+                rotationDeg = Mathf.LerpAngle(rotationDeg, 0f, 1f - Mathf.Exp(-12f * dt));
+                return;
+            }
             switch (mount.rotationMode)
             {
                 case 1: // spin while airborne, settle on landing
@@ -758,7 +770,12 @@ namespace Geodashy.Gameplay
             transform.rotation = Quaternion.Euler(0f, 0f, rotationDeg);
             float s = mini ? 0.6f : 1f;
             float baseScale = 1f;
-            if (sr.sprite != null) baseScale = mount.width / Mathf.Max(0.01f, sr.sprite.bounds.size.x);
+            if (anim != null && !dead)
+            {
+                if (onGround && anim.run != null && anim.run.Length > 0) sr.sprite = anim.run[Mathf.FloorToInt(animTime * anim.runFps) % anim.run.Length];
+                else if (anim.jump != null && anim.jump.Length > 0) sr.sprite = anim.jump[Mathf.Min(anim.jump.Length - 1, Mathf.FloorToInt(airTime * anim.jumpFps))];
+            }
+            else if (anim == null && sr.sprite != null) baseScale = mount.width / Mathf.Max(0.01f, sr.sprite.bounds.size.x);
             transform.localScale = new Vector3(baseScale * s * direction * squash.x, baseScale * s * (flipped ? -1f : 1f) * squash.y, 1f);
             sr.enabled = visible;
             // stay visible but ghosted at the death spot so the contact point can be read

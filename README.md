@@ -100,7 +100,9 @@ Everything currently drawn is a procedural placeholder so the editor is usable t
 To replace art, drop sprites into Resources using these names (Sprite import type, 64 px per block):
 
 - Objects: `Assets/Geodashy/Resources/Sprites/<object id>.png` (e.g. `castle_stone.png`, `rune_wind.png`).
-- Mounts: `Resources/Sprites/mount_<mount id>.png` (facing right, about 96 px).
+- Mounts: `Resources/Sprites/mount_<mount id>.png` (facing right, about 96 px) for a still, or animated
+  strips `mount_<mount id>_run_<frames>.png` and `mount_<mount id>_jump_<frames>.png` (horizontal, equal-width
+  frames, feet at the bottom edge). The horse ships with both. Frames are drawn 1.3 blocks tall over a 1x1 hitbox.
 - Background layers: `Resources/Backgrounds/<layer id>.png` (must tile horizontally; 16 px per block works well).
 - Ground: `Resources/Backgrounds/ground_<ground id>.png` (tiles horizontally, top edge is the surface).
 - Songs: `Resources/Songs/<song id>` audio clips referenced by the Song ID setting or Song trigger.
