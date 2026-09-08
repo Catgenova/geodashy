@@ -9,7 +9,7 @@ namespace Geodashy.Editing.UI
     {
         EditorUI ui;
         LevelEditor editor;
-        Toggle snapToggle, gridToggle, guideToggle, bpmToggle, allLayersToggle, hitboxToggle, beatToggle;
+        Toggle snapToggle, gridToggle, guideToggle, bpmToggle, allLayersToggle, hitboxToggle, beatToggle, gizmoToggle;
         Button[] beatButtons;
         Button[] gridButtons;
         readonly float[] gridSizes = { 0.25f, 0.5f, 1f, 2f };
@@ -92,6 +92,8 @@ namespace Geodashy.Editing.UI
             UIFactory.Label(c, "Uses the level BPM and start speed, so every obstacle lands on the music.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 32);
 
             UIFactory.SectionHeader(c, "Guides");
+            gizmoToggle = UIFactory.Toggle(c, "Transform gizmo on selection (X)", editor.GizmoVisible, v => editor.GizmoVisible = v);
+            UIFactory.Label(c, "Corners scale, edges scale one axis, the ring rotates, the centre moves. Hold Shift for fine steps.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 36);
             hitboxToggle = UIFactory.Toggle(c, "Hitbox edges on all objects (B)", editor.showHitboxes, v =>
             {
                 editor.showHitboxes = v;
@@ -170,6 +172,7 @@ namespace Geodashy.Editing.UI
             snapToggle.SetIsOnWithoutNotify(editor.snapToGrid);
             gridToggle.SetIsOnWithoutNotify(editor.grid.showGrid);
             hitboxToggle.SetIsOnWithoutNotify(editor.showHitboxes);
+            gizmoToggle.SetIsOnWithoutNotify(editor.GizmoVisible);
             beatToggle.SetIsOnWithoutNotify(editor.beatSnap);
             bpmToggle.SetIsOnWithoutNotify(editor.grid.showBpmGuide);
             int[] divs = { 1, 2, 4 };

@@ -19,7 +19,12 @@ namespace Geodashy.Editing
     {
         public static LevelEditor Instance { get; private set; }
 
-        enum DragState { None, Pan, BoxSelect, MoveSelection, SwipeBuild, SwipeDelete }
+        enum DragState { None, Pan, BoxSelect, MoveSelection, SwipeBuild, SwipeDelete, Gizmo }
+
+        struct TransformState
+        {
+            public float x, y, rotation, scaleX, scaleY;
+        }
 
         // ---- scene ---------------------------------------------------------
         public Camera cam;
@@ -57,6 +62,24 @@ namespace Geodashy.Editing
         /// <summary>Snap placed objects' x to the song's beat grid (see beatDivision).</summary>
         public bool beatSnap;
         public int beatDivision = 1;
+
+        // ---- transform gizmo -------------------------------------------------
+        public const string GizmoPref = "geodashy.gizmo";
+        TransformGizmo gizmo;
+        public bool GizmoVisible
+        {
+            get => PlayerPrefs.GetInt(GizmoPref, 1) == 1;
+            set
+            {
+                PlayerPrefs.SetInt(GizmoPref, value ? 1 : 0);
+                ViewOptionsChanged?.Invoke();
+            }
+        }
+        TransformGizmo.Handle gizmoHandle;
+        Vector2 gizmoCenter;
+        Rect gizmoStartBounds;
+        readonly Dictionary<int, TransformState> gizmoOriginals = new Dictionary<int, TransformState>();
+        string gizmoInfo = "";
         public int currentEditorLayer;
         public bool showAllLayers = true;
         public float nudgeStep = 1f;
@@ -127,6 +150,7 @@ namespace Geodashy.Editing
             ghost.sortingOrder = 940;
             ghost.enabled = false;
             hitboxOverlay = HitboxOverlay.Create(transform, "Hitbox Overlay", 960);
+            gizmo = TransformGizmo.Create(transform);
 
             RebuildViews();
             editorCamera.Position = new Vector2(Mathf.Max(level.editorCameraX, 6f), Mathf.Max(level.editorCameraY, level.settings.groundY + 4f));
@@ -1139,6 +1163,8 @@ namespace Geodashy.Editing
                     ViewOptionsChanged?.Invoke();
                 }
                 if (kb[Key.Digit0].wasPressedThisFrame || kb[Key.Numpad0].wasPressedThisFrame) editorCamera.SetZoom(1f);
+                if (kb[Key.Equals].wasPressedThisFrame || kb[Key.NumpadPlus].wasPressedThisFrame) ScaleSelection(1.25f);
+                if (kb[Key.Minus].wasPressedThisFrame || kb[Key.NumpadMinus].wasPressedThisFrame) ScaleSelection(0.8f);
                 if (kb[Key.Enter].wasPressedThisFrame) StartPlaytest(true);
                 return;
             }
@@ -1179,6 +1205,11 @@ namespace Geodashy.Editing
             {
                 uiHidden = !uiHidden;
                 ui.SetHidden(uiHidden);
+            }
+            if (kb[Key.X].wasPressedThisFrame)
+            {
+                GizmoVisible = !GizmoVisible;
+                ui.Toast("Transform gizmo " + (GizmoVisible ? "on: drag corners to scale, edges for one axis, the ring to rotate, the centre to move" : "off"), 3f);
             }
             if (kb[Key.B].wasPressedThisFrame)
             {
@@ -1252,7 +1283,8 @@ namespace Geodashy.Editing
             // hover --------------------------------------------------------------
             if (drag == DragState.None)
             {
-                var hv = overUI ? null : PickObject(CursorWorld);
+                bool overHandle = GizmoActive && gizmo.HitTest(CursorWorld) != TransformGizmo.Handle.None;
+                var hv = overUI || overHandle ? null : PickObject(CursorWorld);
                 int newHover = hv != null ? hv.data.uid : -1;
                 if (newHover != hoverUid)
                 {
@@ -1278,7 +1310,9 @@ namespace Geodashy.Editing
                 dragStartScreen = screen;
                 dragStartWorld = CursorWorld;
                 dragMoved = false;
-                BeginLeftPress(shift, ctrl);
+                var handle = GizmoActive ? gizmo.HitTest(CursorWorld) : TransformGizmo.Handle.None;
+                if (handle != TransformGizmo.Handle.None) BeginGizmoDrag(handle);
+                else BeginLeftPress(shift, ctrl);
             }
             else if (mouse.leftButton.isPressed && drag != DragState.None)
             {
@@ -1317,6 +1351,126 @@ namespace Geodashy.Editing
                     if (hit != null && DeleteAllowed(hit)) DeleteObjects(new[] { hit.data.uid }, false);
                     break;
             }
+        }
+
+        bool GizmoActive => GizmoVisible && selection.Count > 0 && Mode != EditorMode.Delete && !(Mode == EditorMode.Build && BuildDef != null);
+
+        void BeginGizmoDrag(TransformGizmo.Handle handle)
+        {
+            gizmoHandle = handle;
+            gizmoStartBounds = SelectionBounds();
+            gizmoCenter = gizmoStartBounds.center;
+            gizmoOriginals.Clear();
+            foreach (var o in SelectedObjects())
+                gizmoOriginals[o.uid] = new TransformState { x = o.x, y = o.y, rotation = o.rotation, scaleX = o.scaleX, scaleY = o.scaleY };
+            RecordUndo();
+            drag = DragState.Gizmo;
+        }
+
+        void ContinueGizmoDrag(bool shift)
+        {
+            bool multi = gizmoOriginals.Count > 1;
+            switch (gizmoHandle)
+            {
+                case TransformGizmo.Handle.Move:
+                {
+                    var delta = CursorWorld - dragStartWorld;
+                    if (snapToGrid && !shift) delta = new Vector2(GeoMath.SnapValue(delta.x, gridSize), GeoMath.SnapValue(delta.y, gridSize));
+                    foreach (var kv in gizmoOriginals)
+                    {
+                        var o = level.FindByUid(kv.Key);
+                        if (o == null) continue;
+                        o.x = kv.Value.x + delta.x;
+                        o.y = kv.Value.y + delta.y;
+                        GetView(kv.Key)?.ApplyTransform();
+                    }
+                    gizmoInfo = string.Format("MOVE {0:+0.##;-0.##;0} {1:+0.##;-0.##;0}", delta.x, delta.y);
+                    break;
+                }
+                case TransformGizmo.Handle.Rotate:
+                {
+                    float a0 = Mathf.Atan2(dragStartWorld.y - gizmoCenter.y, dragStartWorld.x - gizmoCenter.x) * Mathf.Rad2Deg;
+                    float a1 = Mathf.Atan2(CursorWorld.y - gizmoCenter.y, CursorWorld.x - gizmoCenter.x) * Mathf.Rad2Deg;
+                    float delta = Mathf.DeltaAngle(a0, a1);
+                    float step = shift ? 1f : (snapToGrid ? 15f : 5f);
+                    delta = Mathf.Round(delta / step) * step;
+                    foreach (var kv in gizmoOriginals)
+                    {
+                        var o = level.FindByUid(kv.Key);
+                        if (o == null) continue;
+                        if (multi)
+                        {
+                            var p = GeoMath.Rotate(new Vector2(kv.Value.x, kv.Value.y) - gizmoCenter, delta) + gizmoCenter;
+                            o.x = p.x;
+                            o.y = p.y;
+                        }
+                        o.rotation = GeoMath.NormalizeAngle(kv.Value.rotation + delta);
+                        GetView(kv.Key)?.ApplyTransform();
+                    }
+                    gizmoInfo = string.Format("ROTATE {0:+0;-0;0} DEG", delta);
+                    break;
+                }
+                default:
+                {
+                    // scale: factor from the distance to the centre along the handle's axes
+                    var h = gizmoHandle;
+                    bool xAxis = h != TransformGizmo.Handle.ScaleT && h != TransformGizmo.Handle.ScaleB;
+                    bool yAxis = h != TransformGizmo.Handle.ScaleL && h != TransformGizmo.Handle.ScaleR;
+                    bool uniform = xAxis && yAxis;
+                    var d0 = dragStartWorld - gizmoCenter;
+                    var d1 = CursorWorld - gizmoCenter;
+                    float fx = Mathf.Abs(d0.x) > 0.01f ? Mathf.Abs(d1.x) / Mathf.Abs(d0.x) : 1f;
+                    float fy = Mathf.Abs(d0.y) > 0.01f ? Mathf.Abs(d1.y) / Mathf.Abs(d0.y) : 1f;
+                    if (uniform)
+                    {
+                        float f = d0.magnitude > 0.01f ? d1.magnitude / d0.magnitude : 1f;
+                        fx = fy = f;
+                    }
+                    if (!xAxis) fx = 1f;
+                    if (!yAxis) fy = 1f;
+                    float step = shift ? 0.01f : 0.25f;
+                    foreach (var kv in gizmoOriginals)
+                    {
+                        var o = level.FindByUid(kv.Key);
+                        if (o == null) continue;
+                        float sx = Mathf.Clamp(Mathf.Round(kv.Value.scaleX * fx / step) * step, 0.125f, 16f);
+                        float sy = Mathf.Clamp(Mathf.Round(kv.Value.scaleY * fy / step) * step, 0.125f, 16f);
+                        float ax = kv.Value.scaleX > 0.0001f ? sx / kv.Value.scaleX : 1f;
+                        float ay = kv.Value.scaleY > 0.0001f ? sy / kv.Value.scaleY : 1f;
+                        if (multi)
+                        {
+                            o.x = gizmoCenter.x + (kv.Value.x - gizmoCenter.x) * ax;
+                            o.y = gizmoCenter.y + (kv.Value.y - gizmoCenter.y) * ay;
+                        }
+                        o.scaleX = sx;
+                        o.scaleY = sy;
+                        GetView(kv.Key)?.ApplyTransform();
+                    }
+                    gizmoInfo = string.Format("SCALE {0:0.##} X {1:0.##}", fx, fy);
+                    break;
+                }
+            }
+        }
+
+        void EndGizmoDrag()
+        {
+            bool changed = false;
+            foreach (var kv in gizmoOriginals)
+            {
+                var o = level.FindByUid(kv.Key);
+                if (o == null) continue;
+                if (Mathf.Abs(o.x - kv.Value.x) > 0.0001f || Mathf.Abs(o.y - kv.Value.y) > 0.0001f || Mathf.Abs(o.rotation - kv.Value.rotation) > 0.0001f ||
+                    Mathf.Abs(o.scaleX - kv.Value.scaleX) > 0.0001f || Mathf.Abs(o.scaleY - kv.Value.scaleY) > 0.0001f) changed = true;
+            }
+            gizmoInfo = "";
+            if (changed)
+            {
+                foreach (var kv in gizmoOriginals) RefreshView(kv.Key);
+                RefreshSelectionVisuals();
+                MarkChanged();
+                SelectionChanged?.Invoke();
+            }
+            else undo.DiscardLast();
         }
 
         bool DeleteAllowed(LevelObjectView v)
@@ -1368,6 +1522,9 @@ namespace Geodashy.Editing
         {
             switch (drag)
             {
+                case DragState.Gizmo:
+                    if (dragMoved) ContinueGizmoDrag(shift);
+                    break;
                 case DragState.SwipeBuild:
                     if (swipeBuild && (CursorSnapped - lastSwipeCell).sqrMagnitude > 0.0001f)
                     {
@@ -1408,6 +1565,9 @@ namespace Geodashy.Editing
         {
             switch (drag)
             {
+                case DragState.Gizmo:
+                    EndGizmoDrag();
+                    break;
                 case DragState.BoxSelect:
                     grid.SetSelectionBox(null);
                     if (dragMoved) SelectInRect(GeoMath.RectFromPoints(dragStartWorld, CursorWorld), shift);
@@ -1438,6 +1598,22 @@ namespace Geodashy.Editing
 
         void CancelDrag()
         {
+            if (drag == DragState.Gizmo)
+            {
+                foreach (var kv in gizmoOriginals)
+                {
+                    var o = level.FindByUid(kv.Key);
+                    if (o == null) continue;
+                    o.x = kv.Value.x;
+                    o.y = kv.Value.y;
+                    o.rotation = kv.Value.rotation;
+                    o.scaleX = kv.Value.scaleX;
+                    o.scaleY = kv.Value.scaleY;
+                    RefreshView(kv.Key);
+                }
+                undo.DiscardLast();
+                gizmoInfo = "";
+            }
             if (drag == DragState.MoveSelection)
             {
                 foreach (var kv in dragOriginalPositions)
@@ -1480,6 +1656,27 @@ namespace Geodashy.Editing
                 hitboxOverlay.DrawObject(BuildDef, CursorSnapped, placeRotation, size, placeFlipX, placeFlipY, 1f);
             }
             hitboxOverlay.End();
+
+            if (gizmo != null)
+            {
+                if (GizmoActive && !ui.ModalOpen)
+                {
+                    float ppu = Screen.height / (2f * editorCamera.HalfHeight);
+                    string info = gizmoInfo;
+                    if (string.IsNullOrEmpty(info))
+                    {
+                        var objs = SelectedObjects();
+                        if (objs.Count == 1)
+                        {
+                            var o = objs[0];
+                            info = string.Format("X {0:0.##}  Y {1:0.##}  ROT {2:0}  SCALE {3:0.##}X{4:0.##}", o.x, o.y, o.rotation, o.scaleX, o.scaleY);
+                        }
+                        else info = objs.Count + " OBJECTS";
+                    }
+                    gizmo.Refresh(SelectionBounds(), ppu, CursorWorld, drag == DragState.Gizmo, gizmoHandle, info);
+                }
+                else gizmo.Hide();
+            }
         }
 
         void OnDestroy()

@@ -448,7 +448,9 @@ namespace Geodashy.Editing.UI
             "T — select everything of the same type\n" +
             "Delete / Backspace — delete selection\n" +
             "Ctrl+C / X / V / D — copy / cut / paste at cursor / duplicate\n" +
-            "Ctrl+Z / Ctrl+Y — undo / redo\n\n" +
+            "Ctrl+Z / Ctrl+Y — undo / redo\n" +
+            "X — transform gizmo: drag corners to scale (edges for one axis), the ring to rotate, the centre to move; Shift = fine steps\n" +
+            "Ctrl + / Ctrl − — scale selection\n\n" +
             "VIEW\n" +
             "W A S D — pan   ·   Mouse wheel — zoom   ·   Middle / right drag or Space+drag — pan\n" +
             "+ / − — zoom   ·   Ctrl+0 — reset zoom   ·   Home / End — level start / end\n" +
