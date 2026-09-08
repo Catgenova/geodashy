@@ -60,6 +60,21 @@ namespace Geodashy.Editing.UI
                     editor.DeleteObjects(list);
                 }, "Delete");
             }, -1, 30, UIFactory.Danger, 13);
+            UIFactory.Button(c2, "Delete all start positions", () =>
+            {
+                int n = 0;
+                foreach (var o in editor.level.objects) if (o.type == "start_pos") n++;
+                if (n == 0)
+                {
+                    ui.Toast("No start positions in the level");
+                    return;
+                }
+                editor.DeleteAllOfType("start_pos");
+            }, -1, 30, UIFactory.Danger, 13);
+            UIFactory.Button(c2, "Delete all waystones", () =>
+            {
+                ui.Confirm("Delete all waystones?", "Every Waystone checkpoint will be removed. You can undo this.", () => editor.DeleteAllOfType("checkpoint"), "Delete");
+            }, -1, 30, UIFactory.Danger, 13);
             UIFactory.Button(c2, "Clear entire level", () =>
             {
                 ui.Confirm("Clear the level?", "All objects will be removed. Settings are kept. You can undo this.", () =>
