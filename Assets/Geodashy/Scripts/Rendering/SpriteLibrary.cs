@@ -15,6 +15,8 @@ namespace Geodashy.Rendering
         public Sprite[] jump;
         public float runFps = 14f;
         public float jumpFps = 20f;
+        /// <summary>True when the air clip loops (flight) instead of playing once and holding the last frame (a jump).</summary>
+        public bool loopInAir;
     }
 
     public static class SpriteLibrary
@@ -80,11 +82,21 @@ namespace Geodashy.Rendering
             MountAnimation anim = null;
             var runTex = FindSheet("mount_" + m.id + "_run", out var runFrames);
             var jumpTex = FindSheet("mount_" + m.id + "_jump", out var jumpFrames);
-            if (runTex != null || jumpTex != null)
+            var flyTex = FindSheet("mount_" + m.id + "_fly", out var flyFrames);
+            if (runTex != null || jumpTex != null || flyTex != null)
             {
                 anim = new MountAnimation();
                 if (runTex != null) anim.run = Slice(runTex, runFrames, MountFrameHeightUnits);
                 if (jumpTex != null) anim.jump = Slice(jumpTex, jumpFrames, MountFrameHeightUnits);
+                if (flyTex != null)
+                {
+                    // flying mounts: one looping cycle whether "grounded" or not
+                    var fly = Slice(flyTex, flyFrames, MountFrameHeightUnits);
+                    if (anim.run == null) anim.run = fly;
+                    if (anim.jump == null) anim.jump = fly;
+                    anim.jumpFps = anim.runFps = 12f;
+                    anim.loopInAir = true;
+                }
                 if (anim.run == null) anim.run = anim.jump;
                 if (anim.jump == null) anim.jump = anim.run;
             }

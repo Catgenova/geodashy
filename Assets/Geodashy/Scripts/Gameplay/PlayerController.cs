@@ -773,7 +773,11 @@ namespace Geodashy.Gameplay
             if (anim != null && !dead)
             {
                 if (onGround && anim.run != null && anim.run.Length > 0) sr.sprite = anim.run[Mathf.FloorToInt(animTime * anim.runFps) % anim.run.Length];
-                else if (anim.jump != null && anim.jump.Length > 0) sr.sprite = anim.jump[Mathf.Min(anim.jump.Length - 1, Mathf.FloorToInt(airTime * anim.jumpFps))];
+                else if (anim.jump != null && anim.jump.Length > 0)
+                {
+                    int frame = anim.loopInAir ? Mathf.FloorToInt(animTime * anim.jumpFps) % anim.jump.Length : Mathf.Min(anim.jump.Length - 1, Mathf.FloorToInt(airTime * anim.jumpFps));
+                    sr.sprite = anim.jump[frame];
+                }
             }
             else if (anim == null && sr.sprite != null) baseScale = mount.width / Mathf.Max(0.01f, sr.sprite.bounds.size.x);
             float facing = SpriteLibrary.MountFacing(mount);

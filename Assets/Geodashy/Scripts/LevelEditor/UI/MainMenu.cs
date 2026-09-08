@@ -267,7 +267,9 @@ namespace Geodashy.Editing.UI
             PlaceholderSpriteFactory.ClearHeraldryArt();
             var crest = PlaceholderSpriteFactory.Crest(PlayerProfile.Crest, PlayerProfile.Primary, PlayerProfile.Secondary, 128);
             heraldryCrestPreview.sprite = crest;
-            heraldryMountPreview.sprite = PlaceholderSpriteFactory.ForMount(MountCatalog.Get("dragon"));
+            MountDefinition previewMount = MountCatalog.Get("griffin");
+            foreach (var m in MountCatalog.All) if (!SpriteLibrary.MountIsAnimated(m)) { previewMount = m; break; }
+            heraldryMountPreview.sprite = PlaceholderSpriteFactory.ForMount(previewMount);
             titleCrest.sprite = crest;
             for (int i = 0; i < crestButtons.Count; i++) UIFactory.SetButtonActive(crestButtons[i], i == PlayerProfile.Crest);
         }
