@@ -22,13 +22,58 @@ namespace Geodashy.Core
         public int campaignOrder;
     }
 
+    /// <summary>Display name of the game. Code, folders and save paths keep the internal "geodashy" name.</summary>
+    public static class GameInfo
+    {
+        public const string Title = "LyreFlyer";
+    }
+
     /// <summary>Saves and loads levels as JSON in the persistent data folder. Built-in levels live in Resources/Levels.</summary>
     public static class LevelStorage
     {
+        static bool migrated;
+
+        /// <summary>
+        /// Unity derives persistentDataPath from the product name. When the title changed from "geodashy",
+        /// saves made under the old name are copied across once so nothing is lost.
+        /// </summary>
+        static void MigrateOldSaves()
+        {
+            if (migrated) return;
+            migrated = true;
+            try
+            {
+                var current = Path.Combine(Application.persistentDataPath, "geodashy");
+                if (Directory.Exists(current)) return;
+                var parent = Directory.GetParent(Application.persistentDataPath);
+                if (parent == null) return;
+                foreach (var oldProduct in new[] { "geodashy", "Geodashy" })
+                {
+                    var old = Path.Combine(parent.FullName, oldProduct, "geodashy");
+                    if (!Directory.Exists(old) || string.Equals(Path.GetFullPath(old), Path.GetFullPath(current), StringComparison.OrdinalIgnoreCase)) continue;
+                    CopyDirectory(old, current);
+                    Debug.Log("Copied saved levels from " + old + " to " + current);
+                    return;
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("Could not migrate old saves: " + e.Message);
+            }
+        }
+
+        static void CopyDirectory(string from, string to)
+        {
+            Directory.CreateDirectory(to);
+            foreach (var f in Directory.GetFiles(from)) File.Copy(f, Path.Combine(to, Path.GetFileName(f)), true);
+            foreach (var d in Directory.GetDirectories(from)) CopyDirectory(d, Path.Combine(to, Path.GetFileName(d)));
+        }
+
         public static string LevelsDirectory
         {
             get
             {
+                MigrateOldSaves();
                 var dir = Path.Combine(Application.persistentDataPath, "geodashy", "levels");
                 if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
                 return dir;
@@ -39,6 +84,7 @@ namespace Geodashy.Core
         {
             get
             {
+                MigrateOldSaves();
                 var dir = Path.Combine(Application.persistentDataPath, "geodashy", "backups");
                 if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
                 return dir;

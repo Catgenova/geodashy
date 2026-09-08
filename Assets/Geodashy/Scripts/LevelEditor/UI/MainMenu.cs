@@ -94,7 +94,7 @@ namespace Geodashy.Editing.UI
             UIFactory.VLayout(titleCard, 12, 32, true, true, TextAnchor.UpperCenter);
             var crestRow = UIFactory.Row(titleCard, 64, 0, TextAnchor.MiddleCenter);
             titleCrest = UIFactory.Icon(crestRow, PlaceholderSpriteFactory.Crest(PlayerProfile.Crest, PlayerProfile.Primary, PlayerProfile.Secondary), 64);
-            var title = UIFactory.Label(titleCard, "GEODASHY", 64, TextAnchor.MiddleCenter, UIFactory.Accent, -1, 90, true);
+            var title = UIFactory.Label(titleCard, GameInfo.Title.ToUpperInvariant(), 64, TextAnchor.MiddleCenter, UIFactory.Accent, -1, 90, true);
             title.horizontalOverflow = HorizontalWrapMode.Overflow;
             UIFactory.Label(titleCard, "One button. Seven mounts. A kingdom of spikes.", 16, TextAnchor.MiddleCenter, UIFactory.TextDim, -1, 28);
             UIFactory.Spacer(titleCard, 10);

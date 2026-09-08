@@ -1,6 +1,8 @@
-# Geodashy — a medieval-fantasy rhythm platformer with a serious level editor
+# LyreFlyer — a medieval-fantasy rhythm platformer with a serious level editor
 
-Geodashy is a Unity 6 (URP 2D) project. The player rides a mount from the left edge of a
+(Working title. The code, folders and save paths still use the internal name Geodashy.)
+
+LyreFlyer is a Unity 6 (URP 2D) project. The player rides a mount from the left edge of a
 level to the finish gate using a single button. Different mounts turn that one button
 into different moves: a horse jumps, a dragon pitches up while held, a griffin flaps,
 a war boar flips gravity, a wisp flies diagonally, a siege cart charges its jump, and a
