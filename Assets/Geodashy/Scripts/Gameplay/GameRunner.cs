@@ -43,8 +43,31 @@ namespace Geodashy.Gameplay
         bool fullRun;
         float attemptBest;
 
-        public void Begin(LevelData data, Camera camera_, ParallaxBackground bg, GroundRenderer gr, Vector2? start, Action exit)
+        // ---- practice mode ---------------------------------------------------
+        class Checkpoint
         {
+            public PlayerController.Snapshot player;
+            public TriggerSystem.Snapshot triggers;
+            public LevelWorld.Snapshot world;
+            public PlayCamera.Snapshot camera;
+            public LevelSettings settings;
+            public List<ColorChannel> colors;
+            public float elapsed;
+            public int coins;
+            public bool ceiling;
+            public GameObject marker;
+        }
+
+        public bool practice;
+        public bool autoCheckpoints = true;
+        readonly List<Checkpoint> checkpoints = new List<Checkpoint>();
+        float autoCheckpointTimer;
+        float lastCheckpointX = -100f;
+        public int CheckpointCount => checkpoints.Count;
+
+        public void Begin(LevelData data, Camera camera_, ParallaxBackground bg, GroundRenderer gr, Vector2? start, Action exit, bool practiceMode = false)
+        {
+            practice = practiceMode;
             level = data;
             pristine = data.DeepClone();
             cam = camera_;
@@ -70,10 +93,10 @@ namespace Geodashy.Gameplay
             player.Init(this, world, level.settings);
             triggers = new TriggerSystem(world, this);
             playCamera = new PlayCamera(cam, player, level.settings);
-            hud = PlayHUD.Create(transform, () => TogglePause(), RestartFromStart, Exit);
+            hud = PlayHUD.Create(transform, () => TogglePause(), RestartFromStart, Exit, TogglePractice, PlaceCheckpoint, RemoveCheckpoint);
 
             ComputeStart(start);
-            fullRun = start == null;
+            fullRun = start == null && !practice;
             stats = LevelStatsStorage.Load(level.id);
             attempts = 0;
             Respawn();
@@ -163,12 +186,19 @@ namespace Geodashy.Gameplay
 
         void Respawn()
         {
+            if (practice && checkpoints.Count > 0)
+            {
+                RespawnAtCheckpoint(checkpoints[checkpoints.Count - 1]);
+                return;
+            }
             attempts++;
             complete = false;
             paused = false;
             elapsed = 0f;
             coins = 0;
             respawnTimer = -1f;
+            autoCheckpointTimer = 0f;
+            lastCheckpointX = -100f;
             ResetWorld();
             player.Spawn(startPos, startMount, startSpeed, startFlipped, startMini);
             triggers.ResetForStart(startPos.x);
@@ -180,8 +210,161 @@ namespace Geodashy.Gameplay
             hud.SetMarkers(stats.deaths, sessionDeaths, stats.bestProgress);
             hud.HideComplete();
             hud.ShowPause(false);
-            hud.ShowHint(player.mount.name + " — " + player.mount.control);
+            hud.SetPractice(practice, checkpoints.Count, autoCheckpoints);
+            hud.ShowHint(player.mount.name + " — " + player.mount.control + (practice ? "   ·   Z places a checkpoint, X removes it" : ""));
             StartMusic();
+        }
+
+        // ---- practice mode -----------------------------------------------------------
+
+        public void TogglePractice()
+        {
+            SetPractice(!practice);
+        }
+
+        public void SetPractice(bool on)
+        {
+            if (practice == on) return;
+            practice = on;
+            fullRun = false; // a run that touched practice never counts for stats
+            if (!on) ClearCheckpoints();
+            hud.SetPractice(practice, checkpoints.Count, autoCheckpoints);
+            hud.ShowHint(on ? "Practice mode: Z places a checkpoint, X removes the last one. Deaths return you to the last checkpoint." : "Normal mode: deaths return you to the start.", 5f);
+        }
+
+        public void PlaceCheckpoint()
+        {
+            if (!practice || player.dead || complete || paused) return;
+            var cp = new Checkpoint
+            {
+                player = player.Capture(),
+                triggers = triggers.Capture(),
+                world = world.Capture(),
+                camera = playCamera.Capture(),
+                settings = level.settings.Clone(),
+                colors = new List<ColorChannel>(),
+                elapsed = elapsed,
+                coins = coins,
+                ceiling = ground.showCeiling
+            };
+            foreach (var c in level.colors) cp.colors.Add(c.Clone());
+            cp.marker = CreateCheckpointMarker(player.position);
+            checkpoints.Add(cp);
+            lastCheckpointX = player.position.x;
+            autoCheckpointTimer = 0f;
+            hud.SetPractice(practice, checkpoints.Count, autoCheckpoints);
+        }
+
+        public void RemoveCheckpoint()
+        {
+            if (!practice || checkpoints.Count == 0) return;
+            var cp = checkpoints[checkpoints.Count - 1];
+            checkpoints.RemoveAt(checkpoints.Count - 1);
+            if (cp.marker != null) Destroy(cp.marker);
+            lastCheckpointX = checkpoints.Count > 0 ? checkpoints[checkpoints.Count - 1].player.position.x : -100f;
+            hud.SetPractice(practice, checkpoints.Count, autoCheckpoints);
+        }
+
+        void ClearCheckpoints()
+        {
+            foreach (var cp in checkpoints) if (cp.marker != null) Destroy(cp.marker);
+            checkpoints.Clear();
+            lastCheckpointX = -100f;
+        }
+
+        GameObject CreateCheckpointMarker(Vector2 pos)
+        {
+            var go = new GameObject("Checkpoint");
+            go.transform.SetParent(transform, false);
+            go.transform.position = new Vector3(pos.x, pos.y, 0f);
+            go.transform.rotation = Quaternion.Euler(0f, 0f, 45f);
+            var sr = go.AddComponent<SpriteRenderer>();
+            SpriteLibrary.ApplyMaterial(sr);
+            sr.sprite = PlaceholderSpriteFactory.Outline();
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.size = new Vector2(0.7f, 0.7f);
+            sr.color = new Color(0.4f, 1f, 0.5f, 0.9f);
+            sr.sortingOrder = 6;
+            var inner = new GameObject("Core");
+            inner.transform.SetParent(go.transform, false);
+            var isr = inner.AddComponent<SpriteRenderer>();
+            SpriteLibrary.ApplyMaterial(isr);
+            isr.sprite = PlaceholderSpriteFactory.WhiteSquare();
+            isr.color = new Color(0.4f, 1f, 0.5f, 0.5f);
+            isr.sortingOrder = 5;
+            inner.transform.localScale = new Vector3(0.3f, 0.3f, 1f);
+            return go;
+        }
+
+        void RespawnAtCheckpoint(Checkpoint cp)
+        {
+            attempts++;
+            complete = false;
+            paused = false;
+            respawnTimer = -1f;
+            autoCheckpointTimer = 0f;
+            elapsed = cp.elapsed;
+            coins = cp.coins;
+
+            // world + colours + themes
+            world.Restore(cp.world);
+            var live = level.settings;
+            var saved = cp.settings;
+            live.backgroundColor = saved.backgroundColor;
+            live.groundColor = saved.groundColor;
+            live.lineColor = saved.lineColor;
+            live.objectColor = saved.objectColor;
+            live.backgroundTheme = saved.backgroundTheme;
+            live.far = saved.far.Clone();
+            live.mid = saved.mid.Clone();
+            live.near = saved.near.Clone();
+            live.groundTheme = saved.groundTheme;
+            level.colors.Clear();
+            foreach (var c in cp.colors) level.colors.Add(c.Clone());
+            background.ApplySettings();
+            ground.ApplySettings();
+            ground.showCeiling = cp.ceiling;
+            world.FlushDirty();
+            foreach (var v in world.all) world.MarkDirty(v); // colours may have changed
+            world.FlushDirty();
+
+            triggers.Restore(cp.triggers);
+            player.Restore(cp.player);
+            playCamera.Restore(cp.camera);
+            hud.SetAttempt(attempts);
+            hud.SetCoins(coins, totalCoins);
+            hud.HideComplete();
+            hud.ShowPause(false);
+            hud.SetPractice(practice, checkpoints.Count, autoCheckpoints);
+
+            // music: resume from the checkpoint's position in the song
+            float offset = level.settings.songOffset + startPos.x / MountCatalog.Speed(startSpeed) + elapsed;
+            RestartMusicAt(offset);
+        }
+
+        void RestartMusicAt(float offset)
+        {
+            if (!string.IsNullOrEmpty(level.settings.songFile))
+            {
+                var path = LevelStorage.AssetPath(level.id, level.settings.songFile);
+                int request = ++musicRequest;
+                float startedAt = Time.time;
+                AudioLoader.Load(this, path, clip =>
+                {
+                    if (clip != null && request == musicRequest && this != null) PlayClip(clip, offset + (Time.time - startedAt), false);
+                });
+            }
+            else if (!string.IsNullOrEmpty(level.settings.songId)) PlaySong(level.settings.songId, offset, false);
+        }
+
+        void UpdateAutoCheckpoint(float dt)
+        {
+            if (!practice || !autoCheckpoints || player.dead || complete) return;
+            autoCheckpointTimer += dt;
+            if (autoCheckpointTimer < 3f) return;
+            if (!player.onGround && !player.mount.flying) return;
+            if (player.position.x - lastCheckpointX < 4f) return;
+            PlaceCheckpoint();
         }
 
         void ResetWorld()
@@ -215,6 +398,7 @@ namespace Geodashy.Gameplay
         public void RestartFromStart()
         {
             paused = false;
+            ClearCheckpoints();
             Respawn();
         }
 
@@ -256,6 +440,9 @@ namespace Geodashy.Gameplay
                 held |= kb.spaceKey.isPressed || kb.upArrowKey.isPressed || kb.wKey.isPressed;
                 pressed |= kb.spaceKey.wasPressedThisFrame || kb.upArrowKey.wasPressedThisFrame || kb.wKey.wasPressedThisFrame;
                 if (kb.rKey.wasPressedThisFrame) RestartFromStart();
+                if (kb.zKey.wasPressedThisFrame) PlaceCheckpoint();
+                if (kb.xKey.wasPressedThisFrame) RemoveCheckpoint();
+                if (kb.cKey.wasPressedThisFrame) TogglePractice();
             }
             if (pressed) triggers.OnPress();
             if (wasHeld && !held) triggers.OnRelease();
@@ -279,6 +466,7 @@ namespace Geodashy.Gameplay
             elapsed += dt;
             player.SetInput(held, pressed);
             player.Tick(dt);
+            UpdateAutoCheckpoint(dt);
             triggers.Update(dt);
             world.UpdateSpinners(dt);
             world.FlushDirty();

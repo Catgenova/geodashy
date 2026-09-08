@@ -53,6 +53,28 @@ namespace Geodashy.Gameplay
 
         public float HalfWidth => cam.orthographicSize * cam.aspect;
 
+        public struct Snapshot
+        {
+            public float zoom, currentY;
+            public Vector2 offset;
+        }
+
+        public Snapshot Capture() => new Snapshot { zoom = zoom, currentY = currentY, offset = offset };
+
+        public void Restore(Snapshot s)
+        {
+            zoom = zoomFrom = zoomTo = s.zoom;
+            zoomT = 1f;
+            offset = offsetFrom = offsetTo = s.offset;
+            offsetT = 1f;
+            currentY = s.currentY;
+            shakeDuration = 0f;
+            staticTarget = null;
+            staticBlend = staticBlendTarget = 0f;
+            cam.orthographicSize = baseHalfHeight / zoom;
+            cam.transform.position = new Vector3(player.position.x + HalfWidth * 0.35f * player.direction + offset.x, currentY + offset.y, -10f);
+        }
+
         public void SetZoom(float target, float duration, Easing ease)
         {
             zoomFrom = zoom;

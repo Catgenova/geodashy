@@ -23,16 +23,20 @@ namespace Geodashy.Gameplay
         Text completeStats;
         float hintTimer;
 
-        public static PlayHUD Create(Transform parent, Action onResume, Action onRestart, Action onExit)
+        Text practiceText;
+        Button practiceToggle;
+        RectTransform checkpointButtons;
+
+        public static PlayHUD Create(Transform parent, Action onResume, Action onRestart, Action onExit, Action onTogglePractice, Action onCheckpoint, Action onRemoveCheckpoint)
         {
             var go = new GameObject("Play HUD");
             go.transform.SetParent(parent, false);
             var hud = go.AddComponent<PlayHUD>();
-            hud.Build(onResume, onRestart, onExit);
+            hud.Build(onResume, onRestart, onExit, onTogglePractice, onCheckpoint, onRemoveCheckpoint);
             return hud;
         }
 
-        void Build(Action onResume, Action onRestart, Action onExit)
+        void Build(Action onResume, Action onRestart, Action onExit, Action onTogglePractice, Action onCheckpoint, Action onRemoveCheckpoint)
         {
             var canvas = gameObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -82,13 +86,24 @@ namespace Geodashy.Gameplay
             var esc = UIFactory.Label(root, "Esc — pause / back to editor", 13, TextAnchor.MiddleRight, UIFactory.TextDim);
             UIFactory.Anchor(esc.rectTransform, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-400, 16), new Vector2(-20, 40));
 
+            // practice mode status + on-screen checkpoint buttons
+            practiceText = UIFactory.Label(root, "", 16, TextAnchor.MiddleRight, new Color(0.4f, 1f, 0.5f, 1f), -1, -1, true);
+            UIFactory.Anchor(practiceText.rectTransform, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-420, -92), new Vector2(-20, -64));
+            checkpointButtons = UIFactory.Rect(root, "CheckpointButtons");
+            UIFactory.Anchor(checkpointButtons, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-260, 50), new Vector2(-20, 92));
+            UIFactory.HLayout(checkpointButtons, 8, 0, true);
+            UIFactory.Button(checkpointButtons, "+ Checkpoint (Z)", () => onCheckpoint(), -1, 40, UIFactory.Good, 14);
+            UIFactory.Button(checkpointButtons, "− Remove (X)", () => onRemoveCheckpoint(), -1, 40, UIFactory.Danger, 14);
+            checkpointButtons.gameObject.SetActive(false);
+
             // pause panel
             pausePanel = UIFactory.Panel(root, "Pause", new Color(0, 0, 0, 0.6f));
             var pw = UIFactory.Panel(pausePanel, "Window", UIFactory.PanelBg2);
-            UIFactory.Anchor(pw, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-200, -130), new Vector2(200, 130));
+            UIFactory.Anchor(pw, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-200, -155), new Vector2(200, 155));
             UIFactory.VLayout(pw, 10, 20);
             UIFactory.Label(pw, "PAUSED", 26, TextAnchor.MiddleCenter, UIFactory.Accent, -1, 40, true);
             UIFactory.Button(pw, "Resume", () => onResume(), -1, 40, UIFactory.Good, 16);
+            practiceToggle = UIFactory.Button(pw, "Practice mode: off", () => onTogglePractice(), -1, 40, null, 16);
             UIFactory.Button(pw, "Restart from start", () => onRestart(), -1, 40, null, 16);
             UIFactory.Button(pw, "Back to editor", () => onExit(), -1, 40, UIFactory.Danger, 16);
             pausePanel.gameObject.SetActive(false);
@@ -165,6 +180,14 @@ namespace Geodashy.Gameplay
                 c.a = Mathf.Clamp01(baseAlpha + neighbours * 0.08f * boostPer);
                 img.color = c;
             }
+        }
+
+        public void SetPractice(bool on, int checkpoints, bool auto)
+        {
+            practiceText.text = on ? "PRACTICE  ·  " + checkpoints + " checkpoint" + (checkpoints == 1 ? "" : "s") + (auto ? "  ·  auto" : "") : "";
+            checkpointButtons.gameObject.SetActive(on);
+            UIFactory.SetButtonLabel(practiceToggle, on ? "Practice mode: on (C)" : "Practice mode: off (C)");
+            UIFactory.SetButtonActive(practiceToggle, on);
         }
 
         public void SetAttempt(int n) => attemptText.text = "Attempt " + n;

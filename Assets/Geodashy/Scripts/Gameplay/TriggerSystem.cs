@@ -183,7 +183,7 @@ namespace Geodashy.Gameplay
             public float remaining;
         }
 
-        class TouchListener
+        public class TouchListener
         {
             public int group;
             public bool holdMode;
@@ -214,6 +214,40 @@ namespace Geodashy.Gameplay
                 if (!channelUsers.TryGetValue(ch, out var list)) channelUsers[ch] = list = new List<LevelObjectView>();
                 list.Add(v);
             }
+        }
+
+        public class Snapshot
+        {
+            public int nextTriggerIndex;
+            public HashSet<int> fired;
+            public List<TouchListener> touchListeners;
+            public Dictionary<int, int> itemCounts;
+        }
+
+        /// <summary>Captures firing progress. Running tweens are not captured; object positions come from the world snapshot.</summary>
+        public Snapshot Capture()
+        {
+            return new Snapshot
+            {
+                nextTriggerIndex = nextTriggerIndex,
+                fired = new HashSet<int>(fired),
+                touchListeners = new List<TouchListener>(touchListeners),
+                itemCounts = new Dictionary<int, int>(itemCounts)
+            };
+        }
+
+        public void Restore(Snapshot s)
+        {
+            tweens.Clear();
+            spawnQueue.Clear();
+            channelPulse.Clear();
+            nextTriggerIndex = s.nextTriggerIndex;
+            fired.Clear();
+            fired.UnionWith(s.fired);
+            touchListeners.Clear();
+            touchListeners.AddRange(s.touchListeners);
+            itemCounts.Clear();
+            foreach (var kv in s.itemCounts) itemCounts[kv.Key] = kv.Value;
         }
 
         /// <summary>Resets progress-based firing so triggers left of x are considered already passed.</summary>

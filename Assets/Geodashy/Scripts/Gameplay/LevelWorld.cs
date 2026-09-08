@@ -111,6 +111,44 @@ namespace Geodashy.Gameplay
             return queryScratch;
         }
 
+        public class Snapshot
+        {
+            public Vector2[] offsets;
+            public float[] rotations;
+            public float[] alphas;
+            public bool[] active;
+        }
+
+        public Snapshot Capture()
+        {
+            int n = all.Count;
+            var s = new Snapshot { offsets = new Vector2[n], rotations = new float[n], alphas = new float[n], active = new bool[n] };
+            for (int i = 0; i < n; i++)
+            {
+                var v = all[i];
+                s.offsets[i] = v.runtimeOffset;
+                s.rotations[i] = v.runtimeRotation;
+                s.alphas[i] = v.runtimeAlpha;
+                s.active[i] = v.runtimeActive;
+            }
+            return s;
+        }
+
+        public void Restore(Snapshot s)
+        {
+            int n = Mathf.Min(all.Count, s.offsets.Length);
+            for (int i = 0; i < n; i++)
+            {
+                var v = all[i];
+                v.runtimeOffset = s.offsets[i];
+                v.runtimeRotation = s.rotations[i];
+                v.runtimeAlpha = s.alphas[i];
+                v.runtimeActive = s.active[i];
+                v.pulseColor = Color.clear;
+                dirty.Add(v);
+            }
+        }
+
         public void MarkDirty(LevelObjectView v) => dirty.Add(v);
 
         /// <summary>Pushes runtime state (offsets, rotation, alpha, active) into the scene objects.</summary>

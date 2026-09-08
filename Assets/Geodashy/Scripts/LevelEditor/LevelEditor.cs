@@ -969,7 +969,9 @@ namespace Geodashy.Editing
             LevelChanged?.Invoke();
         }
 
-        public void StartPlaytest(bool fromMarker)
+        public void StartPlaytest(bool fromMarker) => StartPlaytest(fromMarker, false);
+
+        public void StartPlaytest(bool fromMarker, bool practiceMode)
         {
             if (IsPlaying) return;
             StopSongPreview();
@@ -993,7 +995,7 @@ namespace Geodashy.Editing
             var go = new GameObject("Game Runner");
             go.transform.SetParent(transform, false);
             runner = go.AddComponent<GameRunner>();
-            runner.Begin(level.DeepClone(), cam, background, ground, start, StopPlaytest);
+            runner.Begin(level.DeepClone(), cam, background, ground, start, StopPlaytest, practiceMode);
         }
 
         public void StopPlaytest()
@@ -1152,7 +1154,7 @@ namespace Geodashy.Editing
             if (kb[Key.Backslash].wasPressedThisFrame) SetShowAllLayers(!showAllLayers);
             if (kb[Key.Home].wasPressedThisFrame) GoToSpawn();
             if (kb[Key.End].wasPressedThisFrame) editorCamera.Position = new Vector2(level.GetFinishX(), level.settings.groundY + 4f);
-            if (kb[Key.P].wasPressedThisFrame) StartPlaytest(shift);
+            if (kb[Key.P].wasPressedThisFrame) StartPlaytest(shift, alt);
             if (kb[Key.Enter].wasPressedThisFrame) StartPlaytest(false);
             if (kb[Key.M].wasPressedThisFrame)
             {

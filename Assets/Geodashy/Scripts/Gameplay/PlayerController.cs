@@ -129,6 +129,55 @@ namespace Geodashy.Gameplay
             ApplyVisual();
         }
 
+        /// <summary>Everything needed to put the rider back exactly where it was (practice checkpoints).</summary>
+        public class Snapshot
+        {
+            public Vector2 position, velocity;
+            public string mount;
+            public int speedTier, direction, jumps;
+            public bool flipped, mini, mirror, onGround, dashing;
+            public float rotationDeg;
+            public HashSet<int> used;
+        }
+
+        public Snapshot Capture()
+        {
+            return new Snapshot
+            {
+                position = position, velocity = velocity, mount = mount.id, speedTier = speedTier, direction = direction, jumps = jumps,
+                flipped = flipped, mini = mini, mirror = mirror, onGround = onGround, dashing = dashing, rotationDeg = rotationDeg,
+                used = new HashSet<int>(usedInteractables)
+            };
+        }
+
+        public void Restore(Snapshot s)
+        {
+            dead = false;
+            finished = false;
+            deathBurst.enabled = false;
+            position = s.position;
+            prevPosition = s.position;
+            velocity = s.velocity;
+            speedTier = s.speedTier;
+            direction = s.direction;
+            jumps = s.jumps;
+            flipped = s.flipped;
+            mini = s.mini;
+            mirror = s.mirror;
+            onGround = s.onGround;
+            dashing = false;
+            rotationDeg = s.rotationDeg;
+            held = false;
+            pressBuffer = 0f;
+            holdTime = 0f;
+            accumulator = 0f;
+            usedInteractables.Clear();
+            usedInteractables.UnionWith(s.used);
+            touching.Clear();
+            SetMount(s.mount);
+            ApplyVisual();
+        }
+
         public void SetInput(bool isHeld, bool pressed)
         {
             held = isHeld;
