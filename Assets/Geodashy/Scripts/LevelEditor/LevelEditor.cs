@@ -752,10 +752,10 @@ namespace Geodashy.Editing
         public int NextFreeGroup()
         {
             var used = new HashSet<int>();
-            foreach (var o in level.objects) foreach (var g in o.groups) used.Add(g);
-            int g = 1;
-            while (used.Contains(g)) g++;
-            return g;
+            foreach (var o in level.objects) foreach (var gid in o.groups) used.Add(gid);
+            int candidate = 1;
+            while (used.Contains(candidate)) candidate++;
+            return candidate;
         }
 
         // =====================================================================
