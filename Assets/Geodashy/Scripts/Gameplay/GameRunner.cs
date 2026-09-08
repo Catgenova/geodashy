@@ -280,7 +280,7 @@ namespace Geodashy.Gameplay
             if (player.finished)
             {
                 complete = true;
-                hud.SetProgress(1f);
+                hud.SetProgress(1f, true);
                 hud.ShowComplete(attempts, elapsed, player.jumps, coins, totalCoins);
                 if (music != null && level.settings.fadeOut) music.Stop();
             }
@@ -289,6 +289,7 @@ namespace Geodashy.Gameplay
         public void OnPlayerDied()
         {
             respawnTimer = 0.8f;
+            hud.SetProgress(finishX > 0f ? player.position.x / finishX : 0f, true);
             if (music != null) music.Stop();
         }
 

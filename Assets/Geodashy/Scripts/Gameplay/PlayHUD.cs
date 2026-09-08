@@ -70,22 +70,23 @@ namespace Geodashy.Gameplay
             // complete panel
             completePanel = UIFactory.Panel(root, "Complete", new Color(0, 0, 0, 0.6f));
             var cw = UIFactory.Panel(completePanel, "Window", UIFactory.PanelBg2);
-            UIFactory.Anchor(cw, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-240, -160), new Vector2(240, 160));
+            UIFactory.Anchor(cw, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-240, -175), new Vector2(240, 175));
             UIFactory.VLayout(cw, 10, 20);
             UIFactory.Label(cw, "QUEST COMPLETE", 28, TextAnchor.MiddleCenter, UIFactory.Accent, -1, 44, true);
-            completeStats = UIFactory.Label(cw, "", 16, TextAnchor.MiddleCenter, UIFactory.TextColor, -1, 70);
+            completeStats = UIFactory.Label(cw, "", 16, TextAnchor.MiddleCenter, UIFactory.TextColor, -1, 96);
             UIFactory.Button(cw, "Play again", () => onRestart(), -1, 40, UIFactory.Good, 16);
             UIFactory.Button(cw, "Back to editor", () => onExit(), -1, 40, null, 16);
             completePanel.gameObject.SetActive(false);
         }
 
-        public void SetProgress(float t)
+        /// <summary>Updates the bar. Precise mode shows thousandths of a percent (used on completion and death).</summary>
+        public void SetProgress(float t, bool precise = false)
         {
             t = Mathf.Clamp01(t);
             var rt = progressFill.rectTransform;
             rt.anchorMax = new Vector2(t, 1);
             rt.offsetMax = new Vector2(-2, -2);
-            progressText.text = Mathf.RoundToInt(t * 100f) + "%";
+            progressText.text = precise ? (t * 100f).ToString("0.000") + "%" : Mathf.RoundToInt(t * 100f) + "%";
         }
 
         public void SetAttempt(int n) => attemptText.text = "Attempt " + n;
@@ -102,7 +103,7 @@ namespace Geodashy.Gameplay
 
         public void ShowComplete(int attempts, float seconds, int jumps, int coins, int totalCoins)
         {
-            completeStats.text = string.Format("Attempts: {0}\nTime: {1:0.0}s   Jumps: {2}\nLoot: {3} / {4}", attempts, seconds, jumps, coins, totalCoins);
+            completeStats.text = string.Format("Progress: 100.000%\nAttempts: {0}\nTime: {1:0.0}s   Jumps: {2}\nLoot: {3} / {4}", attempts, seconds, jumps, coins, totalCoins);
             completePanel.gameObject.SetActive(true);
         }
 
