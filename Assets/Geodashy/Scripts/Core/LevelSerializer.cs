@@ -37,6 +37,35 @@ namespace Geodashy.Core
             }
         }
 
+        /// <summary>Copies the pre-layer-settings fields into far/mid/near the first time an old level is loaded.</summary>
+        public static void MigrateParallax(LevelSettings s)
+        {
+            if (s.far == null) s.far = new ParallaxLayerSettings();
+            if (s.mid == null) s.mid = new ParallaxLayerSettings();
+            if (s.near == null) s.near = new ParallaxLayerSettings();
+            if (s.far.parallax < 0f)
+            {
+                s.far.parallax = s.parallaxFar;
+                if (!string.IsNullOrEmpty(s.bgFarOverride)) s.far.layerId = s.bgFarOverride;
+            }
+            if (s.mid.parallax < 0f)
+            {
+                s.mid.parallax = s.parallaxMid;
+                if (!string.IsNullOrEmpty(s.bgMidOverride)) s.mid.layerId = s.bgMidOverride;
+            }
+            if (s.near.parallax < 0f)
+            {
+                s.near.parallax = s.parallaxNear;
+                if (!string.IsNullOrEmpty(s.bgNearOverride)) s.near.layerId = s.bgNearOverride;
+            }
+            for (int i = 0; i < 3; i++)
+            {
+                var l = s.Layer(i);
+                if (l.scale <= 0.01f) l.scale = 1f;
+                if (l.tint.a <= 0f && l.tint.r <= 0f && l.tint.g <= 0f && l.tint.b <= 0f) l.tint = Color.white;
+            }
+        }
+
         /// <summary>Repairs missing fields, unknown types and uid collisions.</summary>
         public static void Sanitize(LevelData data)
         {
@@ -47,6 +76,7 @@ namespace Geodashy.Core
             if (string.IsNullOrEmpty(data.name)) data.name = "Untitled Quest";
             if (data.editorZoom <= 0.01f) data.editorZoom = 1f;
             data.EnsureDefaultColors();
+            MigrateParallax(data.settings);
 
             var seen = new System.Collections.Generic.HashSet<int>();
             int maxUid = 0;

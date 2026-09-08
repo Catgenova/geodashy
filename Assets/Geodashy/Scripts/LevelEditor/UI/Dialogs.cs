@@ -11,7 +11,7 @@ namespace Geodashy.Editing.UI
     {
         public static void Open(EditorUI ui, LevelEditor editor)
         {
-            var c = ui.OpenModal("Level Settings", 720, 820, true);
+            var c = ui.OpenModal("Level Settings", 760, 900, true);
             var s = editor.level.settings;
             var level = editor.level;
 
@@ -81,57 +81,85 @@ namespace Geodashy.Editing.UI
             }, false, 140);
 
             UIFactory.SectionHeader(c, "Background (3 parallax layers)");
+            LevelSerializer.MigrateParallax(s);
             var themeIds = ThemeCatalog.BackgroundIds;
             var themeNames = new string[themeIds.Length];
             for (int i = 0; i < themeIds.Length; i++) themeNames[i] = ThemeCatalog.GetBackground(themeIds[i]).name;
             ColorField bgColorField = null;
-            DropdownField farField = null, midField = null, nearField = null;
             var layerIds = new List<string> { "" };
             layerIds.AddRange(ThemeCatalog.LayerIds);
             var layerNames = new List<string> { "(theme default)" };
             foreach (var id in ThemeCatalog.LayerIds) layerNames.Add(ThemeCatalog.GetLayer(id).name);
-            DropdownField.Create(c, "Theme", themeIds, Mathf.Max(0, Array.IndexOf(themeIds, s.backgroundTheme)), i =>
+            var layerArtFields = new DropdownField[3];
+            var layerSpeedFields = new NumberField[3];
+            var layerYFields = new NumberField[3];
+            var layerScaleFields = new NumberField[3];
+            var layerTintFields = new ColorField[3];
+            var layerVisibleFields = new BoolField[3];
+            var layerFlipFields = new BoolField[3];
+            DropdownField.Create(c, "Theme preset", themeIds, Mathf.Max(0, Array.IndexOf(themeIds, s.backgroundTheme)), i =>
             {
                 s.backgroundTheme = themeIds[i];
-                s.bgFarOverride = s.bgMidOverride = s.bgNearOverride = "";
+                s.ResetLayersToTheme();
                 s.backgroundColor = ThemeCatalog.GetBackground(s.backgroundTheme).skyBottom;
                 bgColorField?.Set(s.backgroundColor);
-                farField?.Set(0);
-                midField?.Set(0);
-                nearField?.Set(0);
+                for (int k = 0; k < 3; k++)
+                {
+                    var l = s.Layer(k);
+                    layerArtFields[k]?.Set(0);
+                    layerSpeedFields[k]?.Set(l.parallax);
+                    layerYFields[k]?.Set(l.yOffset);
+                    layerScaleFields[k]?.Set(l.scale);
+                    layerTintFields[k]?.Set(l.tint);
+                    layerVisibleFields[k]?.Set(l.visible);
+                    layerFlipFields[k]?.Set(l.flipX);
+                }
                 Changed();
             }, 140, 28, themeNames);
-            farField = DropdownField.Create(c, "Far layer", layerIds.ToArray(), Mathf.Max(0, layerIds.IndexOf(s.bgFarOverride)), i =>
+            UIFactory.Label(c, "Each layer scrolls at a fraction of the camera speed: 0 sticks to the camera, 1 moves with the world. Far layers should be slow, near layers fast.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 30);
+            string[] layerTitles = { "Far layer", "Mid layer", "Near layer" };
+            for (int k = 0; k < 3; k++)
             {
-                s.bgFarOverride = layerIds[i];
-                Changed();
-            }, 140, 28, layerNames.ToArray());
-            midField = DropdownField.Create(c, "Mid layer", layerIds.ToArray(), Mathf.Max(0, layerIds.IndexOf(s.bgMidOverride)), i =>
-            {
-                s.bgMidOverride = layerIds[i];
-                Changed();
-            }, 140, 28, layerNames.ToArray());
-            nearField = DropdownField.Create(c, "Near layer", layerIds.ToArray(), Mathf.Max(0, layerIds.IndexOf(s.bgNearOverride)), i =>
-            {
-                s.bgNearOverride = layerIds[i];
-                Changed();
-            }, 140, 28, layerNames.ToArray());
-            NumberField.Create(c, "Far parallax", s.parallaxFar, 0.05f, 0, 1, v =>
-            {
-                s.parallaxFar = v;
-                Changed();
-            }, false, 140);
-            NumberField.Create(c, "Mid parallax", s.parallaxMid, 0.05f, 0, 1, v =>
-            {
-                s.parallaxMid = v;
-                Changed();
-            }, false, 140);
-            NumberField.Create(c, "Near parallax", s.parallaxNear, 0.05f, 0, 1, v =>
-            {
-                s.parallaxNear = v;
-                Changed();
-            }, false, 140);
-            UIFactory.Label(c, "Parallax = fraction of the camera speed the layer moves at. 0 sticks to the camera, 1 moves with the world.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 30);
+                int idx = k;
+                var l = s.Layer(k);
+                UIFactory.Label(c, layerTitles[k], 13, TextAnchor.MiddleLeft, UIFactory.Accent, -1, 22, true);
+                layerArtFields[k] = DropdownField.Create(c, "Art", layerIds.ToArray(), Mathf.Max(0, layerIds.IndexOf(l.layerId)), i =>
+                {
+                    s.Layer(idx).layerId = layerIds[i];
+                    Changed();
+                }, 140, 28, layerNames.ToArray());
+                layerSpeedFields[k] = NumberField.Create(c, "Scroll speed", l.parallax, 0.05f, -1f, 2f, v =>
+                {
+                    s.Layer(idx).parallax = v;
+                    Changed();
+                }, false, 140);
+                layerYFields[k] = NumberField.Create(c, "Height offset", l.yOffset, 0.5f, -30f, 60f, v =>
+                {
+                    s.Layer(idx).yOffset = v;
+                    Changed();
+                }, false, 140);
+                layerScaleFields[k] = NumberField.Create(c, "Size", l.scale, 0.1f, 0.2f, 5f, v =>
+                {
+                    s.Layer(idx).scale = v;
+                    Changed();
+                }, false, 140);
+                layerTintFields[k] = ColorField.Create(c, "Tint", l.tint, v =>
+                {
+                    s.Layer(idx).tint = v;
+                    Changed();
+                }, 140);
+                var lr = UIFactory.Row(c, 26, 12);
+                layerVisibleFields[k] = BoolField.Create(lr, "Visible", l.visible, v =>
+                {
+                    s.Layer(idx).visible = v;
+                    Changed();
+                });
+                layerFlipFields[k] = BoolField.Create(lr, "Mirror horizontally", l.flipX, v =>
+                {
+                    s.Layer(idx).flipX = v;
+                    Changed();
+                });
+            }
 
             UIFactory.SectionHeader(c, "Ground");
             var groundIds = ThemeCatalog.GroundIds;
@@ -190,11 +218,50 @@ namespace Geodashy.Editing.UI
             }, -1, 26, null, 12);
 
             UIFactory.SectionHeader(c, "Music");
-            TextField.Create(c, "Song ID", s.songId, v =>
+            Text songLabel = null;
+            void RefreshSongLabel()
+            {
+                if (songLabel == null) return;
+                if (!string.IsNullOrEmpty(s.songFile)) songLabel.text = "Imported song: " + s.songFile + (LevelStorage.AssetExists(level.id, s.songFile) ? "" : "  (file missing!)");
+                else if (!string.IsNullOrEmpty(s.songId)) songLabel.text = "Built-in song: " + s.songId;
+                else songLabel.text = "No song. Import an mp3, ogg or wav to give the quest a soundtrack.";
+            }
+            songLabel = UIFactory.Label(c, "", 13, TextAnchor.MiddleLeft, UIFactory.TextColor, -1, 24);
+            var songRow = UIFactory.Row(c, 32, 6);
+            UIFactory.Button(songRow, "Import song…", () =>
+            {
+                FileBrowserDialog.Open(ui, "Choose a song", LevelStorage.AudioExtensions, path =>
+                {
+                    try
+                    {
+                        s.songFile = LevelStorage.ImportAsset(level.id, path);
+                        editor.MarkDirty();
+                        RefreshSongLabel();
+                        ui.Toast("Imported " + s.songFile);
+                        editor.PreviewSong(s.songOffset);
+                    }
+                    catch (Exception e)
+                    {
+                        ui.Toast("Import failed: " + e.Message);
+                    }
+                });
+            }, -1, 30, UIFactory.ButtonActive, 13);
+            UIFactory.Button(songRow, "▶ Preview", () => editor.PreviewSong(s.songOffset), -1, 30, UIFactory.Good, 13);
+            UIFactory.Button(songRow, "■ Stop", editor.StopSongPreview, -1, 30, null, 13);
+            UIFactory.Button(songRow, "Remove", () =>
+            {
+                s.songFile = "";
+                editor.StopSongPreview();
+                editor.MarkDirty();
+                RefreshSongLabel();
+            }, -1, 30, UIFactory.Danger, 13);
+            RefreshSongLabel();
+            TextField.Create(c, "Built-in song ID", s.songId, v =>
             {
                 s.songId = v;
                 editor.MarkDirty();
-            }, 140, 28, "file name in Resources/Songs");
+                RefreshSongLabel();
+            }, 140, 28, "file name in Resources/Songs (used when nothing is imported)");
             NumberField.Create(c, "Song offset (s)", s.songOffset, 0.5f, 0, 6000, v =>
             {
                 s.songOffset = v;
@@ -216,6 +283,7 @@ namespace Geodashy.Editing.UI
                 s.fadeOut = v;
                 editor.MarkDirty();
             });
+            UIFactory.Label(c, "Imported songs are copied into the level's asset folder and play from Song offset + travel time. Exported JSON does not include the audio file.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 30);
             UIFactory.Spacer(c, 12);
             UIFactory.Button(c, "Close", ui.CloseTopModal, -1, 32, UIFactory.ButtonActive);
         }
@@ -294,6 +362,13 @@ namespace Geodashy.Editing.UI
                         ui.Confirm("Delete " + i.name + "?", "The file will be removed from disk.", () =>
                         {
                             LevelStorage.Delete(i.path);
+                            try
+                            {
+                                LevelStorage.DeleteAssets(i.id);
+                            }
+                            catch (Exception)
+                            {
+                            }
                             Populate(ui, editor, list, modal);
                         }, "Delete");
                     }, 70, 30, UIFactory.Danger, 12);

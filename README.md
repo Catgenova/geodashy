@@ -44,8 +44,16 @@ Top bar: undo/redo, **Play** (from the start or the right-most Start Position ob
 Press `F1` in the editor for the full shortcut list.
 
 Level settings cover the starting mount/speed/gravity/size, the three parallax background
-layers (theme presets or per-layer overrides with individual parallax factors), the ground
-theme, all colour channels, ceiling height for flying sections, finish padding and music.
+layers, the ground theme, all colour channels, ceiling height for flying sections, finish
+padding and music. Each parallax layer can be edited individually: pick any built-in art for
+it, and set its scroll speed, height offset, size, tint, visibility and mirroring. Theme
+presets fill in sensible defaults for all three. Custom images are deliberately not supported.
+
+Soundtracks: **Import song…** in Level Settings opens a built-in file browser for mp3, ogg
+and wav files. The file is copied into the level's asset folder
+(`<persistentDataPath>/geodashy/assets/<level id>/`) so the level stays self-contained, and
+Preview plays it from the configured offset so you can line up the BPM guides. Save As copies
+the assets along with the level; deleting a level deletes them.
 
 ## Objects
 

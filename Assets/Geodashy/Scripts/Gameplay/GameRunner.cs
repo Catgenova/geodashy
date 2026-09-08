@@ -192,9 +192,9 @@ namespace Geodashy.Gameplay
             level.settings.lineColor = pristine.settings.lineColor;
             level.settings.objectColor = pristine.settings.objectColor;
             level.settings.backgroundTheme = pristine.settings.backgroundTheme;
-            level.settings.bgFarOverride = pristine.settings.bgFarOverride;
-            level.settings.bgMidOverride = pristine.settings.bgMidOverride;
-            level.settings.bgNearOverride = pristine.settings.bgNearOverride;
+            level.settings.far = pristine.settings.far.Clone();
+            level.settings.mid = pristine.settings.mid.Clone();
+            level.settings.near = pristine.settings.near.Clone();
             level.settings.groundTheme = pristine.settings.groundTheme;
             level.colors.Clear();
             foreach (var c in pristine.colors) level.colors.Add(c.Clone());
@@ -289,6 +289,7 @@ namespace Geodashy.Gameplay
         public void OnPlayerDied()
         {
             respawnTimer = 0.8f;
+            musicRequest++;
             hud.SetProgress(finishX > 0f ? player.position.x / finishX : 0f, true);
             if (music != null) music.Stop();
         }
@@ -312,11 +313,27 @@ namespace Geodashy.Gameplay
 
         // ---- music --------------------------------------------------------------
 
+        int musicRequest;
+
         void StartMusic()
         {
+            float offset = level.settings.songOffset + startPos.x / MountCatalog.Speed(startSpeed);
+            if (!string.IsNullOrEmpty(level.settings.songFile))
+            {
+                var path = LevelStorage.AssetPath(level.id, level.settings.songFile);
+                int request = ++musicRequest;
+                float startedAt = Time.time;
+                AudioLoader.Load(this, path, clip =>
+                {
+                    if (clip == null || request != musicRequest || this == null) return;
+                    // the level may already be running: skip ahead by however long the load took
+                    PlayClip(clip, offset + (Time.time - startedAt), false);
+                });
+                return;
+            }
             var id = level.settings.songId;
             if (string.IsNullOrEmpty(id)) return;
-            PlaySong(id, level.settings.songOffset + startPos.x / MountCatalog.Speed(startSpeed), false);
+            PlaySong(id, offset, false);
         }
 
         public void PlaySong(string id, float offset, bool loop)
@@ -325,9 +342,26 @@ namespace Geodashy.Gameplay
             var clip = Resources.Load<AudioClip>("Songs/" + id);
             if (clip == null)
             {
-                Debug.LogWarning("Song not found in Resources/Songs: " + id);
+                // Song trigger may also name an imported file
+                var path = LevelStorage.AssetPath(level.id, id);
+                if (path != null && System.IO.File.Exists(path))
+                {
+                    int request = ++musicRequest;
+                    float startedAt = Time.time;
+                    AudioLoader.Load(this, path, c =>
+                    {
+                        if (c != null && request == musicRequest && this != null) PlayClip(c, offset + (Time.time - startedAt), loop);
+                    });
+                    return;
+                }
+                Debug.LogWarning("Song not found in Resources/Songs or the level's assets: " + id);
                 return;
             }
+            PlayClip(clip, offset, loop);
+        }
+
+        void PlayClip(AudioClip clip, float offset, bool loop)
+        {
             if (music == null)
             {
                 music = gameObject.AddComponent<AudioSource>();
@@ -341,6 +375,7 @@ namespace Geodashy.Gameplay
 
         public void Shutdown()
         {
+            musicRequest++;
             if (music != null) music.Stop();
             if (world != null) world.Destroy();
             cam.ResetProjectionMatrix();

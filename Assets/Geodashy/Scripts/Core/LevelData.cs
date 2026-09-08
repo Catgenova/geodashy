@@ -222,6 +222,23 @@ namespace Geodashy.Core
         }
     }
 
+    /// <summary>One of the three parallax layers: which built-in art it uses and how it scrolls.</summary>
+    [Serializable]
+    public class ParallaxLayerSettings
+    {
+        /// <summary>Built-in layer id override; empty = use the theme's layer.</summary>
+        public string layerId = "";
+        /// <summary>Fraction of the camera speed the layer scrolls at. -1 = not yet migrated from the legacy field.</summary>
+        public float parallax = -1f;
+        public float yOffset = 0f;
+        public float scale = 1f;
+        public Color tint = Color.white;
+        public bool visible = true;
+        public bool flipX;
+
+        public ParallaxLayerSettings Clone() => (ParallaxLayerSettings)MemberwiseClone();
+    }
+
     /// <summary>Global settings of a level.</summary>
     [Serializable]
     public class LevelSettings
@@ -234,13 +251,18 @@ namespace Geodashy.Core
         public bool startMirror;
 
         public string backgroundTheme = "castle";
-        /// <summary>Optional per-layer overrides ("" = use theme).</summary>
+        /// <summary>Legacy per-layer overrides, migrated into far/mid/near by LevelSerializer.Sanitize.</summary>
         public string bgFarOverride = "";
         public string bgMidOverride = "";
         public string bgNearOverride = "";
         public float parallaxFar = 0.10f;
         public float parallaxMid = 0.30f;
         public float parallaxNear = 0.60f;
+        public ParallaxLayerSettings far = new ParallaxLayerSettings();
+        public ParallaxLayerSettings mid = new ParallaxLayerSettings();
+        public ParallaxLayerSettings near = new ParallaxLayerSettings();
+
+        public ParallaxLayerSettings Layer(int index) => index == 0 ? far : (index == 1 ? mid : near);
 
         public string groundTheme = "stone";
         public float groundY = 0f;
@@ -252,7 +274,10 @@ namespace Geodashy.Core
         public Color lineColor = Color.white;
         public Color objectColor = Color.white;
 
+        /// <summary>Built-in song: file name in Resources/Songs.</summary>
         public string songId = "";
+        /// <summary>Imported song: file name inside the level's asset folder (wins over songId).</summary>
+        public string songFile = "";
         public float songOffset = 0f;
         public float bpm = 120f;
         public bool fadeIn = true;
@@ -262,7 +287,32 @@ namespace Geodashy.Core
         public float finishPadding = 8f;
         public bool twoPlayerMode;
 
-        public LevelSettings Clone() => (LevelSettings)MemberwiseClone();
+        public LevelSettings Clone()
+        {
+            var c = (LevelSettings)MemberwiseClone();
+            c.far = far.Clone();
+            c.mid = mid.Clone();
+            c.near = near.Clone();
+            return c;
+        }
+
+        /// <summary>Resets the three layers to the theme defaults (used when switching theme).</summary>
+        public void ResetLayersToTheme()
+        {
+            float[] defaults = { 0.10f, 0.30f, 0.60f };
+            for (int i = 0; i < 3; i++)
+            {
+                var l = Layer(i);
+                l.layerId = "";
+                l.parallax = defaults[i];
+                l.yOffset = 0f;
+                l.scale = 1f;
+                l.tint = Color.white;
+                l.visible = true;
+                l.flipX = false;
+            }
+            bgFarOverride = bgMidOverride = bgNearOverride = "";
+        }
     }
 
     /// <summary>A complete level: metadata, settings, colour channels and objects.</summary>

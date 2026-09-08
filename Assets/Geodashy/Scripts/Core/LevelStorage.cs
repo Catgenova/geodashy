@@ -40,6 +40,71 @@ namespace Geodashy.Core
             }
         }
 
+        public static readonly string[] AudioExtensions = { ".mp3", ".ogg", ".wav" };
+
+        /// <summary>Folder holding a level's imported songs.</summary>
+        public static string AssetsDirectory(string levelId, bool create = true)
+        {
+            var dir = Path.Combine(Application.persistentDataPath, "geodashy", "assets", SafeFileName(levelId));
+            if (create && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+            return dir;
+        }
+
+        public static string AssetPath(string levelId, string fileName)
+        {
+            if (string.IsNullOrEmpty(fileName)) return null;
+            return Path.Combine(AssetsDirectory(levelId, false), fileName);
+        }
+
+        public static bool AssetExists(string levelId, string fileName)
+        {
+            var p = AssetPath(levelId, fileName);
+            return p != null && File.Exists(p);
+        }
+
+        /// <summary>Copies a file into the level's asset folder and returns the stored file name.</summary>
+        public static string ImportAsset(string levelId, string sourcePath)
+        {
+            if (!File.Exists(sourcePath)) throw new FileNotFoundException("File not found: " + sourcePath);
+            var dir = AssetsDirectory(levelId);
+            var name = SafeFileName(Path.GetFileNameWithoutExtension(sourcePath));
+            var ext = Path.GetExtension(sourcePath).ToLowerInvariant();
+            var target = Path.Combine(dir, name + ext);
+            int n = 2;
+            while (File.Exists(target) && !FilesEqual(target, sourcePath)) target = Path.Combine(dir, name + "_" + n++ + ext);
+            if (!File.Exists(target)) File.Copy(sourcePath, target);
+            return Path.GetFileName(target);
+        }
+
+        static bool FilesEqual(string a, string b)
+        {
+            try
+            {
+                var fa = new FileInfo(a);
+                var fb = new FileInfo(b);
+                return fa.Length == fb.Length && fa.LastWriteTimeUtc == fb.LastWriteTimeUtc;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>Copies every imported asset from one level id to another (Save As).</summary>
+        public static void CopyAssets(string fromId, string toId)
+        {
+            var from = AssetsDirectory(fromId, false);
+            if (!Directory.Exists(from)) return;
+            var to = AssetsDirectory(toId);
+            foreach (var f in Directory.GetFiles(from)) File.Copy(f, Path.Combine(to, Path.GetFileName(f)), true);
+        }
+
+        public static void DeleteAssets(string levelId)
+        {
+            var dir = AssetsDirectory(levelId, false);
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+
         public static string PathFor(LevelData data)
         {
             return Path.Combine(LevelsDirectory, SafeFileName(data.id) + ".json");

@@ -21,7 +21,10 @@ namespace Geodashy.Rendering
         readonly SpriteRenderer[] layers = new SpriteRenderer[3];
         readonly string[] layerIds = new string[3];
         readonly float[] factors = new float[3];
-        readonly float[] tileWidths = new float[3];
+        readonly float[] yOffsets = new float[3];
+        readonly float[] scales = { 1f, 1f, 1f };
+        readonly Color[] tints = { Color.white, Color.white, Color.white };
+        readonly bool[] visible = { true, true, true };
 
         // fading between themes (BG Switch trigger)
         readonly SpriteRenderer[] fadeLayers = new SpriteRenderer[3];
@@ -64,13 +67,22 @@ namespace Geodashy.Rendering
         public void ApplySettings()
         {
             if (settings == null) return;
+            LevelSerializer.MigrateParallax(settings);
             var theme = ThemeCatalog.GetBackground(settings.backgroundTheme);
-            SetLayerSprite(0, string.IsNullOrEmpty(settings.bgFarOverride) ? theme.far : settings.bgFarOverride);
-            SetLayerSprite(1, string.IsNullOrEmpty(settings.bgMidOverride) ? theme.mid : settings.bgMidOverride);
-            SetLayerSprite(2, string.IsNullOrEmpty(settings.bgNearOverride) ? theme.near : settings.bgNearOverride);
-            factors[0] = settings.parallaxFar;
-            factors[1] = settings.parallaxMid;
-            factors[2] = settings.parallaxNear;
+            string[] themeLayers = { theme.far, theme.mid, theme.near };
+            for (int i = 0; i < 3; i++)
+            {
+                var ls = settings.Layer(i);
+                SetLayerSprite(i, string.IsNullOrEmpty(ls.layerId) ? themeLayers[i] : ls.layerId);
+                factors[i] = Mathf.Clamp(ls.parallax, -1f, 2f);
+                yOffsets[i] = ls.yOffset;
+                scales[i] = Mathf.Clamp(ls.scale, 0.1f, 10f);
+                tints[i] = ls.tint;
+                visible[i] = ls.visible;
+                layers[i].flipX = ls.flipX;
+                fadeLayers[i].flipX = ls.flipX;
+                layers[i].enabled = ls.visible;
+            }
             skyTop = theme.skyTop;
             skyBottom = theme.skyBottom;
             SetBackgroundColor(settings.backgroundColor);
@@ -85,10 +97,12 @@ namespace Geodashy.Rendering
             for (int i = 0; i < 3; i++)
             {
                 float blend = 0.55f - i * 0.2f;
-                var col = Color.Lerp(Color.white, c, blend);
-                col.a = 1f;
+                var col = Color.Lerp(Color.white, c, blend) * tints[i];
+                col.a = tints[i].a;
                 layers[i].color = col;
-                fadeLayers[i].color = col;
+                var fc = col;
+                fc.a = fadeLayers[i].color.a;
+                fadeLayers[i].color = fc;
             }
         }
 
@@ -97,15 +111,13 @@ namespace Geodashy.Rendering
             var def = ThemeCatalog.GetLayer(layerId);
             layerIds[index] = def.id;
             layers[index].sprite = SpriteLibrary.ForBackgroundLayer(def);
-            tileWidths[index] = layers[index].sprite.bounds.size.x;
         }
 
         /// <summary>Crossfades to another theme (BG Switch trigger).</summary>
         public void SwitchTheme(string themeId, float duration)
         {
-            var theme = ThemeCatalog.GetBackground(themeId);
             settings.backgroundTheme = themeId;
-            settings.bgFarOverride = settings.bgMidOverride = settings.bgNearOverride = "";
+            settings.ResetLayersToTheme();
             if (duration <= 0.01f)
             {
                 ApplySettings();
@@ -135,7 +147,7 @@ namespace Geodashy.Rendering
             float groundY = settings != null ? settings.groundY : 0f;
             for (int i = 0; i < 3; i++)
             {
-                PositionLayer(layers[i], i, camX, camY, halfW, halfH, groundY);
+                if (visible[i]) PositionLayer(layers[i], i, camX, camY, halfW, halfH, groundY);
                 if (fadeLayers[i].enabled) PositionLayer(fadeLayers[i], i, camX, camY, halfW, halfH, groundY);
             }
 
@@ -160,14 +172,16 @@ namespace Geodashy.Rendering
         void PositionLayer(SpriteRenderer sr, int index, float camX, float camY, float halfW, float halfH, float groundY)
         {
             if (sr.sprite == null) return;
-            float tileW = Mathf.Max(0.5f, sr.sprite.bounds.size.x);
-            float layerH = sr.sprite.bounds.size.y;
+            float scale = scales[index];
+            float tileW = Mathf.Max(0.5f, sr.sprite.bounds.size.x * scale);
+            float layerH = sr.sprite.bounds.size.y; // local units, scaled by the transform
             float factor = factors[index];
             float width = halfW * 2f + tileW * 2f;
-            sr.size = new Vector2(width, layerH);
+            sr.transform.localScale = new Vector3(scale, scale, 1f);
+            sr.size = new Vector2(width / scale, layerH);
             float phase = Mathf.Repeat(camX * (1f - factor) - (camX - width / 2f), tileW);
             float left = camX - width / 2f + phase;
-            float bottom = groundY - 0.5f + (camY - baseCameraY) * (1f - factor) - index * 0.5f;
+            float bottom = groundY - 0.5f + yOffsets[index] + (camY - baseCameraY) * (1f - factor) - index * 0.5f;
             // the sprite pivot is bottom-centre, tiling grows symmetrically around the pivot
             sr.transform.position = new Vector3(left + width / 2f, bottom, 0f);
         }

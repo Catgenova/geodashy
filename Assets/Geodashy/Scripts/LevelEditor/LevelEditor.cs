@@ -840,10 +840,76 @@ namespace Geodashy.Editing
 
         public void SaveAs(string newName)
         {
+            var oldId = level.id;
             level.id = Guid.NewGuid().ToString("N");
+            try
+            {
+                LevelStorage.CopyAssets(oldId, level.id);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("Could not copy level assets: " + e.Message);
+            }
             if (!string.IsNullOrWhiteSpace(newName)) level.name = newName;
             currentFilePath = null;
             Save();
+        }
+
+        // ---- song preview (editor only) --------------------------------------
+
+        AudioSource previewSource;
+
+        public bool IsPreviewingSong => previewSource != null && previewSource.isPlaying;
+
+        /// <summary>Plays the level's song from the given second so the author can find offsets and BPM.</summary>
+        public void PreviewSong(float fromSeconds)
+        {
+            StopSongPreview();
+            var s = level.settings;
+            if (!string.IsNullOrEmpty(s.songFile))
+            {
+                var path = LevelStorage.AssetPath(level.id, s.songFile);
+                AudioLoader.Load(this, path, clip =>
+                {
+                    if (clip == null)
+                    {
+                        ui.Toast("Could not load " + s.songFile);
+                        return;
+                    }
+                    PlayPreview(clip, fromSeconds);
+                });
+                return;
+            }
+            if (!string.IsNullOrEmpty(s.songId))
+            {
+                var clip = Resources.Load<AudioClip>("Songs/" + s.songId);
+                if (clip == null)
+                {
+                    ui.Toast("No song called " + s.songId + " in Resources/Songs");
+                    return;
+                }
+                PlayPreview(clip, fromSeconds);
+                return;
+            }
+            ui.Toast("No song set. Import one in Level Settings.");
+        }
+
+        void PlayPreview(AudioClip clip, float fromSeconds)
+        {
+            if (previewSource == null)
+            {
+                previewSource = gameObject.AddComponent<AudioSource>();
+                previewSource.playOnAwake = false;
+            }
+            previewSource.clip = clip;
+            previewSource.time = Mathf.Clamp(fromSeconds, 0f, Mathf.Max(0f, clip.length - 0.1f));
+            previewSource.Play();
+            ui.Toast(string.Format("Previewing {0} ({1:0}:{2:00})", clip.name, Mathf.Floor(clip.length / 60f), clip.length % 60f));
+        }
+
+        public void StopSongPreview()
+        {
+            if (previewSource != null) previewSource.Stop();
         }
 
         void StoreEditorCamera()
@@ -906,6 +972,7 @@ namespace Geodashy.Editing
         public void StartPlaytest(bool fromMarker)
         {
             if (IsPlaying) return;
+            StopSongPreview();
             StoreEditorCamera();
             Deselect();
             cameraBeforePlay = editorCamera.Position;
