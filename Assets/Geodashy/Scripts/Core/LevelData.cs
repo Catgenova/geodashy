@@ -333,6 +333,8 @@ namespace Geodashy.Core
         public long createdUnix;
         public long modifiedUnix;
         public int nextUid = 1;
+        /// <summary>Position in the campaign list when this level ships in Resources/Levels (lower first).</summary>
+        public int campaignOrder = 100;
         public float editorCameraX;
         public float editorCameraY;
         public float editorZoom = 1f;
