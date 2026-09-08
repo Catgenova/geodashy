@@ -10,11 +10,10 @@ Rules of thumb:
 - Campaign maps must use a starter song from this folder. Songs a player imports from their
   own disk live outside the project and cannot ship with the game.
 
-Current pack (16-bit 44.1 kHz WAV, stored through Git LFS):
+Current pack (Ogg Vorbis, about quality 6, 44.1 kHz, committed as plain git blobs):
 darkness_falls, final_stand, hillside_clash, le_pharaon, legends_begin, sandswept_siege,
 serenity, starfall_orchestral, the_kingdom, the_old_ways, winters_hymn.
 
-Note on size: the pack is about 320 MB, and GitHub's free LFS tier allows 1 GB of storage and
-1 GB of download bandwidth per month, so every fresh clone spends a third of that. Converting the
-pack to ogg (quality 6 or so) would shrink it to roughly 50 MB with no audible loss in-game, since
-Unity re-encodes audio to Vorbis in builds anyway.
+The pack is about 46 MB in total. The original 16-bit WAV masters (about 320 MB) were pushed
+through Git LFS once and then replaced; they remain in the repository's LFS history. Ogg files in
+this folder are deliberately excluded from LFS in .gitattributes so clones need no LFS bandwidth.
