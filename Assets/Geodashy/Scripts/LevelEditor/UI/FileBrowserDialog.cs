@@ -17,6 +17,9 @@ namespace Geodashy.Editing.UI
             var modal = ui.TopModal;
             string folder = PlayerPrefs.GetString(LastFolderPref, "");
             if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder)) folder = DefaultFolder();
+            // declared up front: the quick-link buttons capture Navigate, which uses these
+            ScrollRect scroll = null;
+            RectTransform list = null;
 
             var pathRow = UIFactory.Row(c, 34, 6);
             var up = UIFactory.Button(pathRow, "↑ Up", null, 70, 32);
@@ -32,7 +35,7 @@ namespace Geodashy.Editing.UI
             }
 
             var filterLabel = UIFactory.Label(c, "Showing " + string.Join(", ", extensions) + " files. Click a file to choose it.", 12, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 20);
-            var scroll = UIFactory.ScrollView(c, "Entries", out var list, true, false);
+            scroll = UIFactory.ScrollView(c, "Entries", out list, true, false);
             UIFactory.VLayout(list, 2, 4);
             UIFactory.Fitter(list, true, false);
             var bottom = UIFactory.Row(c, 34, 6, TextAnchor.MiddleRight);
