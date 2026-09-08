@@ -239,8 +239,9 @@ namespace Geodashy.Rendering
                     var mane = Raster.Darken(body, 0.45f);
                     var hoof = Raster.Darken(body, 0.6f);
                     // tail: curved dark strokes off the rump
-                    r.Line(20, 52, 12, 36, 5, mane);
-                    r.Line(20, 52, 8, 44, 4, mane);
+                    r.Line(18, 54, 8, 34, 6, mane);
+                    r.Line(18, 54, 4, 46, 5, mane);
+                    r.Line(16, 52, 10, 26, 4, mane);
                     // legs: two pairs, slight stride, hooves at the bottom
                     void Leg(float topX, float bottomX, Color c)
                     {
@@ -258,7 +259,8 @@ namespace Geodashy.Rendering
                     // neck rising forward to the head
                     r.FillPolygon(new[] { new Vector2(60, 58), new Vector2(74, 52), new Vector2(86, 74), new Vector2(72, 78) }, body);
                     // mane along the top of the neck
-                    r.FillPolygon(new[] { new Vector2(62, 60), new Vector2(72, 78), new Vector2(78, 82), new Vector2(66, 62) }, mane);
+                    r.FillPolygon(new[] { new Vector2(56, 62), new Vector2(72, 80), new Vector2(80, 86), new Vector2(66, 64) }, mane);
+                    r.FillPolygon(new[] { new Vector2(60, 64), new Vector2(76, 82), new Vector2(72, 88), new Vector2(58, 68) }, mane);
                     // head + muzzle, ears, eye
                     r.FillEllipse(82, 78, 11, 7, body);
                     r.FillEllipse(91, 76, 5, 4, Raster.Lighten(body, 0.2f));
