@@ -14,6 +14,9 @@ level can be tested immediately.
 1. Open the project in Unity 6000.4 or newer.
 2. Menu **Geodashy ▸ Open Level Editor Scene** (or open `Assets/Geodashy/Scenes/LevelEditor.unity`).
 3. Press Play. The whole interface is built from code at runtime, so there are no prefabs to wire up.
+   Set the Game view to **Free Aspect** (or maximise it) so the interface fits your panel; a fixed
+   1920x1080 at 1x scale in a smaller panel gets cropped and resampled. The interface size can be
+   changed in the View dock (persisted between sessions).
    If the scene file ever fails to import, **Geodashy ▸ Regenerate Level Editor Scene** rebuilds it.
 
 Everything lives under `Assets/Geodashy`. The rest of the project is the stock URP 2D template.

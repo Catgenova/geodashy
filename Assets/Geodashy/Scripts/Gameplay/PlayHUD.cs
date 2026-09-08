@@ -28,10 +28,8 @@ namespace Geodashy.Gameplay
             var canvas = gameObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 200;
-            var scaler = gameObject.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080);
-            scaler.matchWidthOrHeight = 0.5f;
+            canvas.pixelPerfect = true;
+            EditorUI.ConfigureScaler(gameObject.AddComponent<CanvasScaler>());
             gameObject.AddComponent<GraphicRaycaster>();
 
             var root = UIFactory.Rect(transform, "Root");

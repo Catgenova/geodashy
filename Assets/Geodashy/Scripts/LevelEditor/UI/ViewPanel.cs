@@ -12,7 +12,7 @@ namespace Geodashy.Editing.UI
         Toggle snapToggle, gridToggle, guideToggle, bpmToggle, allLayersToggle;
         Button[] gridButtons;
         readonly float[] gridSizes = { 0.25f, 0.5f, 1f, 2f };
-        Text layerLabel, zoomLabel, posLabel;
+        Text layerLabel, zoomLabel, posLabel, uiScaleLabel;
         Slider zoomSlider, posSlider;
         bool suppress;
 
@@ -87,6 +87,14 @@ namespace Geodashy.Editing.UI
             UIFactory.Button(nr, "End ⇥", () => editor.editorCamera.Position = new Vector2(editor.level.GetFinishX(), editor.level.settings.groundY + 4f), -1, 24, null, 12);
             UIFactory.Button(c, "Go to ground", () => editor.editorCamera.Position = new Vector2(editor.editorCamera.Position.x, editor.level.settings.groundY + 4f), -1, 24, null, 12);
 
+            UIFactory.SectionHeader(c, "Interface");
+            uiScaleLabel = UIFactory.Label(c, "", 12, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 18);
+            var ur = UIFactory.Row(c, 26, 3);
+            UIFactory.Button(ur, "−", () => ui.SetUIScale(EditorUI.UIScale - 0.1f), -1, 24);
+            UIFactory.Button(ur, "100%", () => ui.SetUIScale(1f), -1, 24, null, 12);
+            UIFactory.Button(ur, "+", () => ui.SetUIScale(EditorUI.UIScale + 0.1f), -1, 24);
+            UIFactory.Label(c, "Tip: set the Game view to Free Aspect so the interface fits the window.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 36);
+
             UIFactory.SectionHeader(c, "Playtest marker");
             var mr = UIFactory.Row(c, 26, 3);
             UIFactory.Button(mr, "Set at camera", () => editor.SetPlaytestMarker(editor.editorCamera.Position), -1, 24, null, 11);
@@ -94,12 +102,14 @@ namespace Geodashy.Editing.UI
             UIFactory.Label(c, "M sets the marker at the cursor. Shift+M clears. Shift+P or ▶ Marker plays from it.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 50);
 
             editor.ViewOptionsChanged += Refresh;
+            ui.UIScaleChanged += Refresh;
             Refresh();
         }
 
         void Refresh()
         {
             if (snapToggle == null) return;
+            if (uiScaleLabel != null) uiScaleLabel.text = string.Format("Interface size {0:0}%", EditorUI.UIScale * 100f);
             snapToggle.SetIsOnWithoutNotify(editor.snapToGrid);
             gridToggle.SetIsOnWithoutNotify(editor.grid.showGrid);
             allLayersToggle.SetIsOnWithoutNotify(editor.showAllLayers);

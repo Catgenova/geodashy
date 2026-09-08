@@ -21,7 +21,12 @@ namespace Geodashy.Editing.UI
         public static readonly Color Good = new Color(0.2f, 0.55f, 0.3f, 1f);
         public static readonly Color InputBg = new Color(0.06f, 0.05f, 0.08f, 1f);
 
+        /// <summary>Smallest font size any widget will use. Dense panels asked for 10-11px which reads badly at 1080p.</summary>
+        public static int MinFontSize = 13;
+
         static Font font;
+
+        public static int FontSize(int requested) => Mathf.Max(MinFontSize, requested);
 
         public static Font Font
         {
@@ -199,7 +204,7 @@ namespace Geodashy.Editing.UI
             var rt = Rect(parent, "Label");
             var t = rt.gameObject.AddComponent<Text>();
             t.font = Font;
-            t.fontSize = size;
+            t.fontSize = FontSize(size);
             t.text = text;
             t.alignment = align;
             t.color = color ?? TextColor;
@@ -317,7 +322,7 @@ namespace Geodashy.Editing.UI
             var textRt = Rect(rt, "Text");
             var t = textRt.gameObject.AddComponent<Text>();
             t.font = Font;
-            t.fontSize = fontSize;
+            t.fontSize = FontSize(fontSize);
             t.color = TextColor;
             t.alignment = TextAnchor.MiddleLeft;
             t.supportRichText = false;
@@ -326,7 +331,7 @@ namespace Geodashy.Editing.UI
             var phRt = Rect(rt, "Placeholder");
             var ph = phRt.gameObject.AddComponent<Text>();
             ph.font = Font;
-            ph.fontSize = fontSize;
+            ph.fontSize = FontSize(fontSize);
             ph.color = TextDim;
             ph.fontStyle = FontStyle.Italic;
             ph.alignment = TextAnchor.MiddleLeft;

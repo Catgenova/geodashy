@@ -13,10 +13,38 @@ namespace Geodashy.Editing.UI
     {
         public static EditorUI Instance { get; private set; }
 
-        public const float TopBarHeight = 52f;
-        public const float BottomDockHeight = 250f;
-        public const float LeftDockWidth = 236f;
-        public const float RightDockWidth = 340f;
+        public const float TopBarHeight = 56f;
+        public const float BottomDockHeight = 260f;
+        public const float LeftDockWidth = 250f;
+        public const float RightDockWidth = 360f;
+        public const string UIScalePref = "geodashy.uiScale";
+        public static readonly Vector2 ReferenceResolution = new Vector2(1920, 1080);
+
+        /// <summary>Interface scale multiplier (0.7 - 2). Persisted in PlayerPrefs and shared with the play HUD.</summary>
+        public static float UIScale
+        {
+            get => Mathf.Clamp(PlayerPrefs.GetFloat(UIScalePref, 1f), 0.7f, 2f);
+            set => PlayerPrefs.SetFloat(UIScalePref, Mathf.Clamp(value, 0.7f, 2f));
+        }
+
+        public static void ConfigureScaler(CanvasScaler scaler)
+        {
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = ReferenceResolution / UIScale;
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+            scaler.matchWidthOrHeight = 0.5f;
+        }
+
+        CanvasScaler canvasScaler;
+        public event Action UIScaleChanged;
+
+        public void SetUIScale(float scale)
+        {
+            UIScale = scale;
+            PlayerPrefs.Save();
+            if (canvasScaler != null) ConfigureScaler(canvasScaler);
+            UIScaleChanged?.Invoke();
+        }
 
         public LevelEditor editor;
         public Canvas canvas;
@@ -85,11 +113,9 @@ namespace Geodashy.Editing.UI
             canvas = gameObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 100;
-            var scaler = gameObject.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080);
-            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            scaler.matchWidthOrHeight = 0.5f;
+            canvas.pixelPerfect = true;
+            canvasScaler = gameObject.AddComponent<CanvasScaler>();
+            ConfigureScaler(canvasScaler);
             gameObject.AddComponent<GraphicRaycaster>();
 
             root = UIFactory.Rect(transform, "Root");
