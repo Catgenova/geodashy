@@ -106,6 +106,11 @@ namespace Geodashy.Core
             BuildDecor();
             BuildTriggers();
             BuildSpecial();
+            foreach (var d in all)
+            {
+                if (!string.IsNullOrEmpty(d.deathVerb)) continue;
+                d.deathVerb = d.IsSolidLike ? "Dashed against" : "Struck by";
+            }
         }
 
         // ---------------------------------------------------------------------
@@ -167,26 +172,26 @@ namespace Geodashy.Core
 
         static void BuildHazards()
         {
-            Add("iron_spike", "Iron Spike", CatHazards, ObjectKind.Hazard).Shape(PlaceholderShape.Spike).Collider(ColliderShape.Triangle, 0.55f).Colors("c9ccd6", "5f6270").Z(1).Tags("spike", "iron", "castle");
-            Add("iron_spike_small", "Small Iron Spike", CatHazards, ObjectKind.Hazard).Size(1, 0.5f).Shape(PlaceholderShape.SpikeSmall).Collider(ColliderShape.Triangle, 0.55f).Colors("c9ccd6", "5f6270").Z(1).Tags("spike", "small");
-            Add("iron_spike_wide", "Pike Wall", CatHazards, ObjectKind.Hazard).Size(3, 1).Shape(PlaceholderShape.SpikeWide).Collider(ColliderShape.Triangle, 0.6f).Colors("c9ccd6", "5f6270").Z(1).Tags("spike", "pike", "wall");
-            Add("lance", "Lance", CatHazards, ObjectKind.Hazard).Size(1, 2).Shape(PlaceholderShape.Lance).Collider(ColliderShape.Triangle, 0.5f).Colors("e2d7a5", "8f8055").Z(1).Tags("spike", "tall", "joust");
-            Add("wood_stake", "Wooden Stake", CatHazards, ObjectKind.Hazard).Shape(PlaceholderShape.Spike).Collider(ColliderShape.Triangle, 0.55f).Colors("a9743d", "5c3a1a").Z(1).Tags("spike", "wood", "forest");
-            Add("ice_spike", "Ice Shard", CatHazards, ObjectKind.Hazard).Shape(PlaceholderShape.Spike).Collider(ColliderShape.Triangle, 0.55f).Colors("d5f1ff", "7fc0e6").Z(1).Tags("spike", "ice");
-            Add("crystal_spike", "Crystal Shard", CatHazards, ObjectKind.Hazard).Shape(PlaceholderShape.Spike).Collider(ColliderShape.Triangle, 0.55f).Colors("d3b8ff", "8a5ee0").Z(1).Tags("spike", "crystal");
-            Add("bone_spike", "Bone Spike", CatHazards, ObjectKind.Hazard).Shape(PlaceholderShape.Spike).Collider(ColliderShape.Triangle, 0.55f).Colors("f0e9d2", "b8ad8c").Z(1).Tags("spike", "bone", "dungeon");
-            Add("thorns", "Thorn Bush", CatHazards, ObjectKind.Hazard).Shape(PlaceholderShape.Thorns).Collider(ColliderShape.Circle, 0.7f).Colors("3f6b2f", "204018").Z(1).Tags("bush", "forest", "thorn");
-            Add("fire_pit", "Fire Pit", CatHazards, ObjectKind.Hazard).Shape(PlaceholderShape.Fire).Collider(ColliderShape.Box, 0.6f).Colors("ff8a2a", "ffd23a").Z(1).Tags("fire", "flame", "volcano");
-            Add("fire_pit_wide", "Fire Trench", CatHazards, ObjectKind.Hazard).Size(3, 1).Shape(PlaceholderShape.Fire).Collider(ColliderShape.Box, 0.6f).Colors("ff8a2a", "ffd23a").Z(1).Tags("fire", "flame");
-            Add("poison_bog", "Poison Bog", CatHazards, ObjectKind.Hazard).Size(2, 0.5f).Shape(PlaceholderShape.Bog).Collider(ColliderShape.Box, 0.7f).Colors("6fbf3a", "3b6d1e").Z(1).Tags("swamp", "poison");
-            Add("saw_blade", "Spinning Blade", CatHazards, ObjectKind.Hazard).Shape(PlaceholderShape.Saw).Collider(ColliderShape.Circle, 0.8f).Colors("d0d3dc", "6a6d78").Z(1).Tags("saw", "blade", "spin").Spins();
-            Add("saw_blade_big", "Great Blade", CatHazards, ObjectKind.Hazard).Size(2, 2).Shape(PlaceholderShape.Saw).Collider(ColliderShape.Circle, 0.8f).Colors("d0d3dc", "6a6d78").Z(1).Tags("saw", "blade", "spin").Spins();
-            Add("saw_blade_huge", "Colossal Blade", CatHazards, ObjectKind.Hazard).Size(3, 3).Shape(PlaceholderShape.Saw).Collider(ColliderShape.Circle, 0.8f).Colors("d0d3dc", "6a6d78").Z(1).Tags("saw", "blade", "spin").Spins();
-            Add("mace", "Chain Mace", CatHazards, ObjectKind.Hazard).Shape(PlaceholderShape.Mace).Collider(ColliderShape.Circle, 0.75f).Colors("6e7180", "3b3d47").Z(1).Tags("mace", "spin", "castle").Spins();
-            Add("mace_big", "Great Mace", CatHazards, ObjectKind.Hazard).Size(2, 2).Shape(PlaceholderShape.Mace).Collider(ColliderShape.Circle, 0.75f).Colors("6e7180", "3b3d47").Z(1).Tags("mace", "spin").Spins();
-            Add("lightning_rune", "Lightning Rune", CatHazards, ObjectKind.Hazard).Size(1, 3).Shape(PlaceholderShape.Lightning).Collider(ColliderShape.Box, 0.5f).Colors("f5f0a0", "7fd0ff").Z(1).Tags("magic", "storm", "beam");
+            Add("iron_spike", "Iron Spike", CatHazards, ObjectKind.Hazard).Shape(PlaceholderShape.Spike).Collider(ColliderShape.Triangle, 0.55f).Colors("c9ccd6", "5f6270").Z(1).Tags("spike", "iron", "castle").Death("Impaled by");
+            Add("iron_spike_small", "Small Iron Spike", CatHazards, ObjectKind.Hazard).Size(1, 0.5f).Shape(PlaceholderShape.SpikeSmall).Collider(ColliderShape.Triangle, 0.55f).Colors("c9ccd6", "5f6270").Z(1).Tags("spike", "small").Death("Impaled by");
+            Add("iron_spike_wide", "Pike Wall", CatHazards, ObjectKind.Hazard).Size(3, 1).Shape(PlaceholderShape.SpikeWide).Collider(ColliderShape.Triangle, 0.6f).Colors("c9ccd6", "5f6270").Z(1).Tags("spike", "pike", "wall").Death("Impaled on");
+            Add("lance", "Lance", CatHazards, ObjectKind.Hazard).Size(1, 2).Shape(PlaceholderShape.Lance).Collider(ColliderShape.Triangle, 0.5f).Colors("e2d7a5", "8f8055").Z(1).Tags("spike", "tall", "joust").Death("Run through by");
+            Add("wood_stake", "Wooden Stake", CatHazards, ObjectKind.Hazard).Shape(PlaceholderShape.Spike).Collider(ColliderShape.Triangle, 0.55f).Colors("a9743d", "5c3a1a").Z(1).Tags("spike", "wood", "forest").Death("Impaled by");
+            Add("ice_spike", "Ice Shard", CatHazards, ObjectKind.Hazard).Shape(PlaceholderShape.Spike).Collider(ColliderShape.Triangle, 0.55f).Colors("d5f1ff", "7fc0e6").Z(1).Tags("spike", "ice").Death("Pierced by");
+            Add("crystal_spike", "Crystal Shard", CatHazards, ObjectKind.Hazard).Shape(PlaceholderShape.Spike).Collider(ColliderShape.Triangle, 0.55f).Colors("d3b8ff", "8a5ee0").Z(1).Tags("spike", "crystal").Death("Pierced by");
+            Add("bone_spike", "Bone Spike", CatHazards, ObjectKind.Hazard).Shape(PlaceholderShape.Spike).Collider(ColliderShape.Triangle, 0.55f).Colors("f0e9d2", "b8ad8c").Z(1).Tags("spike", "bone", "dungeon").Death("Impaled by");
+            Add("thorns", "Thorn Bush", CatHazards, ObjectKind.Hazard).Shape(PlaceholderShape.Thorns).Collider(ColliderShape.Circle, 0.7f).Colors("3f6b2f", "204018").Z(1).Tags("bush", "forest", "thorn").Death("Torn apart by");
+            Add("fire_pit", "Fire Pit", CatHazards, ObjectKind.Hazard).Shape(PlaceholderShape.Fire).Collider(ColliderShape.Box, 0.6f).Colors("ff8a2a", "ffd23a").Z(1).Tags("fire", "flame", "volcano").Death("Burned in");
+            Add("fire_pit_wide", "Fire Trench", CatHazards, ObjectKind.Hazard).Size(3, 1).Shape(PlaceholderShape.Fire).Collider(ColliderShape.Box, 0.6f).Colors("ff8a2a", "ffd23a").Z(1).Tags("fire", "flame").Death("Burned in");
+            Add("poison_bog", "Poison Bog", CatHazards, ObjectKind.Hazard).Size(2, 0.5f).Shape(PlaceholderShape.Bog).Collider(ColliderShape.Box, 0.7f).Colors("6fbf3a", "3b6d1e").Z(1).Tags("swamp", "poison").Death("Drowned in");
+            Add("saw_blade", "Spinning Blade", CatHazards, ObjectKind.Hazard).Shape(PlaceholderShape.Saw).Collider(ColliderShape.Circle, 0.8f).Colors("d0d3dc", "6a6d78").Z(1).Tags("saw", "blade", "spin").Spins().Death("Shredded by");
+            Add("saw_blade_big", "Great Blade", CatHazards, ObjectKind.Hazard).Size(2, 2).Shape(PlaceholderShape.Saw).Collider(ColliderShape.Circle, 0.8f).Colors("d0d3dc", "6a6d78").Z(1).Tags("saw", "blade", "spin").Spins().Death("Shredded by");
+            Add("saw_blade_huge", "Colossal Blade", CatHazards, ObjectKind.Hazard).Size(3, 3).Shape(PlaceholderShape.Saw).Collider(ColliderShape.Circle, 0.8f).Colors("d0d3dc", "6a6d78").Z(1).Tags("saw", "blade", "spin").Spins().Death("Cleaved by");
+            Add("mace", "Chain Mace", CatHazards, ObjectKind.Hazard).Shape(PlaceholderShape.Mace).Collider(ColliderShape.Circle, 0.75f).Colors("6e7180", "3b3d47").Z(1).Tags("mace", "spin", "castle").Spins().Death("Crushed by");
+            Add("mace_big", "Great Mace", CatHazards, ObjectKind.Hazard).Size(2, 2).Shape(PlaceholderShape.Mace).Collider(ColliderShape.Circle, 0.75f).Colors("6e7180", "3b3d47").Z(1).Tags("mace", "spin").Spins().Death("Flattened by");
+            Add("lightning_rune", "Lightning Rune", CatHazards, ObjectKind.Hazard).Size(1, 3).Shape(PlaceholderShape.Lightning).Collider(ColliderShape.Box, 0.5f).Colors("f5f0a0", "7fd0ff").Z(1).Tags("magic", "storm", "beam").Death("Smitten by");
             Add("stalactite_hazard", "Stalactite", CatHazards, ObjectKind.Hazard).Size(1, 2).Shape(PlaceholderShape.Stalactite).Collider(ColliderShape.Triangle, 0.5f).Colors("8e8a9a", "4c485a").Z(1).Tags("cave", "spike")
-                .Desc("A hanging spike. Place it flipped vertically under a ceiling.");
+                .Desc("A hanging spike. Place it flipped vertically under a ceiling.").Death("Impaled by");
         }
 
         static void BuildRunes()
@@ -268,7 +273,12 @@ namespace Geodashy.Core
             Add("gold_coin", "Gold Coin", CatCollectibles, ObjectKind.Collectible).Shape(PlaceholderShape.Coin).Collider(ColliderShape.Circle, 1.2f).Colors("ffd23a", "9a7a10").Z(2).Tags("coin", "secret", "gold");
             Add("gem", "Gem", CatCollectibles, ObjectKind.Collectible).Shape(PlaceholderShape.Gem).Collider(ColliderShape.Circle, 1.2f).Colors("6ad4ff", "1f6a90").Z(2).Tags("gem", "user coin", "crystal");
             Add("key", "Dungeon Key", CatCollectibles, ObjectKind.Collectible).Shape(PlaceholderShape.Key).Collider(ColliderShape.Circle, 1.2f).Colors("e8c460", "7a6020").Z(2).Tags("key", "item")
-                .Prop(new PropDef("itemId", "Item ID", PropType.Int, "1").Range(1, 999, 1));
+                .Desc("Opens every Locked Gate with the same Key ID. Also feeds Count triggers.")
+                .Prop(new PropDef("itemId", "Key ID", PropType.Int, "1").Range(1, 999, 1));
+            Add("locked_gate", "Locked Gate", CatCollectibles, ObjectKind.Solid).Size(2, 3).Shape(PlaceholderShape.Gate).Colors("4a4c56", "8a8d99").Z(-1).Tags("gate", "lock", "key", "door", "castle")
+                .Desc("Solid until a Dungeon Key with the matching Key ID is collected, then it opens. Use it for shortcuts and secret routes.")
+                .Death("Dashed against")
+                .Prop(new PropDef("keyId", "Key ID", PropType.Int, "1").Range(1, 999, 1));
         }
 
         static void BuildDecor()
@@ -430,7 +440,7 @@ namespace Geodashy.Core
                 .Prop(new PropDef("text", "Text", PropType.Text, "HUZZAH"))
                 .Prop(new PropDef("size", "Size", PropType.Float, "1").Range(0.25f, 8, 0.25f));
             Add("checkpoint", "Waystone", CatSpecial, ObjectKind.Decoration).Size(1, 1.5f).Shape(PlaceholderShape.Rune).Collider(ColliderShape.None).Colors("5fff7a", "1a6a2a").Z(2).Tags("checkpoint", "practice")
-                .Desc("Decorative marker for where a checkpoint would make sense in practice mode.");
+                .Desc("Decorative waystone. Squire mode raises real ones where you place checkpoints.");
         }
     }
 }

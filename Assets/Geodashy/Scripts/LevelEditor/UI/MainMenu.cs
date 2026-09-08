@@ -164,7 +164,7 @@ namespace Geodashy.Editing.UI
             UIFactory.Label(detailPane, best + "  ·  " + stats.attempts + " attempts  ·  " + stats.deaths.Count + " recorded deaths", 13, TextAnchor.MiddleLeft, UIFactory.TextColor, -1, 22);
             UIFactory.Spacer(detailPane, 6);
             UIFactory.Button(detailPane, "▶ Play", () => Launch(info, false), -1, 50, UIFactory.Good, 20);
-            UIFactory.Button(detailPane, "▶ Practice (checkpoints)", () => Launch(info, true), -1, 42, null, 16);
+            UIFactory.Button(detailPane, "▶ Squire mode (waystones)", () => Launch(info, true), -1, 42, null, 16);
             UIFactory.Button(detailPane, "Edit in level editor", () =>
             {
                 try

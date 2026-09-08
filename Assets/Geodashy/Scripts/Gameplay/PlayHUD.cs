@@ -96,7 +96,7 @@ namespace Geodashy.Gameplay
             checkpointButtons = UIFactory.Rect(root, "CheckpointButtons");
             UIFactory.Anchor(checkpointButtons, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-260, 50), new Vector2(-20, 92));
             UIFactory.HLayout(checkpointButtons, 8, 0, true);
-            UIFactory.Button(checkpointButtons, "+ Checkpoint (Z)", () => onCheckpoint(), -1, 40, UIFactory.Good, 14);
+            UIFactory.Button(checkpointButtons, "+ Waystone (Z)", () => onCheckpoint(), -1, 40, UIFactory.Good, 14);
             UIFactory.Button(checkpointButtons, "− Remove (X)", () => onRemoveCheckpoint(), -1, 40, UIFactory.Danger, 14);
             checkpointButtons.gameObject.SetActive(false);
 
@@ -115,7 +115,7 @@ namespace Geodashy.Gameplay
             UIFactory.VLayout(pw, 10, 20);
             UIFactory.Label(pw, "PAUSED", 26, TextAnchor.MiddleCenter, UIFactory.Accent, -1, 40, true);
             UIFactory.Button(pw, "Resume", () => onResume(), -1, 40, UIFactory.Good, 16);
-            practiceToggle = UIFactory.Button(pw, "Practice mode: off", () => onTogglePractice(), -1, 40, null, 16);
+            practiceToggle = UIFactory.Button(pw, "Squire mode (waystones): off", () => onTogglePractice(), -1, 40, null, 16);
             UIFactory.Button(pw, "Restart from start", () => onRestart(), -1, 40, null, 16);
             pauseExitButton = UIFactory.Button(pw, "Back to editor", () => onExit(), -1, 40, UIFactory.Danger, 16);
             pausePanel.gameObject.SetActive(false);
@@ -194,11 +194,12 @@ namespace Geodashy.Gameplay
             }
         }
 
-        public void SetPractice(bool on, int checkpoints, bool auto)
+        public void SetPractice(bool on, int checkpoints, bool auto, int current = -1)
         {
-            practiceText.text = on ? "PRACTICE  ·  " + checkpoints + " checkpoint" + (checkpoints == 1 ? "" : "s") + (auto ? "  ·  auto" : "") : "";
+            string pos = checkpoints > 0 && current >= 0 ? (current + 1) + "/" + checkpoints : checkpoints.ToString();
+            practiceText.text = on ? "SQUIRE MODE  ·  waystone " + pos + (auto ? "  ·  auto" : "") + "  ·  ← → scrub" : "";
             checkpointButtons.gameObject.SetActive(on);
-            UIFactory.SetButtonLabel(practiceToggle, on ? "Practice mode: on (C)" : "Practice mode: off (C)");
+            UIFactory.SetButtonLabel(practiceToggle, on ? "Squire mode (waystones): on (C)" : "Squire mode (waystones): off (C)");
             UIFactory.SetButtonActive(practiceToggle, on);
         }
 
@@ -212,7 +213,7 @@ namespace Geodashy.Gameplay
 
         public void ShowDeath(string cause, float progress)
         {
-            deathText.text = string.Format("Struck {0} at {1:0.000}%\nRed = the edge that killed you · dot = contact point · yellow = your hurt box\nClick, Space or Enter to retry · R restarts", cause, progress * 100f);
+            deathText.text = string.Format("{0} at {1:0.000}%\nRed = the edge that killed you · dot = contact point · yellow = your hurt box\nClick, Space or Enter to retry · R restarts", cause, progress * 100f);
             deathPanel.gameObject.SetActive(true);
         }
 
@@ -220,6 +221,15 @@ namespace Geodashy.Gameplay
 
         public void SetAttempt(int n) => attemptText.text = "Attempt " + n;
         public void SetCoins(int n, int total) => coinText.text = total > 0 ? "Loot " + n + " / " + total : "";
+
+        public void SetLoot(int coins, int totalCoins, int gems, int totalGems, int keys)
+        {
+            var parts = new List<string>();
+            if (totalCoins > 0) parts.Add("Gold " + coins + "/" + totalCoins);
+            if (totalGems > 0) parts.Add("Gems " + gems + "/" + totalGems);
+            if (keys > 0) parts.Add("Keys " + keys);
+            coinText.text = string.Join("   ", parts);
+        }
 
         public void ShowHint(string text, float seconds = 4f)
         {
@@ -230,9 +240,10 @@ namespace Geodashy.Gameplay
 
         public void ShowPause(bool on) => pausePanel.gameObject.SetActive(on);
 
-        public void ShowComplete(int attempts, float seconds, int jumps, int coins, int totalCoins, int totalAttempts = 0, int completions = 0)
+        public void ShowComplete(int attempts, float seconds, int jumps, int coins, int totalCoins, int totalAttempts = 0, int completions = 0, int gems = 0, int totalGems = 0)
         {
-            completeStats.text = string.Format("Progress: 100.000%\nAttempts: {0}   (all time: {5}, cleared {6}x)\nTime: {1:0.0}s   Jumps: {2}\nLoot: {3} / {4}", attempts, seconds, jumps, coins, totalCoins, totalAttempts, completions);
+            string loot = "Gold " + coins + "/" + totalCoins + (totalGems > 0 ? "   Gems " + gems + "/" + totalGems : "");
+            completeStats.text = string.Format("Progress: 100.000%\nAttempts: {0}   (all time: {4}, cleared {5}x)\nTime: {1:0.0}s   Jumps: {2}\n{3}", attempts, seconds, jumps, loot, totalAttempts, completions);
             completePanel.gameObject.SetActive(true);
         }
 

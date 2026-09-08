@@ -45,7 +45,7 @@ namespace Geodashy.Editing.UI
             var qr1 = UIFactory.Row(c, 34, 4);
             UIFactory.Button(qr1, "▶ Test", () => editor.StartPlaytest(false), -1, 32, UIFactory.Good, 14);
             UIFactory.Button(qr1, "▶ Marker", () => editor.StartPlaytest(true), -1, 32, UIFactory.Good, 13);
-            UIFactory.Button(c, "▶ Practice (checkpoints)", () => editor.StartPlaytest(false, true), -1, 30, UIFactory.Good, 13);
+            UIFactory.Button(c, "▶ Squire mode (waystones)", () => editor.StartPlaytest(false, true), -1, 30, UIFactory.Good, 13);
             var qr2 = UIFactory.Row(c, 30, 4);
             UIFactory.Button(qr2, "Save", ui.SaveWithPrompt, -1, 28, UIFactory.ButtonActive, 13);
             UIFactory.Button(qr2, "Save as…", ui.PromptSaveAs, -1, 28, null, 13);

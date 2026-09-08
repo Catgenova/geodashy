@@ -77,6 +77,8 @@ namespace Geodashy.Core
         public string code = "";
         /// <summary>True when the object rotates continuously in play (blades).</summary>
         public bool spins;
+        /// <summary>How the death panel phrases a kill by this object ("Impaled by").</summary>
+        public string deathVerb = "";
 
         public string SpriteId => string.IsNullOrEmpty(spriteId) ? id : spriteId;
 
@@ -153,6 +155,12 @@ namespace Geodashy.Core
         public ObjectDefinition Code(string c)
         {
             code = c;
+            return this;
+        }
+
+        public ObjectDefinition Death(string verb)
+        {
+            deathVerb = verb;
             return this;
         }
 
