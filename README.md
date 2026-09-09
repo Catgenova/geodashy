@@ -123,6 +123,41 @@ landing, death, five rune types, two pads, five portal types, coin/gem/key, gate
 completion fanfare, horn and UI click. Replace any file with real audio of the same name. Music
 and effect volumes are on the main menu under Options and persist.
 
+## Building the APK
+
+The project is set up to ship as a sideloadable Android APK (landscape only, IL2CPP, ARM64,
+package id `com.catgenova.lyreflyer`). Gameplay is one touch anywhere; the editor works with
+one finger for place/select/drag and two fingers for pan and pinch zoom.
+
+**In Unity**: install the Android Build Support module (with OpenJDK, SDK and NDK) through Unity
+Hub for 6000.4, open the project, then run **Geodashy > Build Android APK** and pick where to save.
+The build method applies the Android settings itself, so nothing needs changing in Build Profiles.
+Use **Build Android APK (Development)** for a build with the profiler and script debugging.
+
+**From a terminal** (Unity on PATH, same modules installed):
+
+```
+Unity -batchmode -nographics -quit -projectPath . -buildTarget Android \
+      -executeMethod Geodashy.EditorTools.BuildScript.BuildAndroid -logFile -
+```
+
+`BUILD_OUTPUT` overrides the apk path (default `Builds/Android/LyreFlyer.apk`), `BUILD_NUMBER`
+sets the Android versionCode, `DEVELOPMENT_BUILD=1` makes a development build.
+
+**GitHub Actions**: the `Android APK` workflow (`.github/workflows/android.yml`) builds the apk on a
+manual run or on any `v*` tag and uploads it as the `LyreFlyer-apk` artifact. It needs three
+repository secrets for Unity activation: `UNITY_LICENSE` (the contents of a `.ulf` personal
+licence file, made by running `Unity -batchmode -createManualActivationFile` and activating the
+`.alf` at license.unity3d.com/manual), plus `UNITY_EMAIL` and `UNITY_PASSWORD` for the account.
+The first run is slow (it pulls the Android IL2CPP editor image and populates the Library
+cache); later runs reuse the cache.
+
+**Installing**: the apk is signed with the debug key, so enable "install unknown apps" on the
+phone and open the file, or `adb install -r LyreFlyer.apk`. Saved levels live in the app's
+private storage. Importing songs through the file browser needs a file the app can read; on
+Android 11+ that means copying it into `Android/data/com.catgenova.lyreflyer/files/geodashy/`
+first, because the sandboxed file browser cannot read the shared music folders.
+
 ## Adding real art
 
 Everything currently drawn is a procedural placeholder so the editor is usable today.

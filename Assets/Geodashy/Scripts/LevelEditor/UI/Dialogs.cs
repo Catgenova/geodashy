@@ -454,6 +454,7 @@ namespace Geodashy.Editing.UI
             "Edit dock ▸ Defeat heatmap — overlay of every death from this session's playtests\n\n" +
             "VIEW\n" +
             "W A S D — pan   ·   Mouse wheel — zoom   ·   Middle / right drag or Space+drag — pan\n" +
+            "Touch: one finger — place / select / drag   ·   two fingers — pan and pinch to zoom\n" +
             "+ / − — zoom   ·   Ctrl+0 — reset zoom   ·   Home / End — level start / end\n" +
             "G — toggle grid snap   ·   Ctrl+G — toggle grid   ·   [ ] — editor layer   ·   \\ — show all layers\n" +
             "H — hide interface   ·   B — hitbox edges on every object (green safe, red kills, blue interacts)\n\n" +

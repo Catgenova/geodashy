@@ -1142,6 +1142,8 @@ namespace Geodashy.Editing
 
             var kb = Keyboard.current;
             var mouse = Mouse.current;
+            var touch = Touchscreen.current;
+            Pointer pointer = mouse != null ? (Pointer)mouse : touch;   // phones have no mouse: drive the editor from touch
             bool typing = ui.IsTyping;
             bool modal = ui.ModalOpen;
 
@@ -1154,7 +1156,7 @@ namespace Geodashy.Editing
             }
 
             if (!typing && !modal && kb != null) HandleHotkeys(kb);
-            if (!modal && mouse != null) HandleMouse(mouse, kb);
+            if (!modal && pointer != null) HandleMouse(pointer, mouse, touch, kb);
             else ghost.enabled = false;
 
             autosaveTimer += Time.unscaledDeltaTime;
@@ -1306,14 +1308,60 @@ namespace Geodashy.Editing
             }
         }
 
-        void HandleMouse(Mouse mouse, Keyboard kb)
+        float pinchDistance = -1f;
+
+        /// <summary>
+        /// Pointer handling shared by mouse and touch. With a mouse: left = select/place/drag, middle/right (or
+        /// Space+left) = pan, wheel = zoom. With touch: one finger = left button, two fingers = pan + pinch zoom.
+        /// </summary>
+        void HandleMouse(Pointer pointer, Mouse mouse, Touchscreen touch, Keyboard kb)
         {
-            var screen = mouse.position.ReadValue();
+            var screen = pointer.position.ReadValue();
             CursorWorld = editorCamera.ScreenToWorld(screen);
             bool overUI = ui.PointerOverUI;
             bool shift = kb != null && Shift(kb);
             bool ctrl = kb != null && Ctrl(kb);
             bool space = kb != null && kb[Key.Space].isPressed;
+            var left = pointer.press;
+
+            // two-finger touch: pan with the midpoint, zoom with the pinch distance ------------
+            bool twoFingers = mouse == null && touch != null && touch.touches.Count > 1 && touch.touches[0].press.isPressed && touch.touches[1].press.isPressed;
+            if (twoFingers)
+            {
+                var a = touch.touches[0].position.ReadValue();
+                var b = touch.touches[1].position.ReadValue();
+                var mid = (a + b) * 0.5f;
+                float dist = Mathf.Max(1f, Vector2.Distance(a, b));
+                if (drag != DragState.Pan)
+                {
+                    if (drag != DragState.None) CancelDrag();
+                    drag = DragState.Pan;
+                    editorCamera.BeginDragPan(mid);
+                    pinchDistance = dist;
+                }
+                else
+                {
+                    if (pinchDistance > 0f && Mathf.Abs(dist - pinchDistance) > 0.5f)
+                    {
+                        editorCamera.ZoomAt(editorCamera.zoom * (dist / pinchDistance), mid);
+                        editorCamera.BeginDragPan(mid);   // re-anchor so the zoom doesn't fight the pan
+                        ViewOptionsChanged?.Invoke();
+                    }
+                    pinchDistance = dist;
+                    editorCamera.DragPan(mid);
+                }
+                ghost.enabled = false;
+                return;
+            }
+            if (pinchDistance > 0f)
+            {
+                // second finger lifted: end the pan and swallow the remaining single touch until it is released
+                pinchDistance = -1f;
+                editorCamera.EndDragPan();
+                drag = DragState.None;
+                ghost.enabled = false;
+                return;
+            }
 
             // snapped cursor for placement
             var size = BuildDef != null ? new Vector2(BuildDef.width * placeScale, BuildDef.height * placeScale) : Vector2.one;
@@ -1326,7 +1374,7 @@ namespace Geodashy.Editing
             }
 
             // zoom -------------------------------------------------------------
-            float scroll = mouse.scroll.ReadValue().y;
+            float scroll = mouse != null ? mouse.scroll.ReadValue().y : 0f;
             if (!overUI && Mathf.Abs(scroll) > 0.01f)
             {
                 float factor = scroll > 0 ? 1.15f : 1f / 1.15f;
@@ -1335,8 +1383,10 @@ namespace Geodashy.Editing
             }
 
             // pan with middle / right mouse or space+left -------------------------
-            bool panButton = mouse.middleButton.isPressed || mouse.rightButton.isPressed || (space && mouse.leftButton.isPressed);
-            if (drag == DragState.None && panButton && !overUI && (mouse.middleButton.wasPressedThisFrame || mouse.rightButton.wasPressedThisFrame || mouse.leftButton.wasPressedThisFrame))
+            bool sideButton = mouse != null && (mouse.middleButton.isPressed || mouse.rightButton.isPressed);
+            bool sidePressed = mouse != null && (mouse.middleButton.wasPressedThisFrame || mouse.rightButton.wasPressedThisFrame);
+            bool panButton = sideButton || (space && left.isPressed);
+            if (drag == DragState.None && panButton && !overUI && (sidePressed || left.wasPressedThisFrame))
             {
                 drag = DragState.Pan;
                 editorCamera.BeginDragPan(screen);
@@ -1378,7 +1428,7 @@ namespace Geodashy.Editing
             }
 
             // left button ----------------------------------------------------------
-            if (mouse.leftButton.wasPressedThisFrame && !overUI && drag == DragState.None)
+            if (left.wasPressedThisFrame && !overUI && drag == DragState.None)
             {
                 dragStartScreen = screen;
                 dragStartWorld = CursorWorld;
@@ -1387,12 +1437,12 @@ namespace Geodashy.Editing
                 if (handle != TransformGizmo.Handle.None) BeginGizmoDrag(handle);
                 else BeginLeftPress(shift, ctrl);
             }
-            else if (mouse.leftButton.isPressed && drag != DragState.None)
+            else if (left.isPressed && drag != DragState.None)
             {
                 if ((screen - dragStartScreen).sqrMagnitude > 9f) dragMoved = true;
                 ContinueLeftDrag(shift);
             }
-            else if (mouse.leftButton.wasReleasedThisFrame && drag != DragState.None)
+            else if (left.wasReleasedThisFrame && drag != DragState.None)
             {
                 EndLeftDrag(shift);
             }
