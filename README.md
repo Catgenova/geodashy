@@ -203,6 +203,28 @@ and effect volumes are on the main menu under Options and persist.
   screen. Every quest keeps a best-runs table with your rider name (Heraldry), time, medals and attempts,
   with Copy as text.
 
+## VFX round
+
+- **Landing dust and skids**: puffs coloured by the ground theme and sized by the fall, clods on hard landings,
+  a skid streak when the boar flips and sparks when the cart lands.
+- **Portal wipes**: gravity gates ripple the screen in bands, speed gates throw chromatic streaks and stretch
+  the mount, mount gates flare the old silhouette out over the new one, every gate leaves a shockwave ring.
+- **Beat lighting**: torches, braziers, candles, lanterns, lit windows, runes and gates carry a soft glow that
+  flickers and swells on the beat.
+- **Ambient life**: decorations emit on their own — sparks from fires, smoke from chimneys, fireflies over
+  festival lights, drips in caves, petals from apple and hawthorn trees, leaves from other trees, bubbles from
+  fountains and wells. Tags on the catalog entry decide the emitter, so new objects join for free.
+- **Rune afterimages**: a ring at the rune (rainbow at combo three and up) and ghost stamps of the mount along
+  the launch arc; pads throw a coil-shaped squash line.
+- **Depth and light**: a blurred, washed-out copy of the far background sits behind it as a hazier range that
+  bobs slowly; forest, haunted, castle, dungeon and cavern themes get diagonal god rays that brighten when
+  the rider passes windows.
+- **Near misses**: a shockwave at the hazard, a camera nudge away from it and a red pulse on the nearest
+  screen edge.
+- **Finish celebration**: confetti in your heraldry colours, the banner unfurls, the camera eases back in slow
+  motion, medals pop into the report card one by one and the champion seal stamps down with a ring.
+- All of it is cosmetic (`PlayEffects.cs`) and softened or skipped under Reduce flashing.
+
 ## Tests
 
 `Assets/Geodashy/Tests` holds play-mode smoke tests (Window ▸ General ▸ Test Runner): every catalog entry

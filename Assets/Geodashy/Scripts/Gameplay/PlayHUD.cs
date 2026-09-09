@@ -56,6 +56,21 @@ namespace Geodashy.Gameplay
         Image flash;
         float flashTimer, flashDuration;
         Color flashColor;
+        // portal wipes and danger edges
+        readonly List<Image> waveBands = new List<Image>();
+        float waveT = 1f;
+        Color waveColor;
+        readonly List<Image> streaks = new List<Image>();
+        readonly List<float> streakSpeed = new List<float>();
+        float streakT = 1f;
+        readonly Image[] dangerEdges = new Image[4];
+        readonly float[] dangerT = new float[4];
+        RectTransform effectsRoot;
+        Transform sealTransform;
+        float sealStampT = 1f;
+        float medalT = -1f;
+        readonly List<RectTransform> medalChips = new List<RectTransform>();
+        bool[] medalEarned = new bool[0];
         Image vignette;
         float vignetteStrength;
         RectTransform lootBanner;
@@ -107,6 +122,7 @@ namespace Geodashy.Gameplay
             vignette.sprite = PlaceholderSpriteFactory.Vignette();
             vignette.color = Color.clear;
             vignette.raycastTarget = false;
+            BuildWipes(root);
 
             // progress bar
             var barBg = UIFactory.Panel(root, "ProgressBg", new Color(0, 0, 0, 0.5f));
@@ -246,6 +262,7 @@ namespace Geodashy.Gameplay
             UIFactory.VLayout(cw, 8, 16, true, true, TextAnchor.UpperCenter);
             var sealRow = UIFactory.Row(cw, 64, 0, TextAnchor.MiddleCenter);
             var seal = UIFactory.Icon(sealRow, PlaceholderSpriteFactory.Circle(), 64, new Color(0.62f, 0.12f, 0.1f, 1f));
+            sealTransform = seal.transform;
             var sealInner = UIFactory.Icon(seal.transform, PlaceholderSpriteFactory.Circle(), 54, new Color(0.72f, 0.16f, 0.13f, 1f));
             UIFactory.Anchor(sealInner.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-27, -27), new Vector2(27, 27));
             sealCrest = UIFactory.Icon(seal.transform, PlaceholderSpriteFactory.Crest(PlayerProfile.Crest, PlayerProfile.Primary, PlayerProfile.Secondary), 36);
@@ -415,12 +432,20 @@ namespace Geodashy.Gameplay
             {
                 var chip = UIFactory.Panel(medalRow, "Medal", earned ? color : new Color(0.3f, 0.25f, 0.2f, 0.25f));
                 UIFactory.Layout(chip.gameObject, 150, 36);
+                medalChips.Add(chip);
                 var t = UIFactory.Label(chip, (earned ? "★ " : "☆ ") + name, 13, TextAnchor.MiddleCenter, earned ? Color.white : new Color(0.4f, 0.3f, 0.2f, 0.8f), -1, -1, earned);
                 UIFactory.Stretch(t.rectTransform, 4, 2, 4, 2);
             }
+            medalChips.Clear();
             Medal("Swift (under par)", c.medalTime, new Color(0.2f, 0.55f, 0.9f));
             Medal("All loot", c.medalLoot, new Color(0.85f, 0.65f, 0.15f));
             Medal("Deathless", c.medalDeathless, new Color(0.62f, 0.12f, 0.1f));
+            medalEarned = new[] { c.medalTime, c.medalLoot, c.medalDeathless };
+            // medals fly in one by one; the champion seal stamps down on top
+            medalT = Accessibility.ReduceFlash ? 99f : 0f;
+            foreach (var chip in medalChips) chip.localScale = medalT >= 99f ? Vector3.one : Vector3.zero;
+            sealStampT = c.difficultyName == DifficultyInfo.Name(Difficulty.Champion) && !Accessibility.ReduceFlash ? 0f : 1f;
+            if (sealTransform != null) sealTransform.localScale = sealStampT < 1f ? Vector3.one * 3.5f : Vector3.one;
             // run profile: rider height over the level with this session's deaths ticked underneath
             foreach (Transform child in profileChart) Destroy(child.gameObject);
             int n = c.profile.Count;
@@ -484,6 +509,173 @@ namespace Geodashy.Gameplay
 
         public void HideComplete() => completePanel.gameObject.SetActive(false);
 
+        // ---- portal wipes and danger edges ---------------------------------------------------
+
+        void BuildWipes(RectTransform root)
+        {
+            effectsRoot = UIFactory.Rect(root, "Wipes");
+            UIFactory.Stretch(effectsRoot);
+            // gravity wave: horizontal bands that ripple vertically
+            for (int i = 0; i < 10; i++)
+            {
+                var band = UIFactory.Rect(effectsRoot, "Band");
+                var img = band.gameObject.AddComponent<Image>();
+                img.color = Color.clear;
+                img.raycastTarget = false;
+                float y0 = i / 10f, y1 = (i + 1) / 10f;
+                UIFactory.Anchor(band, new Vector2(0, y0), new Vector2(1, y1), new Vector2(0, 0), new Vector2(0, 0));
+                waveBands.Add(img);
+            }
+            // speed streaks: thin long lines that race across the screen
+            for (int i = 0; i < 14; i++)
+            {
+                var st = UIFactory.Rect(effectsRoot, "Streak");
+                var img = st.gameObject.AddComponent<Image>();
+                img.color = Color.clear;
+                img.raycastTarget = false;
+                streaks.Add(img);
+                streakSpeed.Add(1f);
+            }
+            // danger edges: left, right, bottom, top. The sprite fades from opaque on its left edge, so the right
+            // edge is mirrored and the bottom / top ones are tall strips rotated about their left-middle pivot.
+            for (int i = 0; i < 4; i++)
+            {
+                var edge = UIFactory.Rect(effectsRoot, "DangerEdge");
+                var img = edge.gameObject.AddComponent<Image>();
+                img.sprite = PlaceholderSpriteFactory.EdgeFade();
+                img.color = Color.clear;
+                img.raycastTarget = false;
+                switch (i)
+                {
+                    case 0:
+                        UIFactory.Anchor(edge, new Vector2(0, 0), new Vector2(0, 1), new Vector2(0, 0), new Vector2(140, 0));
+                        break;
+                    case 1:
+                        UIFactory.Anchor(edge, new Vector2(1, 0), new Vector2(1, 1), new Vector2(-140, 0), new Vector2(0, 0));
+                        edge.localScale = new Vector3(-1f, 1f, 1f);
+                        break;
+                    default:
+                        edge.anchorMin = edge.anchorMax = new Vector2(0.5f, i == 2 ? 0f : 1f);
+                        edge.pivot = new Vector2(0f, 0.5f);
+                        edge.sizeDelta = new Vector2(140, 4000);
+                        edge.anchoredPosition = Vector2.zero;
+                        edge.localRotation = Quaternion.Euler(0, 0, i == 2 ? 90f : -90f);
+                        break;
+                }
+                dangerEdges[i] = img;
+                dangerT[i] = 1f;
+            }
+        }
+
+        /// <summary>Gravity gate: the screen ripples up and down for a moment.</summary>
+        public void GravityWave(Color color)
+        {
+            if (Accessibility.ReduceFlash) return;
+            waveT = 0f;
+            waveColor = color;
+        }
+
+        /// <summary>Speed gate: chromatic streaks race in the travel direction.</summary>
+        public void SpeedStreaks(Color color, int direction)
+        {
+            if (Accessibility.ReduceFlash) return;
+            streakT = 0f;
+            for (int i = 0; i < streaks.Count; i++)
+            {
+                var img = streaks[i];
+                var rt = img.rectTransform;
+                float y = UnityEngine.Random.Range(0.05f, 0.95f);
+                float len = UnityEngine.Random.Range(160f, 520f);
+                float x0 = UnityEngine.Random.Range(-0.3f, 1.1f);
+                rt.anchorMin = new Vector2(x0, y);
+                rt.anchorMax = new Vector2(x0, y);
+                rt.pivot = new Vector2(direction > 0 ? 1f : 0f, 0.5f);
+                rt.sizeDelta = new Vector2(len, UnityEngine.Random.Range(2f, 5f));
+                rt.anchoredPosition = Vector2.zero;
+                streakSpeed[i] = UnityEngine.Random.Range(1400f, 2600f) * direction;
+                // alternate warm and cool fringes around the gate's colour for a chromatic look
+                var tint = i % 3 == 0 ? new Color(1f, 0.35f, 0.3f) : (i % 3 == 1 ? new Color(0.35f, 0.8f, 1f) : color);
+                img.color = new Color(tint.r, tint.g, tint.b, 0.7f);
+            }
+        }
+
+        /// <summary>Hazard skimmed: the screen edge nearest the hazard pulses red.</summary>
+        public void DangerEdge(Vector2 towardHazard)
+        {
+            int side = Mathf.Abs(towardHazard.x) >= Mathf.Abs(towardHazard.y) ? (towardHazard.x < 0f ? 0 : 1) : (towardHazard.y < 0f ? 2 : 3);
+            dangerT[side] = 0f;
+        }
+
+        void UpdateWipes(float dt)
+        {
+            if (waveT < 1f)
+            {
+                waveT = Mathf.Min(1f, waveT + dt * 2.6f);
+                float fade = Mathf.Sin(waveT * Mathf.PI);
+                for (int i = 0; i < waveBands.Count; i++)
+                {
+                    var rt = waveBands[i].rectTransform;
+                    float offset = Mathf.Sin(waveT * 9f - i * 0.7f) * 26f * (1f - waveT);
+                    rt.anchoredPosition = new Vector2(0f, offset);
+                    float a = (0.12f + 0.1f * Mathf.Sin(i * 1.3f + waveT * 12f)) * fade;
+                    waveBands[i].color = new Color(waveColor.r, waveColor.g, waveColor.b, Mathf.Max(0f, a));
+                }
+                if (waveT >= 1f) foreach (var b in waveBands) b.color = Color.clear;
+            }
+            if (streakT < 1f)
+            {
+                streakT = Mathf.Min(1f, streakT + dt * 2.4f);
+                for (int i = 0; i < streaks.Count; i++)
+                {
+                    var rt = streaks[i].rectTransform;
+                    rt.anchoredPosition += new Vector2(streakSpeed[i] * dt, 0f);
+                    var c = streaks[i].color;
+                    c.a = 0.7f * (1f - streakT);
+                    streaks[i].color = c;
+                }
+                if (streakT >= 1f) foreach (var s in streaks) s.color = Color.clear;
+            }
+            for (int i = 0; i < 4; i++)
+            {
+                if (dangerT[i] >= 1f) continue;
+                dangerT[i] = Mathf.Min(1f, dangerT[i] + dt * 3.2f);
+                float a = Mathf.Sin(dangerT[i] * Mathf.PI) * (Accessibility.ReduceFlash ? 0.2f : 0.5f);
+                var d = HitboxOverlay.DangerColor;
+                dangerEdges[i].color = new Color(d.r, d.g, d.b, a);
+            }
+        }
+
+        void UpdateComplete(float dt)
+        {
+            if (medalT >= 0f && medalT < 99f)
+            {
+                medalT += dt;
+                for (int i = 0; i < medalChips.Count; i++)
+                {
+                    float t = Mathf.Clamp01((medalT - 0.35f - i * 0.4f) / 0.3f);
+                    if (t <= 0f) continue;
+                    var chip = medalChips[i];
+                    if (chip == null) continue;
+                    // overshoot pop, then settle
+                    float s = t < 1f ? 1.35f * Mathf.Sin(t * Mathf.PI * 0.5f) + (1f - 1.35f) * t * t : 1f;
+                    if (chip.localScale.x <= 0.001f && i < medalEarned.Length && medalEarned[i]) Sfx.Play("gem", 0.6f, 1f + 0.15f * i);
+                    chip.localScale = Vector3.one * Mathf.Max(0.001f, s);
+                }
+                if (medalT > 0.35f + medalChips.Count * 0.4f + 0.5f) medalT = 99f;
+            }
+            if (sealStampT < 1f && sealTransform != null)
+            {
+                sealStampT = Mathf.Min(1f, sealStampT + dt * 1.6f);
+                float k = sealStampT * sealStampT;
+                sealTransform.localScale = Vector3.one * Mathf.Lerp(3.5f, 1f, k);
+                if (sealStampT >= 1f)
+                {
+                    Ripple(new Color(1f, 0.85f, 0.3f, 0.8f));
+                    Sfx.Play("horn", 0.5f, 1.1f);
+                }
+            }
+        }
+
         public void Flash(Color color, float duration)
         {
             if (Accessibility.ReduceFlash) color.a *= 0.25f;
@@ -494,6 +686,8 @@ namespace Geodashy.Gameplay
 
         void Update()
         {
+            UpdateWipes(Time.unscaledDeltaTime);
+            UpdateComplete(Time.unscaledDeltaTime);
             if (flashTimer > 0f)
             {
                 flashTimer -= Time.unscaledDeltaTime;

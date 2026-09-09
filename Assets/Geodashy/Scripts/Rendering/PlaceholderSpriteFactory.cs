@@ -81,6 +81,89 @@ namespace Geodashy.Rendering
             return s;
         }
 
+        /// <summary>Soft radial glow: opaque white in the middle falling off to transparent at the rim. Tint it per light.</summary>
+        public static Sprite SoftGlow()
+        {
+            if (cache.TryGetValue("softglow", out var s) && s != null) return s;
+            const int n = 96;
+            var r = new Raster(n, n);
+            float c = n / 2f;
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    float d = Mathf.Sqrt((x + 0.5f - c) * (x + 0.5f - c) + (y + 0.5f - c) * (y + 0.5f - c)) / c;
+                    float a = Mathf.Clamp01(1f - d);
+                    a = a * a * (3f - 2f * a);
+                    r.Plot(x, y, new Color(1f, 1f, 1f, a));
+                }
+            s = r.ToSprite(64f);
+            cache["softglow"] = s;
+            return s;
+        }
+
+        /// <summary>Thin soft ring for shockwaves and rune afterimages.</summary>
+        public static Sprite Ring()
+        {
+            if (cache.TryGetValue("ring", out var s) && s != null) return s;
+            const int n = 96;
+            var r = new Raster(n, n);
+            float c = n / 2f;
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    float d = Mathf.Sqrt((x + 0.5f - c) * (x + 0.5f - c) + (y + 0.5f - c) * (y + 0.5f - c)) / c;
+                    float a = Mathf.Clamp01(1f - Mathf.Abs(d - 0.86f) / 0.12f);
+                    r.Plot(x, y, new Color(1f, 1f, 1f, a));
+                }
+            s = r.ToSprite(64f);
+            cache["ring"] = s;
+            return s;
+        }
+
+        /// <summary>Diagonal light shafts for god rays: a few soft bands from top-left to bottom-right.</summary>
+        public static Sprite LightRays()
+        {
+            if (cache.TryGetValue("rays", out var s) && s != null) return s;
+            const int n = 256;
+            var r = new Raster(n, n);
+            float[] centres = { 0.12f, 0.31f, 0.47f, 0.66f, 0.83f };
+            float[] widths = { 0.05f, 0.03f, 0.07f, 0.04f, 0.05f };
+            float[] strengths = { 0.8f, 0.5f, 1f, 0.6f, 0.7f };
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    // bands are lines of constant (x + y*0.55); brighter near the top
+                    float u = (x + (n - y) * 0.55f) / (n * 1.55f);
+                    float a = 0f;
+                    for (int i = 0; i < centres.Length; i++)
+                    {
+                        float d = Mathf.Abs(u - centres[i]) / widths[i];
+                        if (d < 1f) a = Mathf.Max(a, (1f - d * d) * strengths[i]);
+                    }
+                    a *= Mathf.Lerp(0.25f, 1f, y / (float)n);
+                    r.Plot(x, y, new Color(1f, 1f, 1f, a));
+                }
+            s = r.ToSprite(64f);
+            cache["rays"] = s;
+            return s;
+        }
+
+        /// <summary>Horizontal gradient from opaque on the left to transparent on the right, for screen-edge pulses.</summary>
+        public static Sprite EdgeFade()
+        {
+            if (cache.TryGetValue("edgefade", out var s) && s != null) return s;
+            var r = new Raster(64, 4);
+            for (int y = 0; y < 4; y++)
+                for (int x = 0; x < 64; x++)
+                {
+                    float a = 1f - x / 63f;
+                    r.Plot(x, y, new Color(1f, 1f, 1f, a * a));
+                }
+            s = r.ToSprite(64f);
+            cache["edgefade"] = s;
+            return s;
+        }
+
         public static Sprite Circle()
         {
             if (cache.TryGetValue("circle", out var s) && s != null) return s;

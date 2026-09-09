@@ -44,6 +44,7 @@ namespace Geodashy.Gameplay
         HitboxOverlay deathOverlay;
         float deathTimer;
         ParticleBurst particles;
+        PlayEffects fx;
         float slowMo;
         int lastBeat = -1;
         public GroundProps groundProps;
@@ -207,6 +208,7 @@ namespace Geodashy.Gameplay
             hud = PlayHUD.Create(transform, () => TogglePause(), RestartFromStart, Exit, TogglePractice, PlaceCheckpoint, RemoveCheckpoint);
             deathOverlay = HitboxOverlay.Create(transform, "Death Overlay", 980);
             particles = ParticleBurst.Create(transform, "Particles", 40);
+            fx = new PlayEffects(this, world, transform, particles, cam, level);
             trailRibbon = HitboxOverlay.Create(transform, "Wisp Trail", -3);
             hud.SetExitTarget(exitTarget);
             replayGhost = MakeGhost("Replay Ghost", 4);
@@ -482,6 +484,7 @@ namespace Geodashy.Gameplay
         {
             deathOverlay.Clear();
             hud.HideDeath();
+            fx?.Reset();
             if (difficulty != Difficulty.Champion && checkpoints.Count > 0)
             {
                 if (currentCheckpoint < 0 || currentCheckpoint >= checkpoints.Count) currentCheckpoint = checkpoints.Count - 1;
@@ -847,6 +850,7 @@ namespace Geodashy.Gameplay
             background.Pulse(bar ? 0.9f : 0.35f);
             hud.PulseVignette(bar ? 0.45f : 0.18f);
             beatEnergy = bar ? 1f : 0.55f;
+            if (fx != null) fx.beatEnergy = beatEnergy;
             if (syncCheck && beat != lastFlashBeat)
             {
                 lastFlashBeat = beat;
@@ -1068,6 +1072,7 @@ namespace Geodashy.Gameplay
             {
                 world.UpdateSpinners(dt);
                 playCamera.Update(dt);
+                fx.Update(dt, player, playCamera.HalfWidth, cam.orthographicSize);   // confetti and the waving banner
                 return;
             }
 
@@ -1103,6 +1108,7 @@ namespace Geodashy.Gameplay
             UpdateBestGhost();
             UpdateTrail(dt);
             UpdateReactive(dt);
+            fx.Update(dt, player, playCamera.HalfWidth, cam.orthographicSize);
             EffectsMarker.End();
             UpdateAuthoredWaystones();
             UpdateAutoCheckpoint(dt);
@@ -1130,6 +1136,9 @@ namespace Geodashy.Gameplay
             {
                 complete = true;
                 Sfx.Play("complete");
+                fx.Finish(player, playCamera);
+                slowMo = 0.9f;
+                hud.Flash(new Color(1f, 0.95f, 0.7f, 0.35f), 0.4f);
                 hud.SetProgress(1f, true);
                 bool allLoot = coins >= totalCoins && gems >= totalGems && totalCoins + totalGems > 0;
                 float parTime = finishX / MountCatalog.Speed(startSpeed) * 1.03f + 0.5f;
@@ -1266,13 +1275,15 @@ namespace Geodashy.Gameplay
             Sfx.Play("jump_" + player.mount.id, 0.8f, 1f, 0.05f, "jump");
             var feet = pos - new Vector2(0f, up * player.Size.y * 0.45f);
             particles.Emit(feet, new Color(0.9f, 0.85f, 0.75f, 0.7f), 4, 1.8f, 0.3f, 0.08f, 3f, up > 0 ? 270f : 90f, 120f);
+            // the boar's gravity flip kicks off the surface with a skid
+            if (player.mount.id == "boar") fx.Skid(feet, up, player.direction, new Color(0.5f, 0.35f, 0.2f), 0.8f);
         }
 
         public void OnLanded(Vector2 pos, float up, Vector2 size, float fallSpeed = 0f)
         {
             Sfx.Play("land_" + player.mount.id, 0.5f, 1f, 0.08f, "land");
             var feet = pos - new Vector2(0f, up * size.y * 0.5f);
-            particles.Emit(feet, new Color(0.85f, 0.8f, 0.7f, 0.75f), 7, 2.4f, 0.35f, 0.09f, 4f, up > 0 ? 90f : 270f, 150f);
+            fx.Landing(feet, up, fallSpeed, player.mount.id);
             // hard landings thump the camera a little; ordinary hops do not
             if (fallSpeed > 16f)
             {
@@ -1379,6 +1390,7 @@ namespace Geodashy.Gameplay
                     particles.Emit(player.position, Color.white, 10, 4f, 0.4f, 0.1f, 0f);
                     hud.Flash(new Color(col.r, col.g, col.b, mountGate ? 0.45f : 0.25f), mountGate ? 0.3f : 0.18f);
                     if (v.def.portalType == PortalType.GravityFlip || v.def.portalType == PortalType.GravityNormal) hud.Ripple(new Color(col.r, col.g, col.b, 0.8f));
+                    fx.PortalCrossed(v, player, hud);
                     playCamera.Shake(mountGate ? 0.15f : 0.06f, 0.03f, 0.18f);
                     if (mountGate) slowMo = 0.32f;
                     pulsingPortal = v;
@@ -1403,12 +1415,21 @@ namespace Geodashy.Gameplay
                         default: Sfx.Play("rune", 0.9f, 1f + 0.08f * Mathf.Min(combo - 1, 8), 0.04f); break;
                     }
                     particles.Emit(v.WorldPosition, col, 10, 5f, 0.4f, 0.1f, 6f);
+                    fx.RuneActivated(v, combo);
                     break;
                 case ObjectKind.Pad:
                     Sfx.Play(v.def.padType == PadType.GravityFlip ? "pad_gravity" : "pad", 0.8f, v.def.padType == PadType.BigJump ? 0.85f : 1f, 0.06f);
                     particles.Emit(v.WorldPosition, col, 8, 4f, 0.35f, 0.09f, 8f, player.flipped ? 270f : 90f, 90f);
+                    fx.PadTouched(v, player.flipped);
                     break;
             }
+        }
+
+        /// <summary>A hazard entered the danger halo and left it with the rider alive.</summary>
+        public void OnNearMiss(int uid)
+        {
+            if (fx == null || !world.byUid.TryGetValue(uid, out var v) || v == null) return;
+            fx.NearMiss(v.WorldPosition, player, playCamera, hud);
         }
 
         public void OnPlayerStateChanged()
@@ -1485,6 +1506,7 @@ namespace Geodashy.Gameplay
         {
             Achievements.Announce = previousAnnounce;
             previousAnnounce = null;
+            if (fx != null) fx.Destroy();
             if (stats != null && fullRun) LevelStatsStorage.Save(stats);
             musicRequest++;
             if (music != null) music.Stop();

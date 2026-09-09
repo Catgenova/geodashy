@@ -46,6 +46,8 @@ namespace Geodashy.Gameplay
         float assistTimer;
         /// <summary>Hazards the rider brushed past without dying this run.</summary>
         public int nearMisses;
+        /// <summary>Horizontal stretch of the sprite (speed gates); eases back to 0 on its own.</summary>
+        public float stretch;
         readonly HashSet<int> nearZone = new HashSet<int>();
         readonly HashSet<int> nearZoneNow = new HashSet<int>();
         /// <summary>Sprite and scale the rider is drawn with right now (used by the replay ghosts).</summary>
@@ -300,7 +302,12 @@ namespace Geodashy.Gameplay
             // near misses: hazards that entered the danger halo and left it again with the rider alive
             if (!dead)
             {
-                foreach (var uid in nearZone) if (!nearZoneNow.Contains(uid)) nearMisses++;
+                foreach (var uid in nearZone)
+                {
+                    if (nearZoneNow.Contains(uid)) continue;
+                    nearMisses++;
+                    runner.OnNearMiss(uid);
+                }
                 nearZone.Clear();
                 nearZone.UnionWith(nearZoneNow);
                 nearZoneNow.Clear();
@@ -815,7 +822,9 @@ namespace Geodashy.Gameplay
             float facing = SpriteLibrary.MountFacing(mount);
             // mount switch: the silhouette flares white and pops in size for a moment
             float pop = 1f + 0.35f * Mathf.Sin(morph * Mathf.PI);
-            transform.localScale = new Vector3(baseScale * s * direction * facing * squash.x * pop, baseScale * s * (flipped ? -1f : 1f) * squash.y * pop, 1f);
+            if (stretch > 0f) stretch = Mathf.Max(0f, stretch - Time.deltaTime * 1.6f);
+            float sx = 1f + stretch, sy = 1f - stretch * 0.35f;
+            transform.localScale = new Vector3(baseScale * s * direction * facing * squash.x * pop * sx, baseScale * s * (flipped ? -1f : 1f) * squash.y * pop * sy, 1f);
             sr.enabled = visible;
             // stay visible but ghosted at the death spot so the contact point can be read
             var tint = dead ? new Color(1f, 1f, 1f, 0.45f) : Color.white;

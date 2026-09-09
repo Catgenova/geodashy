@@ -18,6 +18,9 @@ namespace Geodashy.Rendering
         public LevelSettings settings;
 
         SpriteRenderer sky;
+        // blurred, washed-out copy of the far layer drawn behind it: a hazier range further off
+        SpriteRenderer haze;
+        string hazeSource = "";
         readonly SpriteRenderer[] layers = new SpriteRenderer[3];
         readonly string[] layerIds = new string[3];
         readonly float[] factors = new float[3];
@@ -60,8 +63,85 @@ namespace Geodashy.Rendering
                 fadeLayers[i].tileMode = SpriteTileMode.Continuous;
                 fadeLayers[i].enabled = false;
             }
+            haze = SpriteLibrary.CreateRenderer("Haze", transform, null, FarSorting - 1);
+            haze.drawMode = SpriteDrawMode.Tiled;
+            haze.tileMode = SpriteTileMode.Continuous;
+            haze.enabled = false;
             baseCameraY = settings != null ? settings.groundY + 4.5f : 4.5f;
             ApplySettings();
+        }
+
+        /// <summary>Builds the haze sprite from the far layer: box-blurred, desaturated and lifted towards the sky.</summary>
+        void RefreshHaze()
+        {
+            if (haze == null || layers[0].sprite == null)
+            {
+                if (haze != null) haze.enabled = false;
+                return;
+            }
+            var src = layers[0].sprite;
+            string key = layerIds[0] + ":" + src.GetInstanceID();
+            if (key == hazeSource && haze.sprite != null)
+            {
+                haze.enabled = visible[0];
+                return;
+            }
+            hazeSource = key;
+            try
+            {
+                var tex = src.texture;
+                var rect = src.textureRect;
+                int w = (int)rect.width, h = (int)rect.height;
+                if (w < 4 || h < 4) throw new System.Exception("tiny");
+                var px = tex.GetPixels(Mathf.RoundToInt(rect.x), Mathf.RoundToInt(rect.y), w, h);
+                // horizontal then vertical box blur, radius 3, alpha-weighted so edges bleed softly
+                const int r = 3;
+                var tmp = new Color[px.Length];
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++)
+                    {
+                        Color acc = Color.clear;
+                        int n = 0;
+                        for (int k = -r; k <= r; k++)
+                        {
+                            int xx = Mathf.Clamp(x + k, 0, w - 1);
+                            acc += px[y * w + xx];
+                            n++;
+                        }
+                        tmp[y * w + x] = acc / n;
+                    }
+                var outPx = new Color[px.Length];
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++)
+                    {
+                        Color acc = Color.clear;
+                        int n = 0;
+                        for (int k = -r; k <= r; k++)
+                        {
+                            int yy = Mathf.Clamp(y + k, 0, h - 1);
+                            acc += tmp[yy * w + x];
+                            n++;
+                        }
+                        var c = acc / n;
+                        float lum = 0.3f * c.r + 0.59f * c.g + 0.11f * c.b;
+                        var grey = new Color(lum, lum, lum, c.a);
+                        var washed = Color.Lerp(grey, c, 0.35f);
+                        washed = Color.Lerp(washed, new Color(0.85f, 0.88f, 0.95f, washed.a), 0.45f);
+                        washed.a *= 0.75f;
+                        outPx[y * w + x] = washed;
+                    }
+                var t2 = new Texture2D(w, h, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Repeat };
+                t2.SetPixels(outPx);
+                t2.Apply(false, false);
+                if (haze.sprite != null && haze.sprite.texture != null && haze.sprite.texture != tex) Destroy(haze.sprite.texture);
+                haze.sprite = Sprite.Create(t2, new Rect(0, 0, w, h), src.pivot / new Vector2(w, h), src.pixelsPerUnit, 0, SpriteMeshType.FullRect);
+                haze.enabled = visible[0];
+            }
+            catch (System.Exception)
+            {
+                haze.sprite = null;
+                haze.enabled = false;
+            }
         }
 
         /// <summary>Re-reads theme, overrides, parallax factors and colours from the level settings.</summary>
@@ -86,6 +166,7 @@ namespace Geodashy.Rendering
             }
             skyTop = theme.skyTop;
             skyBottom = theme.skyBottom;
+            RefreshHaze();
             SetBackgroundColor(settings.backgroundColor);
             LateUpdate();
         }
@@ -158,6 +239,23 @@ namespace Geodashy.Rendering
             {
                 if (visible[i]) PositionLayer(layers[i], i, camX, camY, halfW, halfH, groundY);
                 if (fadeLayers[i].enabled) PositionLayer(fadeLayers[i], i, camX, camY, halfW, halfH, groundY);
+            }
+            if (haze != null && haze.enabled && haze.sprite != null)
+            {
+                // further away than the far layer: moves less, sits higher, bobs very slowly
+                float scale = scales[0] * 1.18f;
+                float tileW = Mathf.Max(0.5f, haze.sprite.bounds.size.x * scale);
+                float factor = Mathf.Clamp01(factors[0] + (1f - factors[0]) * 0.45f);
+                float width = halfW * 2f + tileW * 2f;
+                haze.transform.localScale = new Vector3(scale, scale, 1f);
+                haze.size = new Vector2(width / scale, haze.sprite.bounds.size.y);
+                float phase = Mathf.Repeat(camX * (1f - factor) - (camX - width / 2f) + tileW * 0.37f, tileW);
+                float left = camX - width / 2f + phase;
+                float bob = Mathf.Sin(Time.time * 0.45f) * 0.12f;
+                float bottom = groundY - 0.5f + yOffsets[0] + 1.4f + bob + (camY - baseCameraY) * (1f - factor);
+                haze.transform.position = new Vector3(left + width / 2f, bottom, 0f);
+                var c = layers[0].color;
+                haze.color = new Color(c.r, c.g, c.b, c.a * 0.9f);
             }
 
             if (fadeT >= 0f)

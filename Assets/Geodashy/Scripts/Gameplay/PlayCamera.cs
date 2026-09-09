@@ -19,6 +19,8 @@ namespace Geodashy.Gameplay
         Easing offsetEase;
         float shakeStrength, shakeDuration, shakeInterval, shakeTimer, shakeTick;
         Vector2 shakeOffset;
+        Vector2 nudgeOffset;
+        float nudgeTimer, nudgeDuration;
         LevelObjectView staticTarget;
         bool staticFollowPlayerY;
         float staticBlend, staticBlendTarget, staticDur;
@@ -99,6 +101,15 @@ namespace Geodashy.Gameplay
             staticFollowPlayerY = followPlayerY;
             staticBlendTarget = target != null ? 1f : 0f;
             staticDur = Mathf.Max(0.01f, duration);
+        }
+
+        /// <summary>A single push of the view in one direction that eases back (near misses).</summary>
+        public void Nudge(Vector2 offset, float duration)
+        {
+            if (Accessibility.ReduceFlash) offset *= 0.3f;
+            nudgeOffset = offset;
+            nudgeDuration = Mathf.Max(0.02f, duration);
+            nudgeTimer = 0f;
         }
 
         public void Shake(float strength, float interval, float duration)
@@ -185,7 +196,14 @@ namespace Geodashy.Gameplay
                 }
             }
 
-            cam.transform.position = new Vector3(desired.x + shakeOffset.x, desired.y + shakeOffset.y, -10f);
+            var nudge = Vector2.zero;
+            if (nudgeTimer < nudgeDuration)
+            {
+                nudgeTimer += dt;
+                float t = Mathf.Clamp01(nudgeTimer / nudgeDuration);
+                nudge = nudgeOffset * Mathf.Sin(t * Mathf.PI);
+            }
+            cam.transform.position = new Vector3(desired.x + shakeOffset.x + nudge.x, desired.y + shakeOffset.y + nudge.y, -10f);
             SetMirror(player.mirror);
         }
     }
