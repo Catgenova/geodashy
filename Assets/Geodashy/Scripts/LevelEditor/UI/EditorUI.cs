@@ -19,13 +19,67 @@ namespace Geodashy.Editing.UI
         public const float LeftDockWidth = 250f;
         public const float RightDockWidth = 360f;
         public const string UIScalePref = "geodashy.uiScale";
+        public const string PhoneUIScalePref = "geodashy.uiScale.phone";
+        public const string PhoneLayoutPref = "geodashy.phoneLayout";
         public static readonly Vector2 ReferenceResolution = new Vector2(1920, 1080);
 
-        /// <summary>Interface scale multiplier (0.7 - 2). Persisted in PlayerPrefs and shared with the play HUD.</summary>
+        // phone (landscape) layout: bigger controls, collapsible docks, overlay drawers
+        public const float PhoneTopBarHeight = 52f;
+        public const float PhoneDockHeight = 150f;
+        public const float PhoneLeftDockWidth = 300f;
+        public const float PhoneRightDockWidth = 340f;
+
+        /// <summary>-1 = automatic (phone layout on handhelds), 0 = desktop layout, 1 = phone layout.</summary>
+        public static int PhoneLayoutSetting
+        {
+            get => PlayerPrefs.GetInt(PhoneLayoutPref, -1);
+            set
+            {
+                PlayerPrefs.SetInt(PhoneLayoutPref, Mathf.Clamp(value, -1, 1));
+                PlayerPrefs.Save();
+            }
+        }
+
+        /// <summary>True when the interface should use the compact touch layout.</summary>
+        public static bool PhoneLayout
+        {
+            get
+            {
+                int s = PhoneLayoutSetting;
+                return s < 0 ? Application.isMobilePlatform : s == 1;
+            }
+        }
+
+        public static string PhoneLayoutName
+        {
+            get
+            {
+                int s = PhoneLayoutSetting;
+                if (s < 0) return "Auto (" + (Application.isMobilePlatform ? "phone" : "desktop") + ")";
+                return s == 1 ? "Phone" : "Desktop";
+            }
+        }
+
+        /// <summary>Cycles Auto → Phone → Desktop → Auto.</summary>
+        public static void CyclePhoneLayout()
+        {
+            int s = PhoneLayoutSetting;
+            PhoneLayoutSetting = s < 0 ? 1 : (s == 1 ? 0 : -1);
+        }
+
+        /// <summary>
+        /// Interface scale multiplier, persisted in PlayerPrefs and shared with the play HUD and menu.
+        /// The desktop layout allows 0.7 - 2; the phone layout keeps its own value (default 2, range 1.4 - 3)
+        /// because touch targets need to be physically larger.
+        /// </summary>
         public static float UIScale
         {
-            get => Mathf.Clamp(PlayerPrefs.GetFloat(UIScalePref, 1f), 0.7f, 2f);
-            set => PlayerPrefs.SetFloat(UIScalePref, Mathf.Clamp(value, 0.7f, 2f));
+            get => PhoneLayout ? Mathf.Clamp(PlayerPrefs.GetFloat(PhoneUIScalePref, 2f), 1.4f, 3f) : Mathf.Clamp(PlayerPrefs.GetFloat(UIScalePref, 1f), 0.7f, 2f);
+            set
+            {
+                if (PhoneLayout) PlayerPrefs.SetFloat(PhoneUIScalePref, Mathf.Clamp(value, 1.4f, 3f));
+                else PlayerPrefs.SetFloat(UIScalePref, Mathf.Clamp(value, 0.7f, 2f));
+            }
         }
 
         public static void ConfigureScaler(CanvasScaler scaler)
@@ -33,7 +87,20 @@ namespace Geodashy.Editing.UI
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = ReferenceResolution / UIScale;
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            scaler.matchWidthOrHeight = 0.5f;
+            // phones: match height so the layout keeps its vertical budget on any aspect ratio and wide screens just gain room
+            scaler.matchWidthOrHeight = PhoneLayout ? 1f : 0.5f;
+        }
+
+        /// <summary>Anchors a full-screen rect to the display's safe area (notches, rounded corners). No-op on desktop screens.</summary>
+        public static void ApplySafeArea(RectTransform rt)
+        {
+            var sa = Screen.safeArea;
+            float w = Screen.width, h = Screen.height;
+            if (w <= 0f || h <= 0f || sa.width <= 0f || sa.height <= 0f) return;
+            rt.anchorMin = new Vector2(Mathf.Clamp01(sa.xMin / w), Mathf.Clamp01(sa.yMin / h));
+            rt.anchorMax = new Vector2(Mathf.Clamp01(sa.xMax / w), Mathf.Clamp01(sa.yMax / h));
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
         }
 
         CanvasScaler canvasScaler;
@@ -69,6 +136,17 @@ namespace Geodashy.Editing.UI
         Text toastText;
         float toastTimer;
         bool playMode;
+        bool phone;
+        bool viewDrawerOpen, propsDrawerOpen, dockCollapsed;
+        float topHeight, dockHeight, leftWidth, rightWidth;
+
+        /// <summary>True when this interface was built with the phone layout.</summary>
+        public bool IsPhone => phone;
+        public bool ViewDrawerOpen => viewDrawerOpen;
+        public bool PropsDrawerOpen => propsDrawerOpen;
+        public bool DockCollapsed => dockCollapsed;
+        /// <summary>Height of the bottom dock in canvas units (0 while collapsed).</summary>
+        public float DockHeight => dockCollapsed ? 0f : dockHeight;
 
         public bool ModalOpen => modals.Count > 0;
 
@@ -119,28 +197,36 @@ namespace Geodashy.Editing.UI
             ConfigureScaler(canvasScaler);
             gameObject.AddComponent<GraphicRaycaster>();
 
+            phone = PhoneLayout;
+            topHeight = phone ? PhoneTopBarHeight : TopBarHeight;
+            dockHeight = phone ? PhoneDockHeight : BottomDockHeight;
+            leftWidth = phone ? PhoneLeftDockWidth : LeftDockWidth;
+            rightWidth = phone ? PhoneRightDockWidth : RightDockWidth;
+
             root = UIFactory.Rect(transform, "Root");
             UIFactory.Stretch(root);
+            if (phone) ApplySafeArea(root);
 
             // docks -----------------------------------------------------------
             var top = UIFactory.Panel(root, "TopBar", UIFactory.PanelBg);
-            UIFactory.Anchor(top, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -TopBarHeight), new Vector2(0, 0));
+            UIFactory.Anchor(top, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -topHeight), new Vector2(0, 0));
             topBar = TopBar.Create(this, top);
 
             bottomDock = UIFactory.Panel(root, "BottomDock", UIFactory.PanelBg);
-            UIFactory.Anchor(bottomDock, new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 0), new Vector2(0, BottomDockHeight));
+            UIFactory.Anchor(bottomDock, new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 0), new Vector2(0, dockHeight));
 
             leftDock = UIFactory.Panel(root, "LeftDock", UIFactory.PanelBg);
-            UIFactory.Anchor(leftDock, new Vector2(0, 0), new Vector2(0, 1), new Vector2(0, BottomDockHeight), new Vector2(LeftDockWidth, -TopBarHeight));
+            UIFactory.Anchor(leftDock, new Vector2(0, 0), new Vector2(0, 1), new Vector2(0, dockHeight), new Vector2(leftWidth, -topHeight));
 
             rightDock = UIFactory.Panel(root, "RightDock", UIFactory.PanelBg);
-            UIFactory.Anchor(rightDock, new Vector2(1, 0), new Vector2(1, 1), new Vector2(-RightDockWidth, BottomDockHeight), new Vector2(0, -TopBarHeight));
+            UIFactory.Anchor(rightDock, new Vector2(1, 0), new Vector2(1, 1), new Vector2(-rightWidth, dockHeight), new Vector2(0, -topHeight));
 
             palettePanel = PalettePanel.Create(this, bottomDock);
             editPanel = EditPanel.Create(this, bottomDock);
             deletePanel = DeletePanel.Create(this, bottomDock);
             viewPanel = ViewPanel.Create(this, leftDock);
             propertiesPanel = PropertiesPanel.Create(this, rightDock);
+            if (phone) leftDock.gameObject.SetActive(false);   // drawers start closed on a phone: the viewport comes first
 
             modalLayer = UIFactory.Rect(transform, "Modals");
             UIFactory.Stretch(modalLayer);
@@ -148,8 +234,15 @@ namespace Geodashy.Editing.UI
             UIFactory.Stretch(popupLayer);
             toastLayer = UIFactory.Rect(transform, "Toasts");
             UIFactory.Stretch(toastLayer);
+            if (phone)
+            {
+                ApplySafeArea(modalLayer);
+                ApplySafeArea(popupLayer);
+                ApplySafeArea(toastLayer);
+            }
             var toastBg = UIFactory.Panel(toastLayer, "Toast", new Color(0, 0, 0, 0.75f));
-            UIFactory.Anchor(toastBg, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(-260, BottomDockHeight + 16), new Vector2(260, BottomDockHeight + 56));
+            float tw = phone ? 220 : 260;
+            UIFactory.Anchor(toastBg, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(-tw, dockHeight + 12), new Vector2(tw, dockHeight + 52));
             toastBg.GetComponent<Image>().raycastTarget = false;
             toastText = UIFactory.Label(toastBg, "", 16, TextAnchor.MiddleCenter, UIFactory.Accent);
             UIFactory.Stretch(toastText.rectTransform, 8, 4, 8, 4);
@@ -179,7 +272,53 @@ namespace Geodashy.Editing.UI
 
         void OnSelectionChanged()
         {
-            rightDock.gameObject.SetActive(editor.selection.Count > 0 && !playMode);
+            bool hasSelection = editor.selection.Count > 0;
+            if (phone && !hasSelection) propsDrawerOpen = false;
+            rightDock.gameObject.SetActive(hasSelection && !playMode && (!phone || propsDrawerOpen));
+            topBar.RefreshDrawerButtons();
+        }
+
+        // ---- phone drawers ---------------------------------------------------
+
+        public void ToggleViewDrawer()
+        {
+            viewDrawerOpen = !viewDrawerOpen;
+            leftDock.gameObject.SetActive(viewDrawerOpen);
+            if (viewDrawerOpen && phone) propsDrawerOpen = false;   // one drawer at a time keeps the viewport usable
+            OnSelectionChanged();
+        }
+
+        public void TogglePropsDrawer()
+        {
+            if (editor.selection.Count == 0)
+            {
+                Toast("Select something first: tap an object in Edit mode");
+                return;
+            }
+            propsDrawerOpen = !propsDrawerOpen;
+            if (propsDrawerOpen && phone)
+            {
+                viewDrawerOpen = false;
+                leftDock.gameObject.SetActive(false);
+            }
+            OnSelectionChanged();
+        }
+
+        /// <summary>Hides or shows the bottom dock; the side docks grow to fill the gap.</summary>
+        public void ToggleDock()
+        {
+            dockCollapsed = !dockCollapsed;
+            bottomDock.gameObject.SetActive(!dockCollapsed);
+            float bottom = dockCollapsed ? 0f : dockHeight;
+            leftDock.offsetMin = new Vector2(0, bottom);
+            rightDock.offsetMin = new Vector2(-rightWidth, bottom);
+            var toast = toastText != null ? toastText.transform.parent as RectTransform : null;
+            if (toast != null)
+            {
+                toast.offsetMin = new Vector2(toast.offsetMin.x, bottom + 12);
+                toast.offsetMax = new Vector2(toast.offsetMax.x, bottom + 52);
+            }
+            topBar.RefreshDrawerButtons();
         }
 
         void Update()
@@ -265,6 +404,13 @@ namespace Geodashy.Editing.UI
         /// <summary>Creates a modal window and returns its content column.</summary>
         public RectTransform OpenModal(string title, float width, float height, bool scroll = false)
         {
+            // never larger than the screen (phones have far fewer canvas units than a desktop window)
+            var avail = modalLayer.rect;
+            if (avail.width > 100f && avail.height > 100f)
+            {
+                width = Mathf.Min(width, avail.width - 16f);
+                height = Mathf.Min(height, avail.height - 16f);
+            }
             var backdrop = UIFactory.Panel(modalLayer, "Modal " + title, new Color(0, 0, 0, 0.55f));
             var window = UIFactory.Panel(backdrop, "Window", UIFactory.PanelBg2);
             UIFactory.Anchor(window, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-width / 2f, -height / 2f), new Vector2(width / 2f, height / 2f));
@@ -385,9 +531,10 @@ namespace Geodashy.Editing.UI
 
         public void ShowDropdown(RectTransform anchor, string[] options, int current, Action<int> onPick)
         {
-            float rowH = 28f;
-            float height = Mathf.Min(340f, options.Length * (rowH + 2f) + 8f);
-            float width = Mathf.Max(anchor.rect.width, 160f);
+            float rowH = phone ? 40f : 28f;
+            float maxH = phone ? Mathf.Max(200f, popupLayer.rect.height - 40f) : 340f;
+            float height = Mathf.Min(maxH, options.Length * (rowH + 2f) + 8f);
+            float width = Mathf.Max(anchor.rect.width, phone ? 220f : 160f);
             var frame = CreatePopupFrame(anchor, width, height);
             var scroll = UIFactory.ScrollView(frame, "List", out var content, true, false, Color.clear);
             UIFactory.Stretch(scroll.GetComponent<RectTransform>(), 2, 2, 2, 2);

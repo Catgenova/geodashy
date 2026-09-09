@@ -14,6 +14,7 @@ namespace Geodashy.Editing.UI
         Button[] gridButtons;
         readonly float[] gridSizes = { 0.25f, 0.5f, 1f, 2f };
         Text layerLabel, zoomLabel, posLabel, uiScaleLabel, savedLabel;
+        Button layoutButton;
         InputField nameInput;
         Slider zoomSlider, posSlider;
         bool suppress;
@@ -144,7 +145,15 @@ namespace Geodashy.Editing.UI
             UIFactory.Button(ur, "−", () => ui.SetUIScale(EditorUI.UIScale - 0.1f), -1, 24);
             UIFactory.Button(ur, "100%", () => ui.SetUIScale(1f), -1, 24, null, 12);
             UIFactory.Button(ur, "+", () => ui.SetUIScale(EditorUI.UIScale + 0.1f), -1, 24);
-            UIFactory.Label(c, "Tip: set the Game view to Free Aspect so the interface fits the window.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 36);
+            layoutButton = UIFactory.Button(c, "", () =>
+            {
+                EditorUI.CyclePhoneLayout();
+                Refresh();
+                ui.Toast("Layout: " + EditorUI.PhoneLayoutName + " — applies when the editor is reopened", 4f);
+            }, -1, 26, null, 12);
+            UIFactory.Label(c, ui.IsPhone
+                ? "Phone layout: View and Props are drawers, ▼ hides the dock, ⋯ holds save, files and settings. One finger places or selects, two fingers pan and zoom."
+                : "Tip: set the Game view to Free Aspect so the interface fits the window. The phone layout is picked automatically on Android.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 60);
 
             UIFactory.SectionHeader(c, "Playtest marker");
             var mr = UIFactory.Row(c, 26, 3);
@@ -171,6 +180,7 @@ namespace Geodashy.Editing.UI
         {
             if (snapToggle == null) return;
             if (uiScaleLabel != null) uiScaleLabel.text = string.Format("Interface size {0:0}%", EditorUI.UIScale * 100f);
+            if (layoutButton != null) UIFactory.SetButtonLabel(layoutButton, "Layout: " + EditorUI.PhoneLayoutName);
             snapToggle.SetIsOnWithoutNotify(editor.snapToGrid);
             gridToggle.SetIsOnWithoutNotify(editor.grid.showGrid);
             hitboxToggle.SetIsOnWithoutNotify(editor.showHitboxes);

@@ -129,6 +129,15 @@ The project is set up to ship as a sideloadable Android APK (landscape only, IL2
 package id `com.catgenova.lyreflyer`). Gameplay is one touch anywhere; the editor works with
 one finger for place/select/drag and two fingers for pan and pinch zoom.
 
+**Phone layout**: the interface switches to a landscape phone layout automatically on Android
+(Options ▸ Switch layout forces it on or off anywhere, which is handy for previewing in the
+editor). It runs at a larger interface scale with finger-sized buttons, applies the display's
+safe area, and rearranges the editor: a compact top bar (mode tabs, undo/redo, play, a ⋯ menu
+for save/files/settings/marker/help), View and Props as slide-in drawers instead of fixed docks,
+a ▼ button that hides the bottom dock, a 150-unit dock with a category dropdown and a sideways
+scrolling object strip in Build mode and two-row button groups in Edit and Delete mode, plus a
+❚❚ pause button in play. Dialogs clamp to the screen and scroll.
+
 **In Unity**: install the Android Build Support module (with OpenJDK, SDK and NDK) through Unity
 Hub for 6000.4, open the project, then run **Geodashy > Build Android APK** and pick where to save.
 The build method applies the Android settings itself, so nothing needs changing in Build Profiles.

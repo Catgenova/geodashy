@@ -470,6 +470,11 @@ namespace Geodashy.Editing.UI
             "Difficulties: Training (place your own waystones), Checkpoints (respawn at Waystone objects you placed in the level), Champion (no checkpoints; sets the record)\n" +
             "Training: Z — raise a waystone   ·   X — remove the last one   ·   ← → — scrub between waystones   ·   C — toggle\n" +
             "Waystones restore everything: mount, gravity, speed, moved objects, colours, loot. Auto waystones rise every few seconds on solid ground.\n\n" +
+            "PHONE LAYOUT (automatic on Android; Options ▸ Switch layout elsewhere)\n" +
+            "One finger — place, select, drag   ·   two fingers — pan and pinch to zoom\n" +
+            "View / Props — slide-in drawers   ·   ▼ hides the dock   ·   ⋯ holds save, files, settings, marker and help\n" +
+            "Build dock: category ▾ picks a shelf, Search… filters, the strip scrolls sideways, Swipe paints while dragging\n" +
+            "In play: tap anywhere — action   ·   ❚❚ — pause   ·   the Android back button also pauses\n\n" +
             "FILES\n" +
             "Ctrl+S — save   ·   Ctrl+Shift+S — save as   ·   Ctrl+O — files\n" +
             "Levels autosave every minute. JSON lives in the persistent data folder and can be exported to the clipboard.";

@@ -61,8 +61,11 @@ namespace Geodashy.Gameplay
             EditorUI.ConfigureScaler(gameObject.AddComponent<CanvasScaler>());
             gameObject.AddComponent<GraphicRaycaster>();
 
+            bool phone = EditorUI.PhoneLayout;
             var root = UIFactory.Rect(transform, "Root");
             UIFactory.Stretch(root);
+            if (phone) EditorUI.ApplySafeArea(root);
+            float bw = phone ? 180f : 300f;   // progress bar half-width
 
             // full-screen flash (drawn first so everything else sits above it)
             var flashRt = UIFactory.Rect(root, "Flash");
@@ -73,7 +76,7 @@ namespace Geodashy.Gameplay
 
             // progress bar
             var barBg = UIFactory.Panel(root, "ProgressBg", new Color(0, 0, 0, 0.5f));
-            UIFactory.Anchor(barBg, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(-300, -34), new Vector2(300, -14));
+            UIFactory.Anchor(barBg, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(-bw, -34), new Vector2(bw, -14));
             barBg.GetComponent<Image>().raycastTarget = false;
             barRoot = barBg;
             var fillRt = UIFactory.Rect(barBg, "Fill");
@@ -96,29 +99,37 @@ namespace Geodashy.Gameplay
             bestRt.gameObject.SetActive(false);
             var legend = UIFactory.Label(root, "", 11, TextAnchor.MiddleCenter, UIFactory.TextDim);
             legend.text = "red = past deaths   orange = this session   gold = personal best";
-            UIFactory.Anchor(legend.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(-300, -76), new Vector2(300, -60));
+            UIFactory.Anchor(legend.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(-bw, -76), new Vector2(bw, -60));
+            if (phone) legend.gameObject.SetActive(false);
             progressText = UIFactory.Label(root, "0%", 14, TextAnchor.MiddleCenter, UIFactory.TextColor);
             UIFactory.Anchor(progressText.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(-60, -60), new Vector2(60, -36));
 
             crestIcon = UIFactory.Icon(root, PlaceholderSpriteFactory.Crest(PlayerProfile.Crest, PlayerProfile.Primary, PlayerProfile.Secondary), 44);
             UIFactory.Anchor(crestIcon.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(16, -60), new Vector2(60, -16));
             attemptText = UIFactory.Label(root, "Attempt 1", 22, TextAnchor.MiddleLeft, UIFactory.TextColor, -1, -1, true);
-            UIFactory.Anchor(attemptText.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(68, -60), new Vector2(440, -14));
-            coinText = UIFactory.Label(root, "", 18, TextAnchor.MiddleRight, UIFactory.Accent);
-            UIFactory.Anchor(coinText.rectTransform, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-400, -60), new Vector2(-20, -14));
-            hintText = UIFactory.Label(root, "", 18, TextAnchor.MiddleLeft, UIFactory.TextColor);
-            UIFactory.Anchor(hintText.rectTransform, new Vector2(0, 0), new Vector2(0, 0), new Vector2(20, 16), new Vector2(900, 50));
+            UIFactory.Anchor(attemptText.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(68, -60), new Vector2(phone ? 300 : 440, -14));
+            coinText = UIFactory.Label(root, "", phone ? 15 : 18, TextAnchor.MiddleRight, UIFactory.Accent);
+            UIFactory.Anchor(coinText.rectTransform, new Vector2(1, 1), new Vector2(1, 1), new Vector2(phone ? -330 : -400, -60), new Vector2(phone ? -76 : -20, -14));
+            hintText = UIFactory.Label(root, "", phone ? 15 : 18, TextAnchor.MiddleLeft, UIFactory.TextColor);
+            UIFactory.Anchor(hintText.rectTransform, new Vector2(0, 0), new Vector2(0, 0), new Vector2(20, 16), new Vector2(phone ? 560 : 900, 50));
             escHint = UIFactory.Label(root, "Esc — pause / back to editor", 13, TextAnchor.MiddleRight, UIFactory.TextDim);
             UIFactory.Anchor(escHint.rectTransform, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-400, 16), new Vector2(-20, 40));
+            if (phone)
+            {
+                // no Esc key on a phone: an always-visible pause button in the top-right corner
+                escHint.gameObject.SetActive(false);
+                var pause = UIFactory.Button(root, "❚❚", () => onResume(), 52, 44, UIFactory.PanelBg3, 16);
+                UIFactory.Anchor(pause.GetComponent<RectTransform>(), new Vector2(1, 1), new Vector2(1, 1), new Vector2(-64, -60), new Vector2(-12, -16));
+            }
 
             // practice mode status + on-screen checkpoint buttons
-            practiceText = UIFactory.Label(root, "", 16, TextAnchor.MiddleRight, new Color(0.4f, 1f, 0.5f, 1f), -1, -1, true);
+            practiceText = UIFactory.Label(root, "", phone ? 13 : 16, TextAnchor.MiddleRight, new Color(0.4f, 1f, 0.5f, 1f), -1, -1, true);
             UIFactory.Anchor(practiceText.rectTransform, new Vector2(1, 1), new Vector2(1, 1), new Vector2(-420, -92), new Vector2(-20, -64));
             checkpointButtons = UIFactory.Rect(root, "CheckpointButtons");
-            UIFactory.Anchor(checkpointButtons, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-260, 50), new Vector2(-20, 92));
+            UIFactory.Anchor(checkpointButtons, new Vector2(1, 0), new Vector2(1, 0), new Vector2(phone ? -300 : -260, phone ? 40 : 50), new Vector2(-20, phone ? 88 : 92));
             UIFactory.HLayout(checkpointButtons, 8, 0, true);
-            UIFactory.Button(checkpointButtons, "+ Waystone (Z)", () => onCheckpoint(), -1, 40, UIFactory.Good, 14);
-            UIFactory.Button(checkpointButtons, "− Remove (X)", () => onRemoveCheckpoint(), -1, 40, UIFactory.Danger, 14);
+            UIFactory.Button(checkpointButtons, phone ? "+ Waystone" : "+ Waystone (Z)", () => onCheckpoint(), -1, phone ? 48 : 40, UIFactory.Good, 14);
+            UIFactory.Button(checkpointButtons, phone ? "− Remove" : "− Remove (X)", () => onRemoveCheckpoint(), -1, phone ? 48 : 40, UIFactory.Danger, 14);
             checkpointButtons.gameObject.SetActive(false);
 
             // death panel (bottom centre so the crash site stays visible)
@@ -159,7 +170,7 @@ namespace Geodashy.Gameplay
             var mountRow = UIFactory.Row(scrollBody, 70, 12, TextAnchor.MiddleCenter);
             introMountIcon = UIFactory.Icon(mountRow, null, 70);
             introMount = UIFactory.Label(mountRow, "", 13, TextAnchor.MiddleLeft, Ink, 420, 70);
-            UIFactory.Label(scrollBody, "Click or press Space to ride out", 14, TextAnchor.MiddleCenter, new Color(0.5f, 0.32f, 0.12f), -1, 26, true);
+            UIFactory.Label(scrollBody, phone ? "Tap to ride out" : "Click or press Space to ride out", 14, TextAnchor.MiddleCenter, new Color(0.5f, 0.32f, 0.12f), -1, 26, true);
             introPanel.gameObject.SetActive(false);
 
             // complete panel
@@ -245,7 +256,7 @@ namespace Geodashy.Gameplay
 
         public void SetMode(string title, string detail, bool training, bool auto)
         {
-            practiceText.text = title + "  ·  " + detail + (training && auto ? "  ·  auto" : "") + (training ? "  ·  ← → scrub" : "");
+            practiceText.text = title + "  ·  " + detail + (training && auto ? "  ·  auto" : "") + (training && !EditorUI.PhoneLayout ? "  ·  ← → scrub" : "");
             checkpointButtons.gameObject.SetActive(training);
             UIFactory.SetButtonLabel(practiceToggle, training ? "Training mode: on (C)" : "Switch to Training (C)");
             UIFactory.SetButtonActive(practiceToggle, training);
@@ -273,7 +284,9 @@ namespace Geodashy.Gameplay
 
         public void ShowDeath(string cause, float progress)
         {
-            deathText.text = string.Format("{0} at {1:0.000}%\nRed = the edge that killed you · dot = contact point · yellow = your hurt box\nClick, Space or Enter to retry · R restarts", cause, progress * 100f);
+            deathText.text = EditorUI.PhoneLayout
+                ? string.Format("{0} at {1:0.000}%\nRed = the edge that killed you · dot = contact point\nTap anywhere to retry", cause, progress * 100f)
+                : string.Format("{0} at {1:0.000}%\nRed = the edge that killed you · dot = contact point · yellow = your hurt box\nClick, Space or Enter to retry · R restarts", cause, progress * 100f);
             deathPanel.gameObject.SetActive(true);
         }
 

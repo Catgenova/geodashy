@@ -26,6 +26,10 @@ namespace Geodashy.Editing.UI
         List<LevelFileInfo> levels = new List<LevelFileInfo>();
         LevelFileInfo selected;
         readonly List<Button> rowButtons = new List<Button>();
+        CanvasScaler scaler;
+        bool phone;
+        /// <summary>Set before the menu is rebuilt so it reopens on the Options screen (used by the layout switch).</summary>
+        public static bool reopenOptions;
 
         public void Initialize(AppController controller, Camera camera)
         {
@@ -33,7 +37,12 @@ namespace Geodashy.Editing.UI
             cam = camera;
             BuildBackdrop();
             BuildUI();
-            ShowTitle();
+            if (reopenOptions)
+            {
+                reopenOptions = false;
+                ShowOptions();
+            }
+            else ShowTitle();
             StartMenuMusic();
         }
 
@@ -81,36 +90,41 @@ namespace Geodashy.Editing.UI
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 150;
             canvas.pixelPerfect = true;
-            EditorUI.ConfigureScaler(gameObject.AddComponent<CanvasScaler>());
+            scaler = gameObject.AddComponent<CanvasScaler>();
+            EditorUI.ConfigureScaler(scaler);
             gameObject.AddComponent<GraphicRaycaster>();
+            phone = EditorUI.PhoneLayout;
             root = UIFactory.Rect(transform, "Root");
             UIFactory.Stretch(root);
+            if (phone) EditorUI.ApplySafeArea(root);
 
             // ---- title screen ---------------------------------------------------
             titleScreen = UIFactory.Rect(root, "Title");
             UIFactory.Stretch(titleScreen);
             var titleCard = UIFactory.Panel(titleScreen, "Card", new Color(0.11f, 0.09f, 0.14f, 0.82f));
-            UIFactory.Anchor(titleCard, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-300, -330), new Vector2(300, 330));
-            UIFactory.VLayout(titleCard, 12, 32, true, true, TextAnchor.UpperCenter);
-            var crestRow = UIFactory.Row(titleCard, 64, 0, TextAnchor.MiddleCenter);
-            titleCrest = UIFactory.Icon(crestRow, PlaceholderSpriteFactory.Crest(PlayerProfile.Crest, PlayerProfile.Primary, PlayerProfile.Secondary), 64);
-            var title = UIFactory.Label(titleCard, GameInfo.Title.ToUpperInvariant(), 64, TextAnchor.MiddleCenter, UIFactory.Accent, -1, 90, true);
+            if (phone) UIFactory.Anchor(titleCard, new Vector2(0.5f, 0), new Vector2(0.5f, 1), new Vector2(-280, 12), new Vector2(280, -12));
+            else UIFactory.Anchor(titleCard, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-300, -330), new Vector2(300, 330));
+            UIFactory.VLayout(titleCard, phone ? 6 : 12, phone ? 16 : 32, true, true, TextAnchor.UpperCenter);
+            var crestRow = UIFactory.Row(titleCard, phone ? 44 : 64, 0, TextAnchor.MiddleCenter);
+            titleCrest = UIFactory.Icon(crestRow, PlaceholderSpriteFactory.Crest(PlayerProfile.Crest, PlayerProfile.Primary, PlayerProfile.Secondary), phone ? 44 : 64);
+            var title = UIFactory.Label(titleCard, GameInfo.Title.ToUpperInvariant(), phone ? 46 : 64, TextAnchor.MiddleCenter, UIFactory.Accent, -1, phone ? 60 : 90, true);
             title.horizontalOverflow = HorizontalWrapMode.Overflow;
-            UIFactory.Label(titleCard, "One button. Seven mounts. A kingdom of spikes.", 16, TextAnchor.MiddleCenter, UIFactory.TextDim, -1, 28);
-            UIFactory.Spacer(titleCard, 10);
-            UIFactory.Button(titleCard, "Play", ShowLevelSelect, -1, 54, UIFactory.Good, 22);
-            UIFactory.Button(titleCard, "Level Editor", () => app.OpenEditor(null, null), -1, 54, UIFactory.ButtonActive, 22);
-            UIFactory.Button(titleCard, "Heraldry", ShowHeraldry, -1, 44, null, 18);
-            UIFactory.Button(titleCard, "Options", ShowOptions, -1, 44, null, 18);
-            UIFactory.Button(titleCard, "Quit", app.Quit, -1, 44, UIFactory.Danger, 18);
-            UIFactory.Spacer(titleCard, 6);
-            UIFactory.Label(titleCard, "Click or Space to ride · Esc pauses", 13, TextAnchor.MiddleCenter, UIFactory.TextDim, -1, 24);
+            UIFactory.Label(titleCard, "One button. Seven mounts. A kingdom of spikes.", phone ? 13 : 16, TextAnchor.MiddleCenter, UIFactory.TextDim, -1, phone ? 22 : 28);
+            UIFactory.Spacer(titleCard, phone ? 4 : 10);
+            UIFactory.Button(titleCard, "Play", ShowLevelSelect, -1, phone ? 46 : 54, UIFactory.Good, phone ? 18 : 22);
+            UIFactory.Button(titleCard, "Level Editor", () => app.OpenEditor(null, null), -1, phone ? 46 : 54, UIFactory.ButtonActive, phone ? 18 : 22);
+            UIFactory.Button(titleCard, "Heraldry", ShowHeraldry, -1, phone ? 40 : 44, null, phone ? 15 : 18);
+            UIFactory.Button(titleCard, "Options", ShowOptions, -1, phone ? 40 : 44, null, phone ? 15 : 18);
+            UIFactory.Button(titleCard, "Quit", app.Quit, -1, phone ? 40 : 44, UIFactory.Danger, phone ? 15 : 18);
+            UIFactory.Spacer(titleCard, phone ? 2 : 6);
+            UIFactory.Label(titleCard, phone ? "Tap anywhere to ride · ❚❚ pauses" : "Click or Space to ride · Esc pauses", 13, TextAnchor.MiddleCenter, UIFactory.TextDim, -1, phone ? 20 : 24);
 
             // ---- level select ---------------------------------------------------
             levelScreen = UIFactory.Rect(root, "LevelSelect");
             UIFactory.Stretch(levelScreen);
             var frame = UIFactory.Panel(levelScreen, "Frame", new Color(0.11f, 0.09f, 0.14f, 0.9f));
-            UIFactory.Anchor(frame, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-620, -400), new Vector2(620, 400));
+            if (phone) UIFactory.Stretch(frame, 12, 12, 12, 12);
+            else UIFactory.Anchor(frame, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-620, -400), new Vector2(620, 400));
             var header = UIFactory.Rect(frame, "Header");
             UIFactory.Anchor(header, new Vector2(0, 1), new Vector2(1, 1), new Vector2(16, -56), new Vector2(-16, -8));
             UIFactory.HLayout(header, 10, 0, false, TextAnchor.MiddleLeft);
@@ -126,9 +140,32 @@ namespace Geodashy.Editing.UI
             UIFactory.VLayout(listContent, 4, 6);
             UIFactory.Fitter(listContent, true, false);
 
-            detailPane = UIFactory.Panel(frame, "Detail", new Color(0.17f, 0.14f, 0.21f, 0.98f));
-            UIFactory.Anchor(detailPane, new Vector2(0.55f, 0), new Vector2(1, 1), new Vector2(8, 16), new Vector2(-16, -64));
-            UIFactory.VLayout(detailPane, 8, 18);
+            // the detail pane scrolls so the record, difficulty buttons and description fit on short screens
+            var detailHost = UIFactory.Panel(frame, "Detail", new Color(0.17f, 0.14f, 0.21f, 0.98f));
+            UIFactory.Anchor(detailHost, new Vector2(0.55f, 0), new Vector2(1, 1), new Vector2(8, 16), new Vector2(-16, -64));
+            var detailScroll = UIFactory.ScrollView(detailHost, "Scroll", out detailPane, true, false, Color.clear);
+            UIFactory.Stretch(detailScroll.GetComponent<RectTransform>());
+            UIFactory.VLayout(detailPane, phone ? 6 : 8, phone ? 12 : 18);
+            UIFactory.Fitter(detailPane, true, false);
+        }
+
+        /// <summary>A framed screen with a header row and a scrolling column of content, sized for the current layout.</summary>
+        RectTransform BuildScreen(string name, string title, float halfWidth, float halfHeight, out RectTransform content)
+        {
+            var screen = UIFactory.Rect(root, name);
+            UIFactory.Stretch(screen);
+            var frame = UIFactory.Panel(screen, "Frame", new Color(0.11f, 0.09f, 0.14f, 0.92f));
+            if (phone) UIFactory.Stretch(frame, 12, 12, 12, 12);
+            else UIFactory.Anchor(frame, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-halfWidth, -halfHeight), new Vector2(halfWidth, halfHeight));
+            UIFactory.VLayout(frame, 8, phone ? 12 : 20, true, true, TextAnchor.UpperLeft);
+            var header = UIFactory.Row(frame, 40, 10);
+            UIFactory.Button(header, "◀ Back", ShowTitle, 100, 40);
+            UIFactory.Label(header, title, phone ? 22 : 26, TextAnchor.MiddleLeft, UIFactory.Accent, -1, 40, true);
+            var scroll = UIFactory.ScrollView(frame, "Scroll", out content, true, false, Color.clear);
+            UIFactory.Layout(scroll.gameObject, -1, -1, 1, 1);
+            UIFactory.VLayout(content, phone ? 8 : 12, 4);
+            UIFactory.Fitter(content, true, false);
+            return screen;
         }
 
         void ShowTitle()
@@ -162,14 +199,30 @@ namespace Geodashy.Editing.UI
 
         void BuildOptions()
         {
-            optionsScreen = UIFactory.Rect(root, "Options");
-            UIFactory.Stretch(optionsScreen);
-            var frame = UIFactory.Panel(optionsScreen, "Frame", new Color(0.11f, 0.09f, 0.14f, 0.92f));
-            UIFactory.Anchor(frame, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-320, -220), new Vector2(320, 220));
-            UIFactory.VLayout(frame, 12, 24, true, true, TextAnchor.UpperLeft);
-            var header = UIFactory.Row(frame, 40, 10);
-            UIFactory.Button(header, "◀ Back", ShowTitle, 100, 40);
-            UIFactory.Label(header, "Options", 26, TextAnchor.MiddleLeft, UIFactory.Accent, -1, 40, true);
+            optionsScreen = BuildScreen("Options", "Options", 320, 300, out var frame);
+
+            UIFactory.SectionHeader(frame, "Interface");
+            var uiLabel = UIFactory.Label(frame, "", 13, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 18);
+            void RefreshUiLabel() => uiLabel.text = "Interface size " + Mathf.RoundToInt(EditorUI.UIScale * 100f) + "%  ·  Layout: " + EditorUI.PhoneLayoutName;
+            void SetScale(float v)
+            {
+                EditorUI.UIScale = v;
+                PlayerPrefs.Save();
+                EditorUI.ConfigureScaler(scaler);
+                RefreshUiLabel();
+            }
+            var sizeRow = UIFactory.Row(frame, 36, 6);
+            UIFactory.Button(sizeRow, "Smaller", () => SetScale(EditorUI.UIScale - 0.1f), -1, 34, null, 13);
+            UIFactory.Button(sizeRow, "Reset", () => SetScale(phone ? 2f : 1f), -1, 34, null, 13);
+            UIFactory.Button(sizeRow, "Larger", () => SetScale(EditorUI.UIScale + 0.1f), -1, 34, null, 13);
+            UIFactory.Button(frame, "Switch layout (Auto / Phone / Desktop)", () =>
+            {
+                EditorUI.CyclePhoneLayout();
+                reopenOptions = true;
+                app.ShowMenu();   // the menu rebuilds itself in the new layout; the editor picks it up when opened
+            }, -1, 36, UIFactory.ButtonActive, 13);
+            UIFactory.Label(frame, "The phone layout has finger-sized controls, drawers instead of docks and touch gestures. Auto picks it on Android and the desktop layout elsewhere.", 12, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 34);
+            RefreshUiLabel();
 
             UIFactory.SectionHeader(frame, "Music volume");
             var musicLabel = UIFactory.Label(frame, "", 13, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 18);
@@ -208,19 +261,13 @@ namespace Geodashy.Editing.UI
 
         void BuildHeraldry()
         {
-            heraldryScreen = UIFactory.Rect(root, "Heraldry");
-            UIFactory.Stretch(heraldryScreen);
-            var frame = UIFactory.Panel(heraldryScreen, "Frame", new Color(0.11f, 0.09f, 0.14f, 0.92f));
-            UIFactory.Anchor(frame, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-460, -320), new Vector2(460, 320));
-            UIFactory.VLayout(frame, 10, 20, true, true, TextAnchor.UpperLeft);
-            var header = UIFactory.Row(frame, 40, 10);
-            UIFactory.Button(header, "◀ Back", ShowTitle, 100, 40);
-            UIFactory.Label(header, "Your heraldry", 26, TextAnchor.MiddleLeft, UIFactory.Accent, -1, 40, true);
+            heraldryScreen = BuildScreen("Heraldry", "Your heraldry", 460, 320, out var frame);
             UIFactory.Label(frame, "Your crest marks your scroll and your seal. Banner and trim colour your rider and the P1 / P2 colour channels that level makers can use.", 13, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 36);
 
-            var previewRow = UIFactory.Row(frame, 150, 24, TextAnchor.MiddleCenter);
-            heraldryCrestPreview = UIFactory.Icon(previewRow, null, 150);
-            heraldryMountPreview = UIFactory.Icon(previewRow, null, 150);
+            float preview = phone ? 100 : 150;
+            var previewRow = UIFactory.Row(frame, preview, 24, TextAnchor.MiddleCenter);
+            heraldryCrestPreview = UIFactory.Icon(previewRow, null, preview);
+            heraldryMountPreview = UIFactory.Icon(previewRow, null, preview);
 
             UIFactory.SectionHeader(frame, "Crest");
             var crestRow = UIFactory.Row(frame, 44, 6);

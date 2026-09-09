@@ -13,7 +13,10 @@ namespace Geodashy.Editing.UI
         Toggle heatToggle;
         InputField groupInput;
         Button[] stepButtons;
+        Button stepButton, heatButton;   // phone layout
         readonly float[] steps = { 0.125f, 0.5f, 1f, 5f };
+        static readonly string[] stepNames = { "⅛", "½", "1", "5" };
+        int stepIndex = 2;
 
         public static EditPanel Create(EditorUI ui, RectTransform dock)
         {
@@ -22,8 +25,118 @@ namespace Geodashy.Editing.UI
             var p = rt.gameObject.AddComponent<EditPanel>();
             p.ui = ui;
             p.editor = ui.editor;
-            p.Build(rt);
+            if (ui.IsPhone) p.BuildPhone(rt);
+            else p.Build(rt);
             return p;
+        }
+
+        /// <summary>Phone dock: a horizontally scrolling strip of tool groups, each two rows of 44-unit buttons.</summary>
+        void BuildPhone(RectTransform rt)
+        {
+            var scroll = UIFactory.ScrollView(rt, "Scroll", out var c, false, true, Color.clear);
+            UIFactory.Stretch(scroll.GetComponent<RectTransform>());
+            UIFactory.HLayout(c, 10, 6, false, TextAnchor.UpperLeft);
+            c.GetComponent<HorizontalLayoutGroup>().childForceExpandHeight = true;
+            UIFactory.Fitter(c, false, true);
+            const float h = 44f;
+
+            RectTransform Group(string header, float width)
+            {
+                var col = UIFactory.Column(c, width, 4, 0);
+                UIFactory.Label(col, header, 11, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 16);
+                return col;
+            }
+
+            var move = Group("Move", 170);
+            var m1 = UIFactory.Row(move, h, 4);
+            UIFactory.Button(m1, "◀", () => Nudge(-1, 0), -1, h, null, 16);
+            UIFactory.Button(m1, "▲", () => Nudge(0, 1), -1, h, null, 16);
+            UIFactory.Button(m1, "▶", () => Nudge(1, 0), -1, h, null, 16);
+            var m2 = UIFactory.Row(move, h, 4);
+            stepButton = UIFactory.Button(m2, "step 1", () => SetStep((stepIndex + 1) % steps.Length), -1, h, null, 12);
+            UIFactory.Button(m2, "▼", () => Nudge(0, -1), -1, h, null, 16);
+            UIFactory.Button(m2, "Snap", editor.SnapSelectionToGrid, -1, h, null, 12);
+            SetStep(2);
+
+            var rot = Group("Rotate & flip", 230);
+            var q1 = UIFactory.Row(rot, h, 4);
+            UIFactory.Button(q1, "↺ 90", () => editor.RotateSelection(90), -1, h, null, 12);
+            UIFactory.Button(q1, "↻ 90", () => editor.RotateSelection(-90), -1, h, null, 12);
+            UIFactory.Button(q1, "↺ 45", () => editor.RotateSelection(45), -1, h, null, 12);
+            UIFactory.Button(q1, "↻ 45", () => editor.RotateSelection(-45), -1, h, null, 12);
+            var q2 = UIFactory.Row(rot, h, 4);
+            UIFactory.Button(q2, "Flip H", () => editor.FlipSelection(true), -1, h, null, 12);
+            UIFactory.Button(q2, "Flip V", () => editor.FlipSelection(false), -1, h, null, 12);
+            UIFactory.Button(q2, "↺ 5", () => editor.RotateSelection(5), -1, h, null, 12);
+            UIFactory.Button(q2, "↻ 5", () => editor.RotateSelection(-5), -1, h, null, 12);
+
+            var scale = Group("Scale", 120);
+            var s1 = UIFactory.Row(scale, h, 4);
+            UIFactory.Button(s1, "× 2", () => editor.ScaleSelection(2f), -1, h, null, 12);
+            UIFactory.Button(s1, "× ½", () => editor.ScaleSelection(0.5f), -1, h, null, 12);
+            var s2 = UIFactory.Row(scale, h, 4);
+            UIFactory.Button(s2, "× 1.25", () => editor.ScaleSelection(1.25f), -1, h, null, 12);
+            UIFactory.Button(s2, "× 0.8", () => editor.ScaleSelection(0.8f), -1, h, null, 12);
+
+            var clip = Group("Clipboard", 210);
+            var c1 = UIFactory.Row(clip, h, 4);
+            UIFactory.Button(c1, "Copy", editor.CopySelection, -1, h, null, 12);
+            UIFactory.Button(c1, "Paste", () => editor.Paste(false), -1, h, null, 12);
+            UIFactory.Button(c1, "Dup", editor.DuplicateSelection, -1, h, null, 12);
+            var c2 = UIFactory.Row(clip, h, 4);
+            UIFactory.Button(c2, "Cut", editor.CutSelection, -1, h, null, 12);
+            UIFactory.Button(c2, "Delete", editor.DeleteSelection, -1, h, UIFactory.Danger, 12);
+            UIFactory.Button(c2, "Reset", () => editor.EditSelection(o =>
+            {
+                o.rotation = 0;
+                o.scaleX = 1;
+                o.scaleY = 1;
+            }), -1, h, null, 12);
+
+            var sel = Group("Select", 210);
+            var e1 = UIFactory.Row(sel, h, 4);
+            UIFactory.Button(e1, "All", editor.SelectAll, -1, h, null, 12);
+            UIFactory.Button(e1, "None", editor.Deselect, -1, h, null, 12);
+            UIFactory.Button(e1, "Invert", editor.InvertSelection, -1, h, null, 12);
+            var e2 = UIFactory.Row(sel, h, 4);
+            UIFactory.Button(e2, "Same type", () =>
+            {
+                var objs = editor.SelectedObjects();
+                if (objs.Count > 0) editor.SelectByType(objs[0].type);
+                else ui.Toast("Select an object first");
+            }, -1, h, null, 12);
+            UIFactory.Button(e2, "Group…", () => ui.Prompt("Select group", "Group number:", "1", v =>
+            {
+                if (int.TryParse(v, out var g)) editor.SelectByGroup(g);
+            }), -1, h, null, 12);
+
+            var align = Group("Align", 210);
+            var a1 = UIFactory.Row(align, h, 4);
+            UIFactory.Button(a1, "Left", () => editor.AlignSelection("left"), -1, h, null, 12);
+            UIFactory.Button(a1, "Right", () => editor.AlignSelection("right"), -1, h, null, 12);
+            UIFactory.Button(a1, "Ctr X", () => editor.AlignSelection("centerX"), -1, h, null, 12);
+            var a2 = UIFactory.Row(align, h, 4);
+            UIFactory.Button(a2, "Top", () => editor.AlignSelection("top"), -1, h, null, 12);
+            UIFactory.Button(a2, "Bottom", () => editor.AlignSelection("bottom"), -1, h, null, 12);
+            UIFactory.Button(a2, "Ctr Y", () => editor.AlignSelection("centerY"), -1, h, null, 12);
+
+            var heat = Group("Defeat heatmap", 150);
+            heatButton = UIFactory.Button(heat, "Deaths: off", () =>
+            {
+                editor.showDeathHeatmap = !editor.showDeathHeatmap;
+                editor.NotifyViewOptionsChanged();
+            }, -1, h, null, 12);
+            UIFactory.Button(heat, "Clear", () =>
+            {
+                editor.ClearSessionDeaths();
+                ui.Toast("Defeat heatmap cleared");
+            }, -1, h, null, 12);
+
+            editor.SelectionChanged += RefreshInfo;
+            editor.DeathsChanged += RefreshHeat;
+            editor.ViewOptionsChanged += RefreshHeat;
+            RefreshInfo();
+            RefreshHeat();
         }
 
         RectTransform Col(Transform parent, string header, float width)
@@ -51,7 +164,6 @@ namespace Geodashy.Editing.UI
             UIFactory.Label(move, "step", 11, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 16);
             var r3 = UIFactory.Row(move, 26, 3);
             stepButtons = new Button[steps.Length];
-            string[] stepNames = { "⅛", "½", "1", "5" };
             for (int i = 0; i < steps.Length; i++)
             {
                 int idx = i;
@@ -159,9 +271,14 @@ namespace Geodashy.Editing.UI
 
         void RefreshHeat()
         {
+            int n = editor.sessionDeaths.Count;
+            if (heatButton != null)
+            {
+                UIFactory.SetButtonActive(heatButton, editor.showDeathHeatmap);
+                UIFactory.SetButtonLabel(heatButton, (editor.showDeathHeatmap ? "Deaths: on" : "Deaths: off") + (n > 0 ? " (" + n + ")" : ""));
+            }
             if (heatLabel == null) return;
             heatToggle.SetIsOnWithoutNotify(editor.showDeathHeatmap);
-            int n = editor.sessionDeaths.Count;
             if (n == 0)
             {
                 heatLabel.text = "No deaths recorded yet this session.";
@@ -180,8 +297,10 @@ namespace Geodashy.Editing.UI
 
         void SetStep(int idx)
         {
+            stepIndex = idx;
             editor.nudgeStep = steps[idx];
-            for (int i = 0; i < stepButtons.Length; i++) UIFactory.SetButtonActive(stepButtons[i], i == idx);
+            if (stepButtons != null) for (int i = 0; i < stepButtons.Length; i++) UIFactory.SetButtonActive(stepButtons[i], i == idx);
+            if (stepButton != null) UIFactory.SetButtonLabel(stepButton, "step " + stepNames[idx]);
         }
 
         void Nudge(int x, int y)

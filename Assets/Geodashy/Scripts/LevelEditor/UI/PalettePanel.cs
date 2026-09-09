@@ -19,6 +19,8 @@ namespace Geodashy.Editing.UI
         readonly Dictionary<string, Button> tiles = new Dictionary<string, Button>();
         Text selectedName, selectedDesc, transformLabel;
         Toggle swipeToggle;
+        Button swipeButton, categoryButton;   // phone layout
+        string lastSearch = "";
 
         public static PalettePanel Create(EditorUI ui, RectTransform dock)
         {
@@ -27,8 +29,81 @@ namespace Geodashy.Editing.UI
             var p = rt.gameObject.AddComponent<PalettePanel>();
             p.ui = ui;
             p.editor = ui.editor;
-            p.Build(rt);
+            if (ui.IsPhone) p.BuildPhone(rt);
+            else p.Build(rt);
             return p;
+        }
+
+        /// <summary>
+        /// Phone dock (150 units tall): category dropdown + search on the left, a horizontally scrolling strip of
+        /// object tiles in the middle and a 3×3 grid of finger-sized transform buttons on the right.
+        /// </summary>
+        void BuildPhone(RectTransform rt)
+        {
+            UIFactory.HLayout(rt, 6, 6, false, TextAnchor.UpperLeft);
+            rt.GetComponent<HorizontalLayoutGroup>().childForceExpandHeight = true;
+
+            var left = UIFactory.Column(rt, 150, 4);
+            categoryButton = UIFactory.Button(left, currentCategory + "  ▾", () =>
+            {
+                var cats = ObjectCatalog.Categories;
+                int cur = System.Array.IndexOf(cats, currentCategory);
+                ui.ShowDropdown(categoryButton.GetComponent<RectTransform>(), cats, cur, i => ShowCategory(cats[i]));
+            }, -1, 40, UIFactory.InputBg, 13);
+            UIFactory.Button(left, "Search…", () =>
+            {
+                ui.Prompt("Search objects", "Name, tag or category:", lastSearch, q =>
+                {
+                    lastSearch = q ?? "";
+                    if (string.IsNullOrWhiteSpace(lastSearch)) ShowCategory(currentCategory);
+                    else
+                    {
+                        Populate(ObjectCatalog.Search(lastSearch));
+                        UIFactory.SetButtonLabel(categoryButton, "\"" + UIFactory.Trunc(lastSearch, 10) + "\"  ▾");
+                    }
+                });
+            }, -1, 40, null, 13);
+            selectedName = UIFactory.Label(left, "", 13, TextAnchor.MiddleLeft, UIFactory.Accent, -1, 20, true);
+            transformLabel = UIFactory.Label(left, "", 11, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 18);
+            selectedDesc = UIFactory.Label(left, "", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 0);
+            selectedDesc.gameObject.SetActive(false);   // no room for the description on a phone; the name is enough
+
+            gridScroll = UIFactory.ScrollView(rt, "Objects", out gridContent, false, true);
+            UIFactory.Layout(gridScroll.gameObject, -1, -1, 1, 1);
+            var grid = UIFactory.Grid(gridContent, new Vector2(84, 84), new Vector2(5, 5), 4);
+            grid.constraint = GridLayoutGroup.Constraint.FixedRowCount;
+            grid.constraintCount = 1;
+            grid.startAxis = GridLayoutGroup.Axis.Vertical;
+            UIFactory.Fitter(gridContent, false, true);
+
+            var right = UIFactory.Column(rt, 204, 4);
+            var r1 = UIFactory.Row(right, 40, 4);
+            UIFactory.Button(r1, "↺ 90", () => editor.RotateSelection(90), -1, 40, null, 12);
+            UIFactory.Button(r1, "↻ 90", () => editor.RotateSelection(-90), -1, 40, null, 12);
+            UIFactory.Button(r1, "Flip H", () => editor.FlipSelection(true), -1, 40, null, 12);
+            var r2 = UIFactory.Row(right, 40, 4);
+            UIFactory.Button(r2, "↺ 45", () => editor.RotateSelection(45), -1, 40, null, 12);
+            UIFactory.Button(r2, "Reset", () =>
+            {
+                editor.placeRotation = 0;
+                editor.placeFlipX = editor.placeFlipY = false;
+                editor.placeScale = 1;
+                editor.NotifyViewOptionsChanged();
+            }, -1, 40, null, 12);
+            UIFactory.Button(r2, "Flip V", () => editor.FlipSelection(false), -1, 40, null, 12);
+            var r3 = UIFactory.Row(right, 40, 4);
+            UIFactory.Button(r3, "Scale −", () => editor.ScaleSelection(0.5f), -1, 40, null, 12);
+            UIFactory.Button(r3, "Scale +", () => editor.ScaleSelection(2f), -1, 40, null, 12);
+            swipeButton = UIFactory.Button(r3, "Swipe", () =>
+            {
+                editor.swipeBuild = !editor.swipeBuild;
+                RefreshPlacement();
+                ui.Toast(editor.swipeBuild ? "Swipe to paint: drag places a row of objects" : "Swipe off: one object per tap");
+            }, -1, 40, null, 12);
+
+            ShowCategory(currentCategory);
+            editor.ViewOptionsChanged += RefreshPlacement;
+            RefreshPlacement();
         }
 
         void Build(RectTransform rt)
@@ -112,6 +187,7 @@ namespace Geodashy.Editing.UI
         {
             currentCategory = cat;
             foreach (var kv in categoryButtons) UIFactory.SetButtonActive(kv.Value, kv.Key == cat);
+            if (categoryButton != null) UIFactory.SetButtonLabel(categoryButton, cat + "  ▾");
             Populate(ObjectCatalog.InCategory(cat));
         }
 
@@ -130,17 +206,20 @@ namespace Geodashy.Editing.UI
                 tiles[def.id] = b;
             }
             gridScroll.verticalNormalizedPosition = 1f;
+            gridScroll.horizontalNormalizedPosition = 0f;
             RefreshPlacement();
         }
 
         void RefreshPlacement()
         {
+            if (selectedName == null) return;   // panel destroyed
             var def = editor.BuildDef;
             foreach (var kv in tiles) UIFactory.SetButtonActive(kv.Value, def != null && kv.Key == def.id);
             selectedName.text = def != null ? def.name : "No object selected";
             selectedDesc.text = def != null ? (string.IsNullOrEmpty(def.description) ? def.category + " · " + def.width + "×" + def.height : def.description) : "Pick an object from the grid.";
             transformLabel.text = string.Format("rot {0:0}°  scale {1:0.##}x  {2}{3}", editor.placeRotation, editor.placeScale, editor.placeFlipX ? "flipH " : "", editor.placeFlipY ? "flipV" : "");
             if (swipeToggle != null) swipeToggle.SetIsOnWithoutNotify(editor.swipeBuild);
+            if (swipeButton != null) UIFactory.SetButtonActive(swipeButton, editor.swipeBuild);
         }
     }
 }

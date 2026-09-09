@@ -224,7 +224,7 @@ namespace Geodashy.Editing
             SetBuildDef(ObjectCatalog.Get("castle_stone"));
             ApplySettings();
             Dirty = false;
-            ui.Toast("Welcome. P tests the quest, Ctrl+S saves it, F1 lists every shortcut.", 6f);
+            ui.Toast(ui.IsPhone ? "Welcome. ▶ tests the quest, ⋯ saves it, View opens the tools drawer." : "Welcome. P tests the quest, Ctrl+S saves it, F1 lists every shortcut.", 6f);
         }
 
         static LevelData CreateStarterLevel()
