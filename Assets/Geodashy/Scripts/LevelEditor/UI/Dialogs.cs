@@ -320,11 +320,70 @@ namespace Geodashy.Editing.UI
                 editor.PlaceSongEndBanner();
             }, -1, 28, null, 12);
             UIFactory.Label(c, "The View dock's Song end flag shows the same spot live; use it to size the quest to its soundtrack.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 18);
-            NumberField.Create(c, "BPM", s.bpm, 1, 20, 400, v =>
+            var bpmField = NumberField.Create(c, "BPM", s.bpm, 1, 20, 400, v =>
             {
                 s.bpm = v;
                 editor.MarkDirty();
             }, false, 140);
+            var beatRow = UIFactory.Row(c, 30, 6);
+            Text beatInfo = null;
+            UIFactory.Button(beatRow, "♪ Detect BPM & offset", () =>
+            {
+                editor.RefreshSongLength();
+                var clip = editor.SongClip;
+                if (clip == null)
+                {
+                    if (string.IsNullOrEmpty(s.songFile) && string.IsNullOrEmpty(s.songId)) ui.Toast("Pick or import a song first");
+                    else ui.Toast("The song is still loading; try again in a moment");
+                    return;
+                }
+                beatInfo.text = "Listening…";
+                if (!BeatDetector.Analyse(clip, out float bpm, out float firstBeat))
+                {
+                    beatInfo.text = "Could not find a steady beat in this song; use Tap tempo instead.";
+                    return;
+                }
+                editor.RecordUndo("Detect tempo");
+                s.bpm = Mathf.Round(bpm * 10f) / 10f;
+                s.songOffset = Mathf.Max(0f, Mathf.Round(firstBeat * 1000f) / 1000f);
+                bpmField.Set(s.bpm);
+                editor.MarkDirty();
+                editor.RefreshSongLength();
+                editor.grid.showBpmGuide = true;
+                editor.NotifyViewOptionsChanged();
+                Achievements.Unlock("song_matched");
+                beatInfo.text = "Found " + s.bpm.ToString("0.#") + " BPM with the first beat at " + firstBeat.ToString("0.000") + " s: the song offset now starts the music on that beat, so the beat lines line up with the drums.";
+                ui.Toast("Tempo set to " + s.bpm.ToString("0.#") + " BPM, offset " + s.songOffset.ToString("0.###") + " s", 4f);
+            }, -1, 28, UIFactory.ButtonActive, 12);
+            var taps = new List<float>();
+            Button tapButton = null;
+            tapButton = UIFactory.Button(beatRow, "Tap tempo", () =>
+            {
+                float now = Time.realtimeSinceStartup;
+                if (taps.Count > 0 && now - taps[taps.Count - 1] > 2f) taps.Clear();
+                taps.Add(now);
+                if (taps.Count < 2)
+                {
+                    UIFactory.SetButtonLabel(tapButton, "Tap… (1)");
+                    return;
+                }
+                var gaps = new List<float>();
+                for (int i = 1; i < taps.Count; i++) gaps.Add(taps[i] - taps[i - 1]);
+                gaps.Sort();
+                float median = gaps[gaps.Count / 2];
+                float bpm = Mathf.Clamp(60f / Mathf.Max(0.05f, median), 20f, 400f);
+                UIFactory.SetButtonLabel(tapButton, "Tap… " + bpm.ToString("0") + " (" + taps.Count + ")");
+                if (taps.Count >= 4)
+                {
+                    s.bpm = Mathf.Round(bpm);
+                    bpmField.Set(s.bpm);
+                    editor.MarkDirty();
+                    editor.NotifyViewOptionsChanged();
+                    beatInfo.text = "Tapped " + s.bpm.ToString("0") + " BPM from " + taps.Count + " taps. Keep tapping to refine; a two-second pause starts over.";
+                }
+            }, 150, 28, null, 12);
+            beatInfo = UIFactory.Label(c, "Detect listens to the song for the drum pulse (70–190 BPM) and sets both fields; Tap tempo takes the tempo from your clicks.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 34);
+            beatInfo.horizontalOverflow = HorizontalWrapMode.Wrap;
             BoolField.Create(c, "Pulse the ground line and sky on every beat", s.beatPulse, v =>
             {
                 s.beatPulse = v;
@@ -466,6 +525,7 @@ namespace Geodashy.Editing.UI
                 {
                     var code = LevelShare.Encode(editor.level);
                     GUIUtility.systemCopyBuffer = code;
+                    Achievements.Unlock("share_code");
                     ui.Toast("Share code copied (" + (code.Length / 1024) + " KB). Paste it in a message; the other side imports it here.", 5f);
                 }
                 catch (Exception e)
@@ -514,6 +574,12 @@ namespace Geodashy.Editing.UI
                 ? "Writes the JSON into Assets/Geodashy/Resources/Levels so it ships with the game. Commit it to git and it becomes a ★ campaign map."
                 : "Writes the JSON into the campaign-exports folder next to your saves. Copy it into Assets/Geodashy/Resources/Levels in the project and commit.", 11, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 34);
 
+            var more = UIFactory.Row(c, 34, 6);
+            UIFactory.Button(more, "Restore autosave…", () => RestoreDialog.Open(ui, editor), 150, 32);
+            UIFactory.Button(more, "Export pack…", () => PackDialog.OpenExport(ui, editor), 120, 32);
+            UIFactory.Button(more, "Import pack…", () => PackDialog.OpenImport(ui, editor), 120, 32);
+            UIFactory.Label(more, "Autosaves keep the last " + LevelStorage.AutosaveVersions + " versions of each level. A pack is several levels in one code.", 11, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 34);
+
             var scroll = UIFactory.ScrollView(c, "List", out var list, true, false);
             UIFactory.VLayout(list, 3, 4);
             UIFactory.Fitter(list, true, false);
@@ -528,9 +594,11 @@ namespace Geodashy.Editing.UI
             foreach (var info in levels)
             {
                 var i = info;
-                var row = UIFactory.Row(list, 34, 6);
+                var row = UIFactory.Row(list, 36, 6);
                 row.gameObject.AddComponent<Image>().color = i.id == editor.level.id ? UIFactory.PanelBg3 : new Color(0, 0, 0, 0.15f);
-                UIFactory.Label(row, (i.builtIn ? "★ " : "") + i.name, 14, TextAnchor.MiddleLeft, UIFactory.TextColor, 250, 34, true);
+                var thumb = UIFactory.Icon(row, Geodashy.Rendering.LevelThumbnail.Get(i), 34);
+                UIFactory.Layout(thumb.gameObject, 88, 34);
+                UIFactory.Label(row, (i.builtIn ? "★ " : "") + i.name + (string.IsNullOrEmpty(i.pack) ? "" : "  [" + i.pack + "]"), 14, TextAnchor.MiddleLeft, UIFactory.TextColor, 200, 34, true);
                 UIFactory.Label(row, i.author, 12, TextAnchor.MiddleLeft, UIFactory.TextDim, 120, 34);
                 UIFactory.Label(row, i.objectCount + " objs", 12, TextAnchor.MiddleLeft, UIFactory.TextDim, 70, 34);
                 UIFactory.Label(row, i.modified.ToString("yyyy-MM-dd HH:mm"), 12, TextAnchor.MiddleLeft, UIFactory.TextDim, 120, 34);
@@ -637,6 +705,18 @@ namespace Geodashy.Editing.UI
             "View / Props — slide-in drawers   ·   ▼ hides the dock   ·   ⋯ holds save, files, settings, marker and help\n" +
             "Build dock: category ▾ picks a shelf, Search… filters, the strip scrolls sideways, Swipe paints while dragging\n" +
             "In play: tap anywhere — action   ·   ❚❚ — pause   ·   the Android back button also pauses\n\n" +
+            "NEWEST TOOLS\n" +
+            "Level settings ▸ Music ▸ Detect BPM & offset — listens to the song and sets the tempo and the first-beat offset   ·   Tap tempo — tap the beat yourself\n" +
+            "Timeline strip — the song's waveform runs behind the bar lines, mapped through every speed portal; bookmarks show as cyan diamonds\n" +
+            "View dock ▸ Sync check — a playtest that pulses on every beat and then marks each jump green (on the beat), amber or red\n" +
+            "View dock ▸ Groups ▸ ⋯ — rename a group, tint it in the editor, see what is inside (▸ expands the type counts)\n" +
+            "Palette ▸ Curve — the path tool bends through its points and each object turns to follow the curve\n" +
+            "View dock ▸ Auto-decorate… — fills editor layer 9 with themed scenery (castle, forest, cave, village, graveyard); run again to replace, Clear to remove\n" +
+            "Palette ▸ ★ Favourite / Save preset… — the ★ Favourites shelf keeps starred objects and presets (rotation, scale, colour, properties)\n" +
+            "View dock ▸ Bookmarks — named spots: Go jumps there and sets the test marker, ▶ plays from it\n" +
+            "Files ▸ Restore autosave… — the last ten autosaved versions of this level   ·   Export pack… / Import pack… — several levels in one code\n" +
+            "Main menu ▸ Deeds — achievements   ·   level details show the best runs table (Copy as text to share)\n" +
+            "View dock ▸ Editor tour — replay the first-run walkthrough\n\n" +
             "FILES\n" +
             "Ctrl+S — save   ·   Ctrl+Shift+S — save as   ·   Ctrl+O — files\n" +
             "Levels autosave every minute. JSON lives in the persistent data folder and can be exported to the clipboard.";
@@ -644,9 +724,181 @@ namespace Geodashy.Editing.UI
         public static void Open(EditorUI ui)
         {
             var c = ui.OpenModal("Help & Shortcuts", 820, 760, true);
-            var t = UIFactory.Label(c, HelpText, 14, TextAnchor.UpperLeft, UIFactory.TextColor, -1, 1200);
+            UIFactory.Button(c, "▶ Replay the editor tour", () =>
+            {
+                ui.CloseTopModal();
+                EditorTour.Begin(ui);
+            }, 260, 30, UIFactory.ButtonActive, 13);
+            var t = UIFactory.Label(c, HelpText, 14, TextAnchor.UpperLeft, UIFactory.TextColor, -1, 1500);
             t.horizontalOverflow = HorizontalWrapMode.Wrap;
             t.verticalOverflow = VerticalWrapMode.Overflow;
+        }
+    }
+
+    /// <summary>Restore one of the timestamped autosave versions of the current level.</summary>
+    public static class RestoreDialog
+    {
+        public static void Open(EditorUI ui, LevelEditor editor)
+        {
+            var c = ui.OpenModal("Restore autosave", 560, 460, true);
+            var modal = ui.TopModal;
+            var versions = LevelStorage.ListAutosaveVersions(editor.level.id);
+            UIFactory.Label(c, versions.Count == 0
+                ? "No autosaved versions of this level yet. Versions are written every minute while there are unsaved changes."
+                : "Newest first. Restoring replaces the level in the editor; the state you are leaving is written as a new version first, and the saved file is not touched until you save.", 12, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 40);
+            foreach (var v in versions)
+            {
+                var ver = v;
+                var row = UIFactory.Row(c, 32, 6);
+                string size = "";
+                try
+                {
+                    size = (new System.IO.FileInfo(ver.Key).Length / 1024) + " KB";
+                }
+                catch (Exception)
+                {
+                }
+                UIFactory.Label(row, ver.Value.ToString("yyyy-MM-dd HH:mm:ss"), 13, TextAnchor.MiddleLeft, UIFactory.TextColor, 200, 32);
+                UIFactory.Label(row, size, 12, TextAnchor.MiddleLeft, UIFactory.TextDim, 70, 32);
+                UIFactory.Button(row, "Restore", () =>
+                {
+                    try
+                    {
+                        var data = LevelStorage.Load(ver.Key);
+                        data.id = editor.level.id;
+                        LevelStorage.SaveAutosaveVersion(editor.level);
+                        editor.LoadLevel(data, editor.currentFilePath);
+                        editor.MarkDirty();
+                        ui.CloseModal(modal);
+                        ui.Toast("Restored the version from " + ver.Value.ToString("HH:mm:ss") + "; the previous state is now the newest autosave", 4f);
+                    }
+                    catch (Exception e)
+                    {
+                        ui.Toast("Restore failed: " + e.Message);
+                    }
+                }, 90, 30, UIFactory.Good, 12);
+            }
+        }
+    }
+
+    /// <summary>Several saved levels bundled into one pack code, and the matching import.</summary>
+    public static class PackDialog
+    {
+        public static void OpenExport(EditorUI ui, LevelEditor editor)
+        {
+            var c = ui.OpenModal("Export level pack", 600, 560, true);
+            var modal = ui.TopModal;
+            var levels = LevelStorage.ListLevels();
+            var chosen = new HashSet<string>();
+            var nameField = TextField.Create(c, "Pack name", editor.level.name + " pack", null, 100);
+            UIFactory.Label(c, "Tick the levels to bundle. The pack code goes to the clipboard; songs are not included.", 12, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 30);
+            foreach (var info in levels)
+            {
+                if (info.builtIn) continue;
+                var i = info;
+                UIFactory.Toggle(c, i.name + "  (" + i.objectCount + " objects)", false, v =>
+                {
+                    if (v) chosen.Add(i.path); else chosen.Remove(i.path);
+                }, 26);
+            }
+            var row = UIFactory.Row(c, 36, 8, TextAnchor.MiddleRight);
+            UIFactory.Button(row, "Cancel", () => ui.CloseModal(modal), 110, 34);
+            UIFactory.Button(row, "Copy pack code", () =>
+            {
+                if (chosen.Count == 0)
+                {
+                    ui.Toast("Tick at least one level");
+                    return;
+                }
+                try
+                {
+                    var list = new List<LevelData>();
+                    foreach (var p in chosen) list.Add(LevelStorage.Load(p));
+                    var code = LevelPack.Encode(string.IsNullOrWhiteSpace(nameField.input.text) ? "Level pack" : nameField.input.text.Trim(), list);
+                    GUIUtility.systemCopyBuffer = code;
+                    Achievements.Unlock("share_code");
+                    ui.CloseModal(modal);
+                    ui.Toast("Pack code copied: " + list.Count + " levels, " + (code.Length / 1024) + " KB", 5f);
+                }
+                catch (Exception e)
+                {
+                    ui.Toast("Could not build the pack: " + e.Message);
+                }
+            }, 160, 34, UIFactory.ButtonActive);
+        }
+
+        public static void OpenImport(EditorUI ui, LevelEditor editor)
+        {
+            ui.Prompt("Import level pack", "Paste the pack code (it starts with " + LevelPack.Prefix + "). Every level in it is saved to your quests.", GUIUtility.systemCopyBuffer ?? "", text =>
+            {
+                if (!LevelPack.TryDecode(text, out var name, out var levels, out var err))
+                {
+                    ui.Toast(err, 4f);
+                    return;
+                }
+                int saved = 0;
+                foreach (var d in levels)
+                {
+                    try
+                    {
+                        LevelStorage.Save(d);
+                        saved++;
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogWarning("Pack import: " + e.Message);
+                    }
+                }
+                ui.Toast("Imported " + saved + " of " + levels.Count + " levels from " + name + ". They are in Files and on the quest list tagged [" + name + "].", 6f);
+            });
+        }
+    }
+
+    /// <summary>Fills the level with themed scenery on its own editor layer.</summary>
+    public static class AutoDecorateDialog
+    {
+        static int lastTheme = PlayerPrefs.GetInt("geodashy.autoDecor.theme", 0);
+        static float lastDensity = PlayerPrefs.GetFloat("geodashy.autoDecor.density", 0.5f);
+
+        public static void Open(EditorUI ui, LevelEditor editor)
+        {
+            var c = ui.OpenModal("Auto-decorate", 520, 360);
+            var modal = ui.TopModal;
+            int theme = Mathf.Clamp(lastTheme, 0, AutoDecorator.Themes.Length - 1);
+            float density = lastDensity;
+            int seed = UnityEngine.Random.Range(1, 99999);
+            UIFactory.Label(c, "Scatters grass, ivy, torches, trees and the like on top of, beside and under your blocks. Everything lands on editor layer " + AutoDecorator.Layer + ", so it never interferes with the objects you placed and can be hidden or cleared as one.", 12, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 60);
+            DropdownField.Create(c, "Theme", AutoDecorator.Themes, theme, i => theme = i, 100);
+            var dl = UIFactory.Label(c, "", 12, TextAnchor.MiddleLeft, UIFactory.TextColor, -1, 20);
+            void RefreshDensity() => dl.text = "Density: " + (density < 0.34f ? "sparse" : (density < 0.67f ? "natural" : "lush")) + " (" + Mathf.RoundToInt(density * 100f) + "%)";
+            UIFactory.Slider(c, 0.05f, 1f, density, v =>
+            {
+                density = v;
+                RefreshDensity();
+            });
+            RefreshDensity();
+            var seedField = NumberField.Create(c, "Seed", seed, 1, 1, 999999, v => seed = Mathf.RoundToInt(v), true, 100);
+            UIFactory.Button(c, "Shuffle seed", () =>
+            {
+                seed = UnityEngine.Random.Range(1, 99999);
+                seedField.Set(seed);
+            }, 140, 26, null, 12);
+            var row = UIFactory.Row(c, 36, 8, TextAnchor.MiddleRight);
+            UIFactory.Button(row, "Clear layer " + AutoDecorator.Layer, () =>
+            {
+                editor.ClearAutoDecor();
+                ui.CloseModal(modal);
+            }, 130, 34, UIFactory.Danger, 13);
+            UIFactory.Button(row, "Cancel", () => ui.CloseModal(modal), 100, 34);
+            UIFactory.Button(row, "Decorate", () =>
+            {
+                lastTheme = theme;
+                lastDensity = density;
+                PlayerPrefs.SetInt("geodashy.autoDecor.theme", theme);
+                PlayerPrefs.SetFloat("geodashy.autoDecor.density", density);
+                editor.AutoDecorate(AutoDecorator.Themes[theme], density, seed);
+                ui.CloseModal(modal);
+            }, 120, 34, UIFactory.Good);
         }
     }
 }

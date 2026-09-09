@@ -77,6 +77,22 @@ namespace Geodashy.Core
         }
     }
 
+    [Serializable]
+    public class Bookmark
+    {
+        public string name = "Bookmark";
+        public float x, y;
+    }
+
+    [Serializable]
+    public class GroupInfo
+    {
+        public int id;
+        public string name = "";
+        /// <summary>Editor tint as hex, empty for none.</summary>
+        public string colorHex = "";
+    }
+
     /// <summary>One placed object in a level.</summary>
     [Serializable]
     public class LevelObject
@@ -342,6 +358,22 @@ namespace Geodashy.Core
         public float editorZoom = 1f;
         public float playtestX = -1f;
         public float playtestY = -1f;
+        /// <summary>Named playtest spots.</summary>
+        public List<Bookmark> bookmarks = new List<Bookmark>();
+        /// <summary>Editor-only names and tints for groups ("folders").</summary>
+        public List<GroupInfo> groupInfos = new List<GroupInfo>();
+        /// <summary>Name of the level pack this level came in with (empty = none).</summary>
+        public string pack = "";
+
+        public GroupInfo GetGroupInfo(int id, bool create)
+        {
+            if (groupInfos == null) groupInfos = new List<GroupInfo>();
+            foreach (var g in groupInfos) if (g.id == id) return g;
+            if (!create) return null;
+            var n = new GroupInfo { id = id };
+            groupInfos.Add(n);
+            return n;
+        }
 
         public LevelSettings settings = new LevelSettings();
         public List<ColorChannel> colors = new List<ColorChannel>();

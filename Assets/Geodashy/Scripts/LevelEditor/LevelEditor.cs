@@ -51,6 +51,53 @@ namespace Geodashy.Editing
         public float placeRotation;
         public bool placeFlipX, placeFlipY;
         public float placeScale = 1f;
+        /// <summary>Properties and colour a favourite preset applies to every object placed with the current brush (null when none).</summary>
+        public BrushPreset ActivePreset { get; private set; }
+        public void ApplyPreset(BrushPreset p)
+        {
+            var def = p != null ? ObjectCatalog.Get(p.type) : null;
+            if (def == null)
+            {
+                ui.Toast("That preset's object no longer exists");
+                return;
+            }
+            SetBuildDef(def);
+            ActivePreset = p;
+            placeRotation = p.rotation;
+            placeScale = Mathf.Clamp(p.scale, 0.125f, 16f);
+            placeFlipX = p.flipX;
+            placeFlipY = p.flipY;
+            if (Mode != EditorMode.Build) SetMode(EditorMode.Build);
+            ViewOptionsChanged?.Invoke();
+        }
+        /// <summary>The current brush and transform as a preset that can be saved to the Favourites shelf.</summary>
+        public BrushPreset CurrentBrushAsPreset(string name)
+        {
+            if (BuildDef == null) return null;
+            var p = new BrushPreset { name = name, type = BuildDef.id, rotation = placeRotation, scale = placeScale, flipX = placeFlipX, flipY = placeFlipY };
+            if (ActivePreset != null && ActivePreset.type == BuildDef.id)
+            {
+                p.baseColor = ActivePreset.baseColor;
+                foreach (var pr in ActivePreset.props) p.props.Add(new ObjectProp(pr.key, pr.value));
+            }
+            else
+            {
+                // a single selected object of the brush type lends its properties and colour
+                var sel = SelectedObjects();
+                if (sel.Count == 1 && sel[0].type == BuildDef.id)
+                {
+                    p.baseColor = sel[0].baseColor;
+                    foreach (var pr in sel[0].props) p.props.Add(new ObjectProp(pr.key, pr.value));
+                }
+            }
+            return p;
+        }
+        void ApplyPresetProps(LevelObject o)
+        {
+            if (ActivePreset == null || o.type != ActivePreset.type) return;
+            foreach (var pr in ActivePreset.props) o.SetProp(pr.key, pr.value);
+            if (ActivePreset.baseColor != 0) o.baseColor = ActivePreset.baseColor;
+        }
         public bool snapToGrid = true;
         public float gridSize = 1f;
         public bool swipeBuild = true;
@@ -145,6 +192,7 @@ namespace Geodashy.Editing
             if (objs.Count == 0) return false;
             var stamp = Stamp.FromObjects(name, objs);
             StampStorage.Save(stamp);
+            Achievements.Unlock("stamp_saved");
             StampsChanged?.Invoke();
             return true;
         }
@@ -175,6 +223,37 @@ namespace Geodashy.Editing
         /// <summary>Level x where the song ends, or null when there is no song or its length is not known yet.</summary>
         public float? SongEndX { get; private set; }
         public float SongLength { get; private set; } = -1f;
+        /// <summary>Loudness per slice of the whole song (0..1), for the timeline strip; null until the clip is known.</summary>
+        public float[] SongWaveform { get; private set; }
+        /// <summary>The loaded song clip, when it is available in memory (built-in songs and imported files after loading).</summary>
+        public AudioClip SongClip { get; private set; }
+        public event Action SongChanged;
+
+        /// <summary>Seconds of travel from the spawn to level x, walking through every speed portal.</summary>
+        public float TravelTimeToX(float targetX)
+        {
+            var portals = new List<KeyValuePair<float, int>>();
+            foreach (var o in level.objects)
+            {
+                var d = ObjectCatalog.Get(o.type);
+                if (d != null && d.kind == ObjectKind.Portal && d.portalType == PortalType.Speed) portals.Add(new KeyValuePair<float, int>(o.x, (int)d.portalSpeed));
+            }
+            portals.Sort((a, b) => a.Key.CompareTo(b.Key));
+            float x = 0f, t = 0f;
+            float speed = MountCatalog.Speed(level.settings.startSpeed);
+            foreach (var p in portals)
+            {
+                if (p.Key >= targetX) break;
+                if (p.Key > x)
+                {
+                    t += (p.Key - x) / speed;
+                    x = p.Key;
+                }
+                speed = MountCatalog.Speed(p.Value);
+            }
+            if (targetX > x) t += (targetX - x) / speed;
+            return t;
+        }
         string songKey = "";
         int songRequest;
 
@@ -191,6 +270,8 @@ namespace Geodashy.Editing
             songKey = key;
             SongLength = -1f;
             SongEndX = null;
+            SongWaveform = null;
+            SongClip = null;
             int request = ++songRequest;
             if (key.StartsWith("file:"))
             {
@@ -198,18 +279,24 @@ namespace Geodashy.Editing
                 AudioLoader.Load(this, path, clip =>
                 {
                     if (request != songRequest || this == null) return;
+                    SongClip = clip;
                     SongLength = clip != null ? clip.length : -1f;
+                    SongWaveform = clip != null ? BeatDetector.Waveform(clip, 2048) : null;
                     RecomputeSongEnd();
                     ViewOptionsChanged?.Invoke();
+                    SongChanged?.Invoke();
                 });
             }
             else if (key.StartsWith("id:"))
             {
                 var clip = Resources.Load<AudioClip>("Songs/" + s.songId);
+                SongClip = clip;
                 SongLength = clip != null ? clip.length : -1f;
+                SongWaveform = clip != null ? BeatDetector.Waveform(clip, 2048) : null;
             }
             RecomputeSongEnd();
             ViewOptionsChanged?.Invoke();
+            SongChanged?.Invoke();
         }
 
         /// <summary>Walks the speed portals from the start and finds the x reached when the song runs out.</summary>
@@ -268,12 +355,46 @@ namespace Geodashy.Editing
         // ---- last playtest trace ---------------------------------------------------------
         public readonly List<Vector2> lastRunTrace = new List<Vector2>();
         public Vector2? lastRunDeath;
+        /// <summary>Every jump of the last sync-check playtest: x, y and how far (in beats, -0.5..0.5) it was from the nearest beat.</summary>
+        public readonly List<Vector3> lastRunJumps = new List<Vector3>();
+        public bool lastRunWasSyncCheck;
         public const string RunTracePref = "geodashy.runTrace";
         public bool showRunTrace = PlayerPrefs.GetInt(RunTracePref, 1) == 1;
 
         // ---- path tool: click points, lay the brush along them ---------------------------
         public bool pathTool;
+        /// <summary>When on, the path points are joined by a smooth Catmull-Rom curve instead of straight lines.</summary>
+        public bool pathCurve = PlayerPrefs.GetInt("geodashy.pathCurve", 0) == 1;
         public readonly List<Vector2> pathPoints = new List<Vector2>();
+        public void SetPathCurve(bool on)
+        {
+            pathCurve = on;
+            PlayerPrefs.SetInt("geodashy.pathCurve", on ? 1 : 0);
+            ViewOptionsChanged?.Invoke();
+        }
+        /// <summary>The path as a polyline: the clicked points, or a Catmull-Rom spline through them when the curve tool is on.</summary>
+        public List<Vector2> PathPolyline()
+        {
+            if (!pathCurve || pathPoints.Count < 3) return new List<Vector2>(pathPoints);
+            var pts = new List<Vector2>();
+            int n = pathPoints.Count;
+            for (int i = 0; i < n - 1; i++)
+            {
+                var p0 = pathPoints[Mathf.Max(0, i - 1)];
+                var p1 = pathPoints[i];
+                var p2 = pathPoints[i + 1];
+                var p3 = pathPoints[Mathf.Min(n - 1, i + 2)];
+                int segs = Mathf.Clamp(Mathf.CeilToInt(Vector2.Distance(p1, p2) * 4f), 4, 64);
+                for (int k = 0; k < segs; k++)
+                {
+                    float t = k / (float)segs, t2 = t * t, t3 = t2 * t;
+                    var p = 0.5f * ((2f * p1) + (-p0 + p2) * t + (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2 + (-p0 + 3f * p1 - 3f * p2 + p3) * t3);
+                    pts.Add(p);
+                }
+            }
+            pts.Add(pathPoints[n - 1]);
+            return pts;
+        }
         public void SetPathTool(bool on)
         {
             pathTool = on;
@@ -287,7 +408,10 @@ namespace Geodashy.Editing
             ViewOptionsChanged?.Invoke();
         }
         /// <summary>Places the brush along the clicked polyline at a spacing (grid size, or the beat when onBeat).</summary>
-        public void LayPath(bool onBeat)
+        public void LayPath(bool onBeat) => LayPath(onBeat, pathCurve);
+
+        /// <summary>Lays the brush along the path; with followTangent each object is rotated to face along the curve.</summary>
+        public void LayPath(bool onBeat, bool followTangent)
         {
             if (BuildDef == null)
             {
@@ -302,10 +426,12 @@ namespace Geodashy.Editing
             float spacing = onBeat ? BeatLength / Mathf.Max(1, beatDivision) : Mathf.Max(0.25f, gridSize);
             var placed = new List<LevelObject>();
             float carry = 0f;
-            for (int i = 1; i < pathPoints.Count; i++)
+            var poly = PathPolyline();
+            bool curve = pathCurve && pathPoints.Count >= 3;
+            for (int i = 1; i < poly.Count; i++)
             {
-                var a = pathPoints[i - 1];
-                var b = pathPoints[i];
+                var a = poly[i - 1];
+                var b = poly[i];
                 float len = Vector2.Distance(a, b);
                 if (len < 0.001f) continue;
                 var dir = (b - a) / len;
@@ -313,12 +439,13 @@ namespace Geodashy.Editing
                 while (t <= len + 0.001f)
                 {
                     var p = a + dir * t;
-                    if (snapToGrid) p = GeoMath.SnapCenter(p, new Vector2(BuildDef.width * placeScale, BuildDef.height * placeScale), gridSize);
+                    if (snapToGrid && !curve) p = GeoMath.SnapCenter(p, new Vector2(BuildDef.width * placeScale, BuildDef.height * placeScale), gridSize);
                     bool dup = false;
                     foreach (var q in placed) if ((new Vector2(q.x, q.y) - p).sqrMagnitude < 0.0001f) { dup = true; break; }
                     if (!dup)
                     {
-                        var o = new LevelObject { type = BuildDef.id, x = p.x, y = p.y, rotation = placeRotation, scaleX = placeScale * (placeFlipX ? -1f : 1f), scaleY = placeScale * (placeFlipY ? -1f : 1f), zLayer = BuildDef.defaultZLayer, zOrder = BuildDef.defaultZOrder, editorLayer = currentEditorLayer };
+                        float rot = followTangent ? GeoMath.NormalizeAngle(placeRotation + Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg) : placeRotation;
+                        var o = new LevelObject { type = BuildDef.id, x = p.x, y = p.y, rotation = rot, scaleX = placeScale * (placeFlipX ? -1f : 1f), scaleY = placeScale * (placeFlipY ? -1f : 1f), zLayer = BuildDef.defaultZLayer, zOrder = BuildDef.defaultZOrder, editorLayer = currentEditorLayer };
                         o.flipX = placeFlipX;
                         o.flipY = placeFlipY;
                         o.scaleX = placeScale;
@@ -330,12 +457,41 @@ namespace Geodashy.Editing
                 carry = t - len;
             }
             if (placed.Count == 0) return;
-            RecordUndo("Lay path of " + BuildDef.name);
+            foreach (var o in placed) ApplyPresetProps(o);
+            RecordUndo((curve ? "Lay curve of " : "Lay path of ") + BuildDef.name);
             AddObjects(placed, false, true);
             pathPoints.Clear();
-            ui.Toast("Placed " + placed.Count + " × " + BuildDef.name + " along the path");
+            ui.Toast("Placed " + placed.Count + " × " + BuildDef.name + (curve ? " along the curve" : " along the path"));
             Haptics.Place();
             ViewOptionsChanged?.Invoke();
+        }
+
+        // ---- auto-decorate ---------------------------------------------------------------
+        /// <summary>Fills editor layer 9 with themed decorations around the level's blocks; a second run replaces the previous one.</summary>
+        public void AutoDecorate(string theme, float density, int seed)
+        {
+            var fresh = AutoDecorator.Decorate(level, theme, density, seed);
+            RecordUndo("Auto-decorate (" + theme + ")");
+            var old = new List<int>();
+            foreach (var o in level.objects) if (o.editorLayer == AutoDecorator.Layer) old.Add(o.uid);
+            if (old.Count > 0) DeleteObjects(old, false);
+            foreach (var o in fresh) o.editorLayer = AutoDecorator.Layer;
+            AddObjects(fresh, false, false);
+            ui.Toast("Placed " + fresh.Count + " " + theme.ToLowerInvariant() + " decorations on editor layer " + AutoDecorator.Layer + (old.Count > 0 ? " (replaced " + old.Count + ")" : ""), 4f);
+        }
+
+        public void ClearAutoDecor()
+        {
+            var old = new List<int>();
+            foreach (var o in level.objects) if (o.editorLayer == AutoDecorator.Layer) old.Add(o.uid);
+            if (old.Count == 0)
+            {
+                ui.Toast("Nothing on editor layer " + AutoDecorator.Layer);
+                return;
+            }
+            RecordUndo("Clear auto-decorations");
+            DeleteObjects(old, false);
+            ui.Toast("Removed " + old.Count + " decorations");
         }
 
         // ---- replace ---------------------------------------------------------------------
@@ -600,12 +756,69 @@ namespace Geodashy.Editing
             RefreshLayerVisibility();
         }
 
+        /// <summary>Editor-only tint for the first of the object's groups that has one, or clear.</summary>
+        public Color GroupTint(LevelObject o)
+        {
+            if (level.groupInfos == null || level.groupInfos.Count == 0 || o.groups == null) return Color.clear;
+            foreach (var g in o.groups)
+            {
+                var info = level.GetGroupInfo(g, false);
+                if (info != null && !string.IsNullOrEmpty(info.colorHex) && ColorUtility.TryParseHtmlString("#" + info.colorHex.TrimStart('#'), out var c)) return c;
+            }
+            return Color.clear;
+        }
+
+        public string GroupLabel(int g)
+        {
+            var info = level.GetGroupInfo(g, false);
+            return info != null && !string.IsNullOrEmpty(info.name) ? "Group " + g + " · " + info.name : "Group " + g;
+        }
+
+        /// <summary>Object type counts inside a group, most common first.</summary>
+        public List<KeyValuePair<string, int>> GroupContents(int g)
+        {
+            var counts = new Dictionary<string, int>();
+            foreach (var o in level.objects)
+            {
+                if (!o.InGroup(g)) continue;
+                var d = ObjectCatalog.Get(o.type);
+                var n = d != null ? d.name : o.type;
+                counts[n] = counts.TryGetValue(n, out var c) ? c + 1 : 1;
+            }
+            var list = new List<KeyValuePair<string, int>>(counts);
+            list.Sort((a, b) => b.Value.CompareTo(a.Value));
+            return list;
+        }
+
+        public void SetGroupName(int g, string name)
+        {
+            var info = level.GetGroupInfo(g, true);
+            info.name = (name ?? "").Trim();
+            MarkDirty();
+            LevelChanged?.Invoke();
+        }
+
+        public void SetGroupTint(int g, Color? tint)
+        {
+            var info = level.GetGroupInfo(g, true);
+            info.colorHex = tint.HasValue ? ColorUtility.ToHtmlStringRGB(tint.Value) : "";
+            MarkDirty();
+            RefreshAllViews();
+            LevelChanged?.Invoke();
+        }
+
         void RefreshLayerVisibility()
         {
             foreach (var v in viewList)
             {
                 bool dim = !showAllLayers && v.data.editorLayer != currentEditorLayer;
                 v.SetDimmed(dim);
+                var tint = GroupTint(v.data);
+                if (tint.a > 0f)
+                {
+                    var c = v.renderer2D.color;
+                    v.renderer2D.color = new Color(Mathf.Lerp(c.r, tint.r, 0.45f), Mathf.Lerp(c.g, tint.g, 0.45f), Mathf.Lerp(c.b, tint.b, 0.45f), c.a);
+                }
                 bool hidden = IsHidden(v.data);
                 if (v.gameObject.activeSelf == hidden) v.gameObject.SetActive(!hidden);
             }
@@ -627,6 +840,7 @@ namespace Geodashy.Editing
         public void SetBuildDef(ObjectDefinition def)
         {
             if (def != null) StampBrush = null;
+            if (ActivePreset != null && (def == null || def.id != ActivePreset.type)) ActivePreset = null;
             BuildDef = def;
             if (ghost != null)
             {
@@ -660,6 +874,8 @@ namespace Geodashy.Editing
 
         /// <summary>World distance travelled per beat at the level's starting speed.</summary>
         public float BeatLength => MountCatalog.Speed(level.settings.startSpeed) * 60f / Mathf.Max(20f, level.settings.bpm);
+        /// <summary>Seconds per beat from the level BPM.</summary>
+        public float BeatSeconds => 60f / Mathf.Max(20f, level.settings.bpm);
 
         // =====================================================================
         // undo
@@ -756,6 +972,7 @@ namespace Geodashy.Editing
                 editorLayer = currentEditorLayer
             };
             foreach (var p in def.props) o.SetProp(p.key, p.defaultValue);
+            ApplyPresetProps(o);
             level.objects.Add(o);
             CreateView(o);
             MarkChanged();
@@ -1262,6 +1479,9 @@ namespace Geodashy.Editing
                 currentFilePath = LevelStorage.PathFor(level);
                 Dirty = false;
                 ui.Toast("Saved " + level.name);
+                Achievements.Unlock("first_save");
+                if (level.objects.Count >= 500) Achievements.Unlock("builder_500");
+                foreach (var o in level.objects) if (o.type == "trig_volley") { Achievements.Unlock("volley_used"); break; }
                 LevelChanged?.Invoke();
                 return true;
             }
@@ -1387,6 +1607,36 @@ namespace Geodashy.Editing
             editorCamera.Position = new Vector2(sp.x + editorCamera.HalfWidth * 0.5f, Mathf.Max(sp.y, level.settings.groundY + 4f));
         }
 
+        public void AddBookmark(string name, Vector2 pos)
+        {
+            if (level.bookmarks == null) level.bookmarks = new List<Bookmark>();
+            level.bookmarks.Add(new Bookmark { name = string.IsNullOrWhiteSpace(name) ? "Bookmark " + (level.bookmarks.Count + 1) : name.Trim(), x = Mathf.Max(0f, pos.x), y = pos.y });
+            MarkDirty();
+            LevelChanged?.Invoke();
+            ui.Toast("Bookmark added at x " + pos.x.ToString("0.#"));
+        }
+
+        public void RemoveBookmark(int index)
+        {
+            if (level.bookmarks == null || index < 0 || index >= level.bookmarks.Count) return;
+            level.bookmarks.RemoveAt(index);
+            MarkDirty();
+            LevelChanged?.Invoke();
+        }
+
+        /// <summary>Jumps the camera to a bookmark and makes it the playtest marker so ▶ Marker starts there.</summary>
+        public void GoToBookmark(int index, bool play)
+        {
+            if (level.bookmarks == null || index < 0 || index >= level.bookmarks.Count) return;
+            var b = level.bookmarks[index];
+            editorCamera.Position = new Vector2(b.x + editorCamera.HalfWidth * 0.5f, Mathf.Max(b.y, level.settings.groundY + 4f));
+            level.playtestX = b.x;
+            level.playtestY = b.y;
+            Dirty = true;
+            LevelChanged?.Invoke();
+            if (play) StartPlaytest(true);
+        }
+
         public void SetPlaytestMarker(Vector2? pos)
         {
             if (pos == null)
@@ -1416,7 +1666,12 @@ namespace Geodashy.Editing
 
         public void StartPlaytest(bool fromMarker, bool training) => StartPlaytest(fromMarker, training ? Difficulty.Training : TestDifficulty);
 
-        public void StartPlaytest(bool fromMarker, Difficulty difficulty)
+        public void StartPlaytest(bool fromMarker, Difficulty difficulty) => StartPlaytest(fromMarker, difficulty, false);
+
+        /// <summary>Sync-check playtest: the screen flashes on every beat and each jump is scored against the beat grid afterwards.</summary>
+        public void StartSyncCheck() => StartPlaytest(false, Difficulty.Training, true);
+
+        public void StartPlaytest(bool fromMarker, Difficulty difficulty, bool syncCheck)
         {
             if (IsPlaying) return;
             StopSongPreview();
@@ -1441,6 +1696,8 @@ namespace Geodashy.Editing
             go.transform.SetParent(transform, false);
             runner = go.AddComponent<GameRunner>();
             runner.DeathRecorded += RecordDeath;
+            runner.syncCheck = syncCheck;
+            if (syncCheck) ui.Toast("Sync check: the screen pulses on every beat. Jump to the music; the dots afterwards show how far off each jump was.", 5f);
             runner.Begin(level.DeepClone(), cam, background, ground, start, StopPlaytest, difficulty);
         }
 
@@ -1453,6 +1710,22 @@ namespace Geodashy.Editing
             lastRunTrace.Clear();
             lastRunTrace.AddRange(r.runTrace);
             lastRunDeath = r.player != null && r.player.dead ? r.player.deathPoint : (Vector2?)null;
+            lastRunJumps.Clear();
+            lastRunJumps.AddRange(r.jumpBeats);
+            lastRunWasSyncCheck = r.syncCheck;
+            if (r.syncCheck && lastRunJumps.Count > 0)
+            {
+                int onBeat = 0;
+                float sum = 0f;
+                foreach (var j in lastRunJumps)
+                {
+                    float off = Mathf.Abs(j.z);
+                    sum += off;
+                    if (off < 0.12f) onBeat++;
+                }
+                float avgMs = sum / lastRunJumps.Count * BeatSeconds * 1000f;
+                ui.Toast(onBeat + " of " + lastRunJumps.Count + " jumps on the beat · average " + avgMs.ToString("0") + " ms off. Green dots landed, amber were close, red missed.", 6f);
+            }
             r.Shutdown();
             Destroy(r.gameObject);
             objectsRoot.gameObject.SetActive(true);
@@ -2274,11 +2547,25 @@ namespace Geodashy.Editing
                 }
                 if (lastRunDeath.HasValue) hitboxOverlay.Dot(lastRunDeath.Value, 0.16f, new Color(1f, 0.25f, 0.25f, 0.9f));
             }
+            // sync-check jump dots: green on the beat, amber close, red off
+            if (showRunTrace && lastRunWasSyncCheck && lastRunJumps.Count > 0)
+            {
+                var view = GeoMath.Expand(editorCamera.ViewRect, 1f);
+                foreach (var j in lastRunJumps)
+                {
+                    if (j.x < view.xMin || j.x > view.xMax) continue;
+                    float off = Mathf.Abs(j.z);
+                    var c = off < 0.12f ? new Color(0.35f, 1f, 0.45f, 0.95f) : (off < 0.25f ? new Color(1f, 0.8f, 0.3f, 0.95f) : new Color(1f, 0.3f, 0.3f, 0.95f));
+                    hitboxOverlay.Dot(new Vector2(j.x, j.y), 0.14f, c);
+                    if (off >= 0.12f) hitboxOverlay.Segment(new Vector2(j.x, j.y), new Vector2(j.x - j.z * BeatLength, j.y), c, hitboxOverlay.thickness * 0.6f);
+                }
+            }
             // path tool polyline
             if (pathTool && pathPoints.Count > 0)
             {
                 var pc = new Color(1f, 0.6f, 0.2f, 0.9f);
-                for (int i = 1; i < pathPoints.Count; i++) hitboxOverlay.Segment(pathPoints[i - 1], pathPoints[i], pc, hitboxOverlay.thickness);
+                var poly = PathPolyline();
+                for (int i = 1; i < poly.Count; i++) hitboxOverlay.Segment(poly[i - 1], poly[i], pc, hitboxOverlay.thickness);
                 foreach (var p in pathPoints) hitboxOverlay.Dot(p, 0.12f, pc);
                 if (drag == DragState.None && !ui.PointerOverUI) hitboxOverlay.Segment(pathPoints[pathPoints.Count - 1], CursorSnapped, new Color(1f, 0.6f, 0.2f, 0.4f), hitboxOverlay.thickness * 0.6f);
             }

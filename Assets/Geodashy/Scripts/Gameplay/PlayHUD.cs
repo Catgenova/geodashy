@@ -29,6 +29,10 @@ namespace Geodashy.Gameplay
         RectTransform medalRow, profileChart;
         Text completeTitle;
         Button clipButton;
+        Text comboText;
+        float comboTimer;
+        Image ripple;
+        float rippleT = 1f;
         Image progressFill;
         RectTransform barRoot, markerLayer;
         Image bestMarker;
@@ -195,6 +199,19 @@ namespace Geodashy.Gameplay
             pauseExitButton = UIFactory.Button(pw, "Back to editor", () => onExit(), -1, 40, UIFactory.Danger, 16);
             UIFactory.Anchor(pw, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-200, -180), new Vector2(200, 180));
             pausePanel.gameObject.SetActive(false);
+
+            // rune combo counter and the gravity ripple ring
+            comboText = UIFactory.Label(root, "", 30, TextAnchor.MiddleCenter, BestColor, -1, -1, true);
+            UIFactory.Anchor(comboText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-200, 60), new Vector2(200, 120));
+            comboText.raycastTarget = false;
+            comboText.gameObject.SetActive(false);
+            var rippleRt = UIFactory.Rect(root, "Ripple");
+            ripple = rippleRt.gameObject.AddComponent<Image>();
+            ripple.sprite = PlaceholderSpriteFactory.Outline();
+            ripple.type = Image.Type.Sliced;
+            ripple.color = Color.clear;
+            ripple.raycastTarget = false;
+            UIFactory.Anchor(rippleRt, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-40, -40), new Vector2(40, 40));
 
             // performance readout (Options ▸ Performance overlay)
             perfText = UIFactory.Label(root, "", 12, TextAnchor.UpperLeft, new Color(0.6f, 1f, 0.7f, 0.9f));
@@ -431,6 +448,28 @@ namespace Geodashy.Gameplay
             completePanel.gameObject.SetActive(true);
         }
 
+        /// <summary>"x3" style counter for chained runes; hides itself after a moment.</summary>
+        public void ShowCombo(int n)
+        {
+            if (n < 2)
+            {
+                comboText.gameObject.SetActive(false);
+                return;
+            }
+            comboText.text = "x" + n + (n >= 5 ? "  FLOW" : "");
+            comboText.gameObject.SetActive(true);
+            comboText.rectTransform.localScale = Vector3.one * 1.4f;
+            comboTimer = 1.2f;
+        }
+
+        /// <summary>Expanding ring from the screen centre (gravity runes and gates).</summary>
+        public void Ripple(Color color)
+        {
+            if (Accessibility.ReduceFlash) return;
+            rippleT = 0f;
+            ripple.color = color;
+        }
+
         public void SetPerf(string text)
         {
             bool on = !string.IsNullOrEmpty(text);
@@ -467,6 +506,21 @@ namespace Geodashy.Gameplay
                 vignette.color = new Color(0.05f, 0.02f, 0.08f, vignetteStrength * 0.55f);
                 vignetteStrength = Mathf.Max(0f, vignetteStrength - Time.unscaledDeltaTime * 3f);
                 if (vignetteStrength <= 0f) vignette.color = Color.clear;
+            }
+            if (comboTimer > 0f)
+            {
+                comboTimer -= Time.unscaledDeltaTime;
+                comboText.rectTransform.localScale = Vector3.one * Mathf.Lerp(comboText.rectTransform.localScale.x, 1f, 1f - Mathf.Exp(-14f * Time.unscaledDeltaTime));
+                if (comboTimer <= 0f) comboText.gameObject.SetActive(false);
+            }
+            if (rippleT < 1f)
+            {
+                rippleT = Mathf.Min(1f, rippleT + Time.unscaledDeltaTime * 2.2f);
+                float s = Mathf.Lerp(1f, 22f, rippleT);
+                ripple.rectTransform.localScale = Vector3.one * s;
+                var c = ripple.color;
+                c.a = (1f - rippleT) * 0.6f;
+                ripple.color = c;
             }
             if (lootTimer > 0f)
             {

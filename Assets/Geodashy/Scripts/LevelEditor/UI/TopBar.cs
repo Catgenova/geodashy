@@ -96,7 +96,8 @@ namespace Geodashy.Editing.UI
         {
             string[] options =
             {
-                "Save", "Save as…", "Files…", "Level settings…", "▶ Training test", "⚑ Marker at camera", "Clear marker", "Rename quest…", "Help", "◀ Main menu", "History…", "Save selection as stamp…"
+                "Save", "Save as…", "Files…", "Level settings…", "▶ Training test", "⚑ Marker at camera", "Clear marker", "Rename quest…", "Help", "◀ Main menu", "History…", "Save selection as stamp…",
+                "♪ Sync check test", "Auto-decorate…", "Save brush as preset…", "+ Bookmark here", "Editor tour"
             };
             ui.ShowDropdown(menuBtn.GetComponent<RectTransform>(), options, -1, i =>
             {
@@ -121,6 +122,14 @@ namespace Geodashy.Editing.UI
                     case 9: ui.ReturnToMenu(); break;
                     case 10: ui.OpenHistory(); break;
                     case 11: ui.PromptSaveStamp(); break;
+                    case 12: editor.StartSyncCheck(); break;
+                    case 13: AutoDecorateDialog.Open(ui, editor); break;
+                    case 14: ui.palettePanel?.PromptSavePreset(); break;
+                    case 15:
+                        ui.Prompt("New bookmark", "Name for x " + editor.editorCamera.Position.x.ToString("0.#") + ":", "Section " + ((editor.level.bookmarks != null ? editor.level.bookmarks.Count : 0) + 1),
+                            n => editor.AddBookmark(n, new Vector2(Mathf.Max(0f, editor.editorCamera.Position.x - editor.editorCamera.HalfWidth * 0.5f), editor.level.settings.groundY + 0.5f)));
+                        break;
+                    case 16: EditorTour.Begin(ui); break;
                 }
             });
         }

@@ -298,6 +298,12 @@ namespace Geodashy.Editing.UI
             editor.SelectionChanged += OnSelectionChanged;
             OnModeChanged();
             OnSelectionChanged();
+            EditorTour.StartIfFirstRun(this);
+            Geodashy.Core.Achievements.Announce = msg =>
+            {
+                if (this != null) Toast(msg, 4f);
+                Geodashy.Core.Sfx.Play("horn", 0.6f, 1.3f);
+            };
         }
 
         static void EnsureEventSystem()

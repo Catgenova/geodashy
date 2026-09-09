@@ -17,7 +17,7 @@ namespace Geodashy.Editing.UI
         ParallaxBackground background;
         GroundRenderer ground;
         LevelSettings backdropSettings;
-        RectTransform root, titleScreen, levelScreen, heraldryScreen, optionsScreen, campaignScreen;
+        RectTransform root, titleScreen, levelScreen, heraldryScreen, optionsScreen, campaignScreen, deedsScreen;
         Button jumpKeyButton;
         bool remapping;
         AudioSource menuMusic;
@@ -127,6 +127,7 @@ namespace Geodashy.Editing.UI
             UIFactory.Button(titleCard, L10n.T("Level Editor"), () => app.OpenEditor(null, null), -1, phone ? 42 : 46, UIFactory.ButtonActive, phone ? 16 : 18);
             var smallRow = UIFactory.Row(titleCard, phone ? 36 : 40, 8);
             UIFactory.Button(smallRow, L10n.T("Heraldry"), ShowHeraldry, -1, phone ? 36 : 40, null, phone ? 14 : 16);
+            UIFactory.Button(smallRow, L10n.T("Deeds"), ShowDeeds, -1, phone ? 36 : 40, null, phone ? 14 : 16);
             UIFactory.Button(smallRow, L10n.T("Options"), ShowOptions, -1, phone ? 36 : 40, null, phone ? 14 : 16);
             UIFactory.Button(smallRow, L10n.T("Quit"), app.Quit, -1, phone ? 36 : 40, UIFactory.Danger, phone ? 14 : 16);
             UIFactory.Spacer(titleCard, phone ? 2 : 6);
@@ -208,6 +209,7 @@ namespace Geodashy.Editing.UI
         {
             titleScreen.gameObject.SetActive(false);
             levelScreen.gameObject.SetActive(false);
+            if (deedsScreen != null) deedsScreen.gameObject.SetActive(false);
             if (heraldryScreen != null) heraldryScreen.gameObject.SetActive(false);
             if (optionsScreen != null) optionsScreen.gameObject.SetActive(false);
             if (campaignScreen != null) Destroy(campaignScreen.gameObject);
@@ -257,7 +259,13 @@ namespace Geodashy.Editing.UI
                 // road segment drawn as a thick bar behind the node row
                 var road = UIFactory.Panel(node, "Road", new Color(0.55f, 0.45f, 0.3f, 0.6f));
                 UIFactory.Layout(road.gameObject, -1, 10);
-                var icon = UIFactory.Icon(node, SpriteLibrary.ForObject(cleared ? castle : gate), 88, unlocked ? Color.white : new Color(0.35f, 0.35f, 0.4f, 1f));
+                var icon = UIFactory.Icon(node, SpriteLibrary.ForObject(cleared ? castle : gate), 72, unlocked ? Color.white : new Color(0.35f, 0.35f, 0.4f, 1f));
+                var nodeThumb = LevelThumbnail.Get(info);
+                if (nodeThumb != null)
+                {
+                    var th = UIFactory.Icon(node, nodeThumb, 60, unlocked ? Color.white : new Color(0.5f, 0.5f, 0.55f, 1f));
+                    UIFactory.Layout(th.gameObject, 160, 60);
+                }
                 var name = UIFactory.Label(node, (i + 1) + ". " + info.name, 15, TextAnchor.MiddleCenter, unlocked ? UIFactory.Accent : UIFactory.TextDim, -1, 40, true);
                 name.horizontalOverflow = HorizontalWrapMode.Wrap;
                 string state = !unlocked ? L10n.T("Locked: clear the quest before it") : (cleared ? L10n.T("Cleared") + (stats.completions > 0 ? " · " + L10n.T("Champion seal") : "") : (stats.bestProgress > 0f ? L10n.T("Best") + " " + (stats.bestProgress * 100f).ToString("0") + "%" : L10n.T("Unexplored")));
@@ -287,6 +295,7 @@ namespace Geodashy.Editing.UI
         {
             titleScreen.gameObject.SetActive(true);
             levelScreen.gameObject.SetActive(false);
+            if (deedsScreen != null) deedsScreen.gameObject.SetActive(false);
             if (heraldryScreen != null) heraldryScreen.gameObject.SetActive(false);
             if (optionsScreen != null) optionsScreen.gameObject.SetActive(false);
             if (campaignScreen != null) campaignScreen.gameObject.SetActive(false);
@@ -296,6 +305,7 @@ namespace Geodashy.Editing.UI
         void ShowLevelSelect()
         {
             if (campaignScreen != null) campaignScreen.gameObject.SetActive(false);
+            if (deedsScreen != null) deedsScreen.gameObject.SetActive(false);
             titleScreen.gameObject.SetActive(false);
             levelScreen.gameObject.SetActive(true);
             if (heraldryScreen != null) heraldryScreen.gameObject.SetActive(false);
@@ -308,6 +318,7 @@ namespace Geodashy.Editing.UI
         void ShowOptions()
         {
             if (campaignScreen != null) campaignScreen.gameObject.SetActive(false);
+            if (deedsScreen != null) deedsScreen.gameObject.SetActive(false);
             titleScreen.gameObject.SetActive(false);
             levelScreen.gameObject.SetActive(false);
             if (heraldryScreen != null) heraldryScreen.gameObject.SetActive(false);
@@ -407,9 +418,66 @@ namespace Geodashy.Editing.UI
             UIFactory.Label(frame, "Effects live in Assets/Geodashy/Resources/SFX; replace any file to change a sound.", 12, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 30);
         }
 
+        // ---- deeds (achievements) -----------------------------------------------
+
+        void ShowDeeds()
+        {
+            titleScreen.gameObject.SetActive(false);
+            levelScreen.gameObject.SetActive(false);
+            if (campaignScreen != null) campaignScreen.gameObject.SetActive(false);
+            if (heraldryScreen != null) heraldryScreen.gameObject.SetActive(false);
+            if (optionsScreen != null) optionsScreen.gameObject.SetActive(false);
+            if (deedsScreen != null) Destroy(deedsScreen.gameObject);
+            deedsScreen = BuildScreen("Deeds", L10n.T("Deeds of renown"), 420, 320, out var frame);
+            UIFactory.Label(frame, Achievements.UnlockedCount + " of " + Achievements.All.Length + " deeds done. Deeds unlock while you ride and build; a horn sounds when one is earned.", 13, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 36);
+            foreach (var d in Achievements.All)
+            {
+                bool done = Achievements.IsUnlocked(d.id);
+                var row = UIFactory.Row(frame, 44, 8);
+                row.gameObject.AddComponent<Image>().color = done ? new Color(0.62f, 0.48f, 0.18f, 0.25f) : new Color(0, 0, 0, 0.15f);
+                UIFactory.Label(row, done ? "✓" : "○", 20, TextAnchor.MiddleCenter, done ? UIFactory.Accent : UIFactory.TextDim, 32, 44, true);
+                var col = UIFactory.Column(row, -1, 0);
+                UIFactory.Label(col, d.name, 14, TextAnchor.MiddleLeft, done ? UIFactory.Accent : UIFactory.TextColor, -1, 22, true);
+                UIFactory.Label(col, d.description, 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 20);
+            }
+            deedsScreen.gameObject.SetActive(true);
+        }
+
+        /// <summary>Top runs on a level, from the local stats file, with a Copy as text button for bragging.</summary>
+        void BuildLeaderboard(Transform parent, LevelFileInfo info, LevelStats stats)
+        {
+            UIFactory.SectionHeader(parent, "Best runs");
+            if (stats.bestRuns == null || stats.bestRuns.Count == 0)
+            {
+                UIFactory.Label(parent, "No full runs timed yet: clear the quest from the start to enter the table.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 20);
+                return;
+            }
+            var sb = new System.Text.StringBuilder();
+            sb.Append(info.name).Append(" — best runs\n");
+            int rank = 1;
+            foreach (var r in stats.bestRuns)
+            {
+                var row = UIFactory.Row(parent, 22, 6);
+                row.gameObject.AddComponent<Image>().color = rank == 1 ? new Color(0.62f, 0.48f, 0.18f, 0.25f) : new Color(0, 0, 0, 0.12f);
+                UIFactory.Label(row, rank + ".", 12, TextAnchor.MiddleRight, UIFactory.TextDim, 22, 22);
+                UIFactory.Label(row, string.IsNullOrEmpty(r.rider) ? "Rider" : r.rider, 12, TextAnchor.MiddleLeft, UIFactory.TextColor, 110, 22, rank == 1);
+                UIFactory.Label(row, r.seconds.ToString("0.00") + " s", 12, TextAnchor.MiddleRight, UIFactory.Accent, 70, 22);
+                UIFactory.Label(row, r.medals, 12, TextAnchor.MiddleCenter, UIFactory.TextDim, 50, 22);
+                UIFactory.Label(row, r.attempts + " tries · " + DateTimeOffset.FromUnixTimeSeconds(r.dateUnix).LocalDateTime.ToString("yyyy-MM-dd"), 11, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 22);
+                sb.Append(rank).Append(". ").Append(string.IsNullOrEmpty(r.rider) ? "Rider" : r.rider).Append("  ").Append(r.seconds.ToString("0.00")).Append(" s  ").Append(r.medals).Append("  (").Append(r.attempts).Append(" tries)\n");
+                rank++;
+            }
+            UIFactory.Label(parent, "Medals: S = Champion, L = all loot, D = deathless.", 10, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 16);
+            UIFactory.Button(parent, "Copy table as text", () =>
+            {
+                GUIUtility.systemCopyBuffer = sb.ToString();
+            }, 170, 26, null, 12);
+        }
+
         void ShowHeraldry()
         {
             if (campaignScreen != null) campaignScreen.gameObject.SetActive(false);
+            if (deedsScreen != null) deedsScreen.gameObject.SetActive(false);
             titleScreen.gameObject.SetActive(false);
             levelScreen.gameObject.SetActive(false);
             if (optionsScreen != null) optionsScreen.gameObject.SetActive(false);
@@ -427,6 +495,13 @@ namespace Geodashy.Editing.UI
             var previewRow = UIFactory.Row(frame, preview, 24, TextAnchor.MiddleCenter);
             heraldryCrestPreview = UIFactory.Icon(previewRow, null, preview);
             heraldryMountPreview = UIFactory.Icon(previewRow, null, preview);
+
+            UIFactory.SectionHeader(frame, "Rider name");
+            TextField.Create(frame, "Name", PlayerProfile.Name, v =>
+            {
+                if (!string.IsNullOrWhiteSpace(v)) PlayerProfile.Name = v.Trim();
+            }, 80, 30, "Rider");
+            UIFactory.Label(frame, "Shown on the best-runs table of every quest you clear.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 18);
 
             UIFactory.SectionHeader(frame, "Crest");
             var crestRow = UIFactory.Row(frame, 44, 6);
@@ -527,11 +602,19 @@ namespace Geodashy.Editing.UI
                 string status = stats.completions > 0 ? "✔ cleared" : (stats.bestProgress > 0f ? (stats.bestProgress * 100f).ToString("0") + "%" : "new");
                 if (stats.fullLoot) status += " · all loot";
                 string tags = (string.IsNullOrEmpty(i.difficultyTag) ? "" : LevelRating.Name(i.difficultyTag) + " · ") + i.LengthTag;
-                var b = UIFactory.Button(listContent, (i.builtIn ? "★ " : "") + i.name + "\n<size=11>" + (string.IsNullOrEmpty(i.author) ? "unknown author" : i.author) + " · " + status + "   [" + tags + "]</size>",
+                var b = UIFactory.Button(listContent, (i.builtIn ? "★ " : "") + i.name + (string.IsNullOrEmpty(i.pack) ? "" : "  <color=#7fd0ff>[" + i.pack + "]</color>") + "\n<size=11>" + (string.IsNullOrEmpty(i.author) ? "unknown author" : i.author) + " · " + status + "   [" + tags + "]</size>",
                     () => Select(i), -1, 52, null, 15);
                 var t = b.GetComponentInChildren<Text>();
                 t.alignment = TextAnchor.MiddleLeft;
                 t.supportRichText = true;
+                var thumb = LevelThumbnail.Get(i);
+                if (thumb != null)
+                {
+                    var img = UIFactory.Icon(b.transform, thumb, 44);
+                    UIFactory.Anchor(img.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(4, -22), new Vector2(120, 22));
+                    Destroy(img.GetComponent<LayoutElement>());
+                    UIFactory.Stretch(t.rectTransform, 128, 2, 4, 2);
+                }
                 rowButtons.Add(b);
             }
             LevelFileInfo keep = null;
@@ -548,7 +631,17 @@ namespace Geodashy.Editing.UI
             var stats = LevelStatsStorage.Load(info.id);
             var mount = MountCatalog.Get(info.startMount);
             UIFactory.Label(detailPane, info.name, 24, TextAnchor.MiddleLeft, UIFactory.Accent, -1, 36, true);
-            UIFactory.Label(detailPane, "by " + (string.IsNullOrEmpty(info.author) ? "unknown" : info.author) + (info.builtIn ? "  ·  built-in" : ""), 13, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 20);
+            var big = LevelThumbnail.Get(info);
+            if (big != null)
+            {
+                var imgHost = UIFactory.Rect(detailPane, "Thumb");
+                UIFactory.Layout(imgHost.gameObject, -1, phone ? 72 : 108);
+                var img = imgHost.gameObject.AddComponent<Image>();
+                img.sprite = big;
+                img.preserveAspect = true;
+                img.raycastTarget = false;
+            }
+            UIFactory.Label(detailPane, "by " + (string.IsNullOrEmpty(info.author) ? "unknown" : info.author) + (info.builtIn ? "  ·  built-in" : "") + (string.IsNullOrEmpty(info.pack) ? "" : "  ·  pack: " + info.pack), 13, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 20);
             if (!string.IsNullOrEmpty(info.description)) UIFactory.Label(detailPane, info.description, 13, TextAnchor.UpperLeft, UIFactory.TextColor, -1, 48);
             var row = UIFactory.Row(detailPane, 72, 12);
             var mountIcon = UIFactory.Icon(row, SpriteLibrary.ForMount(mount), 72);
@@ -562,6 +655,7 @@ namespace Geodashy.Editing.UI
             string best = stats.completions > 0 ? "Champion: cleared " + stats.completions + "×" : (stats.bestProgress > 0f ? "Champion best " + (stats.bestProgress * 100f).ToString("0.0") + "%" : "Champion: not attempted");
             UIFactory.Label(detailPane, best + "  ·  " + stats.attempts + " attempts" + (stats.checkpointCompletions > 0 ? "  ·  Checkpoints: cleared " + stats.checkpointCompletions + "×" : "") + (stats.fullLoot ? "  ·  all loot gathered" : ""), 13, TextAnchor.MiddleLeft, UIFactory.TextColor, -1, 22);
             BuildDeathChart(detailPane, stats);
+            BuildLeaderboard(detailPane, info, stats);
             UIFactory.SectionHeader(detailPane, "Ride out");
             UIFactory.Button(detailPane, "▶ Training", () => Launch(info, Difficulty.Training), -1, 40, null, 16);
             UIFactory.Label(detailPane, DifficultyInfo.Describe(Difficulty.Training), 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 30);

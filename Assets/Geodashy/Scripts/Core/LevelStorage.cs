@@ -21,6 +21,7 @@ namespace Geodashy.Core
         public string backgroundTheme;
         public int campaignOrder;
         public string difficultyTag;
+        public string pack;
         public string LengthTag => LevelRating.LengthName(lengthSeconds);
         public string DifficultyName => LevelRating.Name(difficultyTag);
     }
@@ -216,8 +217,55 @@ namespace Geodashy.Core
             File.Move(tmp, path);
         }
 
+        public const int AutosaveVersions = 10;
+
+        /// <summary>Folder of timestamped autosave versions for a level.</summary>
+        public static string VersionsDirectory(string levelId)
+        {
+            var dir = Path.Combine(BackupDirectory, "versions", SafeFileName(levelId));
+            if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+            return dir;
+        }
+
+        /// <summary>Keeps the last ten autosaves per level so an accident can be undone from the Files dialog.</summary>
+        public static void SaveAutosaveVersion(LevelData data)
+        {
+            try
+            {
+                var dir = VersionsDirectory(data.id);
+                var path = Path.Combine(dir, DateTimeOffset.UtcNow.ToUnixTimeSeconds() + ".json");
+                File.WriteAllText(path, LevelSerializer.ToJson(data, false));
+                var files = Directory.GetFiles(dir, "*.json");
+                Array.Sort(files, StringComparer.Ordinal);
+                for (int i = 0; i < files.Length - AutosaveVersions; i++) File.Delete(files[i]);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("Autosave version failed: " + e.Message);
+            }
+        }
+
+        /// <summary>Timestamped versions, newest first: (path, time).</summary>
+        public static List<KeyValuePair<string, DateTime>> ListAutosaveVersions(string levelId)
+        {
+            var list = new List<KeyValuePair<string, DateTime>>();
+            try
+            {
+                foreach (var f in Directory.GetFiles(VersionsDirectory(levelId), "*.json"))
+                {
+                    if (long.TryParse(Path.GetFileNameWithoutExtension(f), out var unix)) list.Add(new KeyValuePair<string, DateTime>(f, DateTimeOffset.FromUnixTimeSeconds(unix).LocalDateTime));
+                }
+            }
+            catch (Exception)
+            {
+            }
+            list.Sort((a, b) => b.Value.CompareTo(a.Value));
+            return list;
+        }
+
         public static void SaveAutosave(LevelData data)
         {
+            SaveAutosaveVersion(data);
             var json = LevelSerializer.ToJson(data, false);
             File.WriteAllText(Path.Combine(BackupDirectory, "autosave.json"), json);
         }
@@ -253,7 +301,7 @@ namespace Geodashy.Core
                 path = path, id = d.id, name = d.name, author = d.author, objectCount = d.objects.Count, modified = modified, builtIn = builtIn,
                 description = d.description, startMount = d.settings.startMount, backgroundTheme = d.settings.backgroundTheme,
                 lengthSeconds = d.GetFinishX() / MountCatalog.Speed(d.settings.startSpeed), campaignOrder = d.campaignOrder,
-                difficultyTag = d.settings.difficultyTag ?? ""
+                difficultyTag = d.settings.difficultyTag ?? "", pack = d.pack ?? ""
             };
         }
 

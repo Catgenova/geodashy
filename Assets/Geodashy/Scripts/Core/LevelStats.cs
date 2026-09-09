@@ -28,6 +28,17 @@ namespace Geodashy.Core
         public List<float> bestRunY = new List<float>();
         public float bestRunProgress;
         public const float BestRunStep = 0.05f;
+        /// <summary>Best Champion clears, fastest first (at most five).</summary>
+        public List<RunRecord> bestRuns = new List<RunRecord>();
+
+        public void AddRun(RunRecord r)
+        {
+            if (bestRuns == null) bestRuns = new List<RunRecord>();
+            bestRuns.Add(r);
+            bestRuns.Sort((a, b) => a.seconds.CompareTo(b.seconds));
+            if (bestRuns.Count > 5) bestRuns.RemoveRange(5, bestRuns.Count - 5);
+        }
+
         /// <summary>Death causes (object names) and how often each ended a full run.</summary>
         public List<string> killerNames = new List<string>();
         public List<int> killerCounts = new List<int>();
@@ -76,6 +87,16 @@ namespace Geodashy.Core
         }
     }
 
+    [Serializable]
+    public class RunRecord
+    {
+        public string rider = "";
+        public float seconds;
+        public long dateUnix;
+        public string medals = "";
+        public int attempts;
+    }
+
     public static class LevelStatsStorage
     {
         static string Directory_
@@ -105,6 +126,7 @@ namespace Geodashy.Core
                         if (s.bestRunY == null) s.bestRunY = new List<float>();
                         if (s.killerNames == null) s.killerNames = new List<string>();
                         if (s.killerCounts == null) s.killerCounts = new List<int>();
+                        if (s.bestRuns == null) s.bestRuns = new List<RunRecord>();
                         s.levelId = levelId;
                         return s;
                     }

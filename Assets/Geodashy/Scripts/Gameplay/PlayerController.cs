@@ -58,6 +58,7 @@ namespace Geodashy.Gameplay
         float pressBuffer;
         float holdTime;
         bool dashing;
+        public bool IsDashing => dashing;
         bool dashFlip;
 
         readonly HashSet<int> usedInteractables = new HashSet<int>();
@@ -120,6 +121,7 @@ namespace Geodashy.Gameplay
 
         public void SetMount(string id)
         {
+            Achievements.MountRidden(id);
             mount = MountCatalog.Get(id);
             anim = SpriteLibrary.ForMountAnimation(mount);
             sr.sprite = SpriteLibrary.ForMount(mount);

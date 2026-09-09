@@ -19,6 +19,10 @@ namespace Geodashy.Editing.UI
         LevelEditor editor;
         RectTransform rt;
         RectTransform cameraLine, viewBox, songLine;
+        Image waveform;
+        Sprite waveformSprite;
+        string waveKey = "";
+        const int WaveColumns = 640;
         readonly List<Image> barPool = new List<Image>();
         readonly List<TimelineMarker> markerPool = new List<TimelineMarker>();
         Text lengthLabel;
@@ -40,6 +44,13 @@ namespace Geodashy.Editing.UI
 
         void Build()
         {
+            var wave = UIFactory.Rect(rt, "Waveform");
+            UIFactory.Stretch(wave, 0, 1, 0, 1);
+            waveform = wave.gameObject.AddComponent<Image>();
+            waveform.raycastTarget = false;
+            waveform.preserveAspect = false;
+            waveform.color = new Color(EditorGrid.SongColor.r, EditorGrid.SongColor.g, EditorGrid.SongColor.b, 0.55f);
+            waveform.enabled = false;
             viewBox = UIFactory.Panel(rt, "View", new Color(1f, 1f, 1f, 0.08f));
             viewBox.GetComponent<Image>().raycastTarget = false;
             cameraLine = UIFactory.Panel(rt, "Camera", new Color(0.4f, 0.85f, 1f, 0.9f));
@@ -51,7 +62,76 @@ namespace Geodashy.Editing.UI
             UIFactory.Anchor(lengthLabel.rectTransform, new Vector2(1, 0), new Vector2(1, 1), new Vector2(-90, 0), new Vector2(-4, 0));
             editor.LevelChanged += () => version++;
             editor.ViewOptionsChanged += () => version++;
+            editor.SongChanged += () => { waveKey = ""; version++; };
             Rebuild();
+        }
+
+        /// <summary>
+        /// Paints the song's loudness along the strip: each column is a level x, turned into a song time by walking the
+        /// speed portals, so the waveform stretches and squeezes exactly like the music will while riding.
+        /// </summary>
+        void RebuildWaveform(float length)
+        {
+            var data = editor.SongWaveform;
+            if (data == null || data.Length == 0 || editor.SongLength <= 0f)
+            {
+                waveform.enabled = false;
+                waveKey = "";
+                return;
+            }
+            var sb = new System.Text.StringBuilder();
+            sb.Append(editor.SongLength.ToString("0.00")).Append('|').Append(editor.level.settings.songOffset.ToString("0.000")).Append('|').Append(length.ToString("0.0")).Append('|').Append(editor.level.settings.startSpeed);
+            foreach (var o in editor.level.objects)
+            {
+                var d = ObjectCatalog.Get(o.type);
+                if (d != null && d.kind == ObjectKind.Portal && d.portalType == PortalType.Speed) sb.Append(';').Append(o.x.ToString("0.0")).Append(':').Append((int)d.portalSpeed);
+            }
+            var key = sb.ToString();
+            if (key == waveKey && waveformSprite != null)
+            {
+                waveform.enabled = true;
+                return;
+            }
+            waveKey = key;
+            int h = 24;
+            var r = new Geodashy.Rendering.Raster(WaveColumns, h);
+            var col = Color.white;
+            float offset = editor.level.settings.songOffset;
+            // one speed-portal walk for the whole strip: columns are in x order, so the travel time only grows
+            var portals = new List<KeyValuePair<float, int>>();
+            foreach (var o in editor.level.objects)
+            {
+                var d = ObjectCatalog.Get(o.type);
+                if (d != null && d.kind == ObjectKind.Portal && d.portalType == PortalType.Speed) portals.Add(new KeyValuePair<float, int>(o.x, (int)d.portalSpeed));
+            }
+            portals.Sort((a, b) => a.Key.CompareTo(b.Key));
+            int pi = 0;
+            float x = 0f, t = 0f;
+            float speed = MountCatalog.Speed(editor.level.settings.startSpeed);
+            for (int c = 0; c < WaveColumns; c++)
+            {
+                float target = (c + 0.5f) / WaveColumns * length;
+                while (pi < portals.Count && portals[pi].Key <= target)
+                {
+                    if (portals[pi].Key > x)
+                    {
+                        t += (portals[pi].Key - x) / speed;
+                        x = portals[pi].Key;
+                    }
+                    speed = MountCatalog.Speed(portals[pi].Value);
+                    pi++;
+                }
+                float time = t + (target - x) / speed + offset;
+                if (time < 0f || time > editor.SongLength) continue;
+                int bin = Mathf.Clamp(Mathf.FloorToInt(time / editor.SongLength * data.Length), 0, data.Length - 1);
+                float amp = Mathf.Clamp01(data[bin]);
+                float half = Mathf.Max(0.5f, amp * h * 0.5f);
+                r.FillRect(c, h * 0.5f - half, c + 1, h * 0.5f + half, col);
+            }
+            if (waveformSprite != null) UnityEngine.Object.Destroy(waveformSprite.texture);
+            waveformSprite = r.ToSprite(1f);
+            waveform.sprite = waveformSprite;
+            waveform.enabled = true;
         }
 
         Image Bar(int i)
@@ -109,9 +189,32 @@ namespace Geodashy.Editing.UI
                 r.offsetMax = new Vector2(r.offsetMax.x, -2);
             }
             for (int i = used; i < barPool.Count; i++) barPool[i].enabled = false;
+            RebuildWaveform(length);
+
+            // bookmarks: cyan diamonds you can click to jump there
+            int m = 0;
+            if (editor.level.bookmarks != null)
+            {
+                for (int bi = 0; bi < editor.level.bookmarks.Count && m < 380; bi++)
+                {
+                    var bm = editor.level.bookmarks[bi];
+                    var mk = Marker(m++);
+                    mk.uid = -1;
+                    mk.bookmark = bi;
+                    mk.draggable = false;
+                    mk.gameObject.SetActive(true);
+                    mk.image.color = new Color(0.45f, 0.95f, 1f, 0.95f);
+                    var br = mk.image.rectTransform;
+                    br.anchorMin = new Vector2(0, 0.5f);
+                    br.anchorMax = new Vector2(0, 0.5f);
+                    br.pivot = new Vector2(0.5f, 0.5f);
+                    br.sizeDelta = new Vector2(h - 10f, h - 10f);
+                    br.localRotation = Quaternion.Euler(0, 0, 45f);
+                    br.anchoredPosition = new Vector2(ToLocal(bm.x), 0);
+                }
+            }
 
             // trigger and portal markers
-            int m = 0;
             foreach (var o in editor.level.objects)
             {
                 var def = ObjectCatalog.Get(o.type);
@@ -123,8 +226,10 @@ namespace Geodashy.Editing.UI
                 if (m >= 400) break;
                 var mk = Marker(m++);
                 mk.uid = o.uid;
+                mk.bookmark = -1;
                 mk.draggable = trigger;
                 mk.gameObject.SetActive(true);
+                mk.image.rectTransform.localRotation = Quaternion.identity;
                 mk.image.color = trigger ? def.primaryColor : (portal ? new Color(def.primaryColor.r, def.primaryColor.g, def.primaryColor.b, 0.9f) : new Color(0.4f, 1f, 0.5f, 0.9f));
                 var r = mk.image.rectTransform;
                 r.anchorMin = new Vector2(0, 0.5f);
@@ -219,6 +324,11 @@ namespace Geodashy.Editing.UI
 
         public void ClickMarker(TimelineMarker m)
         {
+            if (m.bookmark >= 0)
+            {
+                editor.GoToBookmark(m.bookmark, false);
+                return;
+            }
             var o = editor.level.FindByUid(m.uid);
             if (o == null) return;
             editor.editorCamera.Position = new Vector2(o.x, editor.editorCamera.Position.y);
@@ -233,6 +343,7 @@ namespace Geodashy.Editing.UI
         public TimelineStrip strip;
         public Image image;
         public int uid;
+        public int bookmark = -1;
         public bool draggable;
         bool dragging;
 

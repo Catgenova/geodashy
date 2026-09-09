@@ -23,14 +23,102 @@ namespace Geodashy.Editing.UI
         Button pathButton;
         string lastSearch = "";
         public const string StampsCategory = "Stamps";
-        Button deleteStampButton;
+        public const string FavouritesCategory = "★ Favourites";
+        Button deleteStampButton, favouriteButton, presetButton, curveButton;
         readonly Dictionary<string, Stamp> stampTiles = new Dictionary<string, Stamp>();
+        readonly Dictionary<BrushPreset, Button> presetTiles = new Dictionary<BrushPreset, Button>();
 
         static string[] CategoriesWithStamps()
         {
-            var list = new List<string>(ObjectCatalog.Categories);
+            var list = new List<string> { FavouritesCategory };
+            list.AddRange(ObjectCatalog.Categories);
             list.Add(StampsCategory);
             return list.ToArray();
+        }
+
+        void ToggleFavourite()
+        {
+            var def = editor.BuildDef;
+            if (def == null)
+            {
+                ui.Toast("Pick a brush object first");
+                return;
+            }
+            PresetStorage.ToggleFavourite(def.id);
+            ui.Toast(PresetStorage.IsFavourite(def.id) ? def.name + " added to ★ Favourites" : def.name + " removed from ★ Favourites");
+            if (currentCategory == FavouritesCategory) ShowCategory(FavouritesCategory);
+            RefreshPlacement();
+        }
+
+        public void PromptSavePreset()
+        {
+            var def = editor.BuildDef;
+            if (def == null)
+            {
+                ui.Toast("Pick a brush object first");
+                return;
+            }
+            ui.Prompt("Save brush preset", "Saves " + def.name + " with its rotation, scale, flips" + (editor.SelectedObjects().Count == 1 ? ", colour and properties of the selected object" : "") + " to the ★ Favourites shelf. Name:", def.name + " preset", n =>
+            {
+                var p = editor.CurrentBrushAsPreset(string.IsNullOrWhiteSpace(n) ? def.name + " preset" : n.Trim());
+                if (p == null) return;
+                PresetStorage.AddPreset(p);
+                ui.Toast("Preset saved to ★ Favourites");
+                if (currentCategory == FavouritesCategory) ShowCategory(FavouritesCategory);
+            });
+        }
+
+        void PopulateFavourites()
+        {
+            foreach (Transform child in gridContent) Destroy(child.gameObject);
+            tiles.Clear();
+            stampTiles.Clear();
+            presetTiles.Clear();
+            int n = 0;
+            foreach (var id in PresetStorage.Favourites)
+            {
+                var d = ObjectCatalog.Get(id);
+                if (d == null) continue;
+                n++;
+                var b = UIFactory.TileButton(gridContent, SpriteLibrary.ForObject(d), d.name, () =>
+                {
+                    editor.SetBuildDef(d);
+                    if (editor.Mode != EditorMode.Build) editor.SetMode(EditorMode.Build);
+                });
+                tiles[d.id] = b;
+            }
+            foreach (var p in PresetStorage.Presets)
+            {
+                var preset = p;
+                var d = ObjectCatalog.Get(preset.type);
+                if (d == null) continue;
+                n++;
+                var b = UIFactory.TileButton(gridContent, SpriteLibrary.ForObject(d), "⚙ " + preset.name, () => editor.ApplyPreset(preset));
+                presetTiles[preset] = b;
+            }
+            if (n == 0)
+            {
+                var hint = UIFactory.Label(gridContent, "Nothing starred yet. Pick any object and press ★ to keep it here; Save preset keeps its rotation, scale, colour and properties too.", 12, TextAnchor.UpperLeft, UIFactory.TextDim, 240, 76);
+                hint.horizontalOverflow = HorizontalWrapMode.Wrap;
+            }
+            gridScroll.verticalNormalizedPosition = 1f;
+            gridScroll.horizontalNormalizedPosition = 0f;
+            RefreshPlacement();
+        }
+
+        void DeleteCurrentPreset()
+        {
+            var p = editor.ActivePreset;
+            if (p == null) return;
+            ui.Confirm("Remove preset " + p.name + "?", "Only the preset is removed; objects placed with it stay.", () =>
+            {
+                PresetStorage.RemovePreset(p);
+                var def = editor.BuildDef;
+                editor.SetBuildDef(null);
+                editor.SetBuildDef(def);
+                if (currentCategory == FavouritesCategory) ShowCategory(FavouritesCategory);
+                ui.Toast("Preset removed");
+            }, "Remove");
         }
 
         public static PalettePanel Create(EditorUI ui, RectTransform dock)
@@ -61,7 +149,9 @@ namespace Geodashy.Editing.UI
                 int cur = System.Array.IndexOf(cats, currentCategory);
                 ui.ShowDropdown(categoryButton.GetComponent<RectTransform>(), cats, cur, i => ShowCategory(cats[i]));
             }, -1, 40, UIFactory.InputBg, 13);
-            UIFactory.Button(left, "Search…", () =>
+            var searchRow = UIFactory.Row(left, 40, 4);
+            favouriteButton = UIFactory.Button(searchRow, "☆", ToggleFavourite, 40, 40, null, 18);
+            UIFactory.Button(searchRow, "Search…", () =>
             {
                 ui.Prompt("Search objects", "Name, tag or category:", lastSearch, q =>
                 {
@@ -117,8 +207,13 @@ namespace Geodashy.Editing.UI
                 editor.SetPathTool(!editor.pathTool);
                 ui.Toast(editor.pathTool ? "Path tool: tap points, then Lay" : "Path tool off");
             }, -1, 40, null, 12);
-            UIFactory.Button(r4, "Lay grid", () => editor.LayPath(false), -1, 40, UIFactory.Good, 12);
-            UIFactory.Button(r4, "Lay beat", () => editor.LayPath(true), -1, 40, UIFactory.Good, 12);
+            curveButton = UIFactory.Button(r4, "Curve", () =>
+            {
+                editor.SetPathCurve(!editor.pathCurve);
+                ui.Toast(editor.pathCurve ? "Curve: the path bends smoothly through the points and objects follow its direction" : "Straight path segments");
+            }, -1, 40, null, 12);
+            UIFactory.Button(r4, "Lay", () => editor.LayPath(false), -1, 40, UIFactory.Good, 12);
+            UIFactory.Button(r4, "Lay ♪", () => editor.LayPath(true), -1, 40, UIFactory.Good, 12);
             deleteStampButton = UIFactory.Button(left, "Delete stamp", DeleteCurrentStamp, -1, 0, UIFactory.Danger, 12);
             deleteStampButton.gameObject.SetActive(false);
 
@@ -235,16 +330,37 @@ namespace Geodashy.Editing.UI
             UIFactory.Label(right, "Click to place · Ctrl+click to select · Esc clears the brush", 11, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 20);
             deleteStampButton = UIFactory.Button(right, "Delete this stamp", DeleteCurrentStamp, -1, 24, UIFactory.Danger, 11);
             deleteStampButton.gameObject.SetActive(false);
+            var fr = UIFactory.Row(right, 26, 3);
+            favouriteButton = UIFactory.Button(fr, "☆ Favourite", ToggleFavourite, -1, 24, null, 11);
+            presetButton = UIFactory.Button(fr, "Save preset…", () =>
+            {
+                if (editor.ActivePreset != null) DeleteCurrentPreset();
+                else PromptSavePreset();
+            }, -1, 24, null, 11);
             var pr = UIFactory.Row(right, 26, 3);
             pathButton = UIFactory.Button(pr, "Path tool", () => editor.SetPathTool(!editor.pathTool), -1, 24, null, 11);
+            curveButton = UIFactory.Button(pr, "Curve", () => editor.SetPathCurve(!editor.pathCurve), -1, 24, null, 11);
             UIFactory.Button(pr, "Lay (grid)", () => editor.LayPath(false), -1, 24, UIFactory.Good, 11);
             UIFactory.Button(pr, "Lay (beat)", () => editor.LayPath(true), -1, 24, UIFactory.Good, 11);
             UIFactory.Button(pr, "Clear", editor.ClearPath, 48, 24, null, 11);
+            UIFactory.Label(right, "Curve bends the path smoothly through its points and turns each object to follow it.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 30);
 
             ShowCategory(currentCategory);
             editor.ViewOptionsChanged += RefreshPlacement;
             editor.StampsChanged += () => { if (currentCategory == StampsCategory) ShowCategory(StampsCategory); };
+            PresetStorage.Changed += OnPresetsChanged;
             RefreshPlacement();
+        }
+
+        void OnPresetsChanged()
+        {
+            if (this == null || gridContent == null) return;
+            if (currentCategory == FavouritesCategory) ShowCategory(FavouritesCategory);
+        }
+
+        void OnDestroy()
+        {
+            PresetStorage.Changed -= OnPresetsChanged;
         }
 
         void OnSearchChanged(string q)
@@ -268,6 +384,11 @@ namespace Geodashy.Editing.UI
                 PopulateStamps();
                 return;
             }
+            if (cat == FavouritesCategory)
+            {
+                PopulateFavourites();
+                return;
+            }
             Populate(ObjectCatalog.InCategory(cat));
         }
 
@@ -276,6 +397,7 @@ namespace Geodashy.Editing.UI
             foreach (Transform child in gridContent) Destroy(child.gameObject);
             tiles.Clear();
             stampTiles.Clear();
+            presetTiles.Clear();
             foreach (var def in defs)
             {
                 var d = def;
@@ -296,8 +418,17 @@ namespace Geodashy.Editing.UI
             if (selectedName == null) return;   // panel destroyed
             var def = editor.BuildDef;
             var stamp = editor.StampBrush;
-            foreach (var kv in tiles) UIFactory.SetButtonActive(kv.Value, def != null && kv.Key == def.id);
+            foreach (var kv in tiles) UIFactory.SetButtonActive(kv.Value, def != null && kv.Key == def.id && editor.ActivePreset == null);
             foreach (var kv in stampTiles) UIFactory.SetButtonActive(kv.Value, stamp != null && kv.Key == stamp.path);
+            foreach (var kv in presetTiles) UIFactory.SetButtonActive(kv.Value, editor.ActivePreset == kv.Key);
+            if (favouriteButton != null)
+            {
+                bool fav = def != null && PresetStorage.IsFavourite(def.id);
+                UIFactory.SetButtonLabel(favouriteButton, ui.IsPhone ? (fav ? "★" : "☆") : (fav ? "★ Favourite" : "☆ Favourite"));
+                UIFactory.SetButtonActive(favouriteButton, fav);
+            }
+            if (presetButton != null) UIFactory.SetButtonLabel(presetButton, editor.ActivePreset != null ? "Remove preset" : "Save preset…");
+            if (curveButton != null) UIFactory.SetButtonActive(curveButton, editor.pathCurve);
             if (deleteStampButton != null)
             {
                 bool showDelete = stamp != null && currentCategory == StampsCategory;
@@ -313,6 +444,11 @@ namespace Geodashy.Editing.UI
             {
                 selectedName.text = "Stamp: " + stamp.name;
                 selectedDesc.text = stamp.objects.Count + " objects · " + stamp.width.ToString("0.#") + "×" + stamp.height.ToString("0.#") + " · tap to place";
+            }
+            else if (editor.ActivePreset != null && def != null)
+            {
+                selectedName.text = "⚙ " + editor.ActivePreset.name;
+                selectedDesc.text = def.name + " preset: " + editor.ActivePreset.props.Count + " properties" + (editor.ActivePreset.baseColor != 0 ? ", colour " + ColorChannelIds.Name(editor.ActivePreset.baseColor) : "") + " · applied to every placement";
             }
             else
             {

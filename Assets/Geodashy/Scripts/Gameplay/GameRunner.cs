@@ -108,6 +108,18 @@ namespace Geodashy.Gameplay
         readonly List<Reactive> reactive = new List<Reactive>();
         float beatEnergy;
 
+        // ---- rune combos, coin streaks, sync check, crash guard ----
+        int combo;
+        float comboTimer;
+        int coinStreak;
+        float coinStreakTimer;
+        float dashLineTimer;
+        public bool syncCheck;
+        /// <summary>Jumps of the last run: x, y and the offset from the nearest beat in beats (-0.5..0.5).</summary>
+        public readonly List<Vector3> jumpBeats = new List<Vector3>();
+        bool crashed;
+        int lastFlashBeat = -1;
+
         // ---- captures, performance readout, profiler markers ----
         CaptureRecorder recorder;
         float perfTimer, perfFps;
@@ -200,6 +212,14 @@ namespace Geodashy.Gameplay
             replayGhost = MakeGhost("Replay Ghost", 4);
             bestGhost = MakeGhost("Best Run Ghost", 3);
             CollectReactive();
+            CrashGuard.Hook();
+            previousAnnounce = Achievements.Announce;
+            Achievements.Announce = msg =>
+            {
+                if (hud != null) hud.ShowHint(msg, 4f);
+                Sfx.Play("horn", 0.6f, 1.3f);
+            };
+            Achievements.LevelPlayed(level.id);
             recorder = CaptureRecorder.Create(transform, level.name);
             recorder.recording = RecordClips;
             hud.onScreenshot = () => recorder.SaveScreenshot(path => hud.ShowHint(string.IsNullOrEmpty(path) ? "Screenshot failed" : "Screenshot saved: " + path, 5f));
@@ -486,6 +506,9 @@ namespace Geodashy.Gameplay
             runX.Clear();
             runY.Clear();
             runTrace.Clear();
+            jumpBeats.Clear();
+            combo = 0;
+            coinStreak = 0;
             profile.Clear();
             profileTimer = 0f;
             runSampleTimer = 0f;
@@ -824,6 +847,61 @@ namespace Geodashy.Gameplay
             background.Pulse(bar ? 0.9f : 0.35f);
             hud.PulseVignette(bar ? 0.45f : 0.18f);
             beatEnergy = bar ? 1f : 0.55f;
+            if (syncCheck && beat != lastFlashBeat)
+            {
+                lastFlashBeat = beat;
+                hud.Flash(new Color(1f, 1f, 1f, bar ? 0.35f : 0.18f), 0.08f);
+            }
+        }
+
+        /// <summary>Beats since the song started at this moment of the run.</summary>
+        float SongBeat()
+        {
+            var s = level.settings;
+            float songTime = s.songOffset + startPos.x / MountCatalog.Speed(startSpeed) + elapsed;
+            return songTime * s.bpm / 60f;
+        }
+
+        void UpdateRuneEffects(float dt)
+        {
+            if (comboTimer > 0f)
+            {
+                comboTimer -= dt;
+                if (comboTimer <= 0f) combo = 0;
+            }
+            if (coinStreakTimer > 0f)
+            {
+                coinStreakTimer -= dt;
+                if (coinStreakTimer <= 0f) coinStreak = 0;
+            }
+            // speed lines while dashing
+            if (player.IsDashing)
+            {
+                dashLineTimer += dt;
+                while (dashLineTimer > 0.03f)
+                {
+                    dashLineTimer -= 0.03f;
+                    var p = player.position + new Vector2(-player.direction * 0.4f, UnityEngine.Random.Range(-0.9f, 0.9f));
+                    particles.Emit(p, new Color(0.6f, 1f, 0.95f, 0.7f), 1, 6f, 0.25f, 0.05f, 0f, player.direction > 0 ? 180f : 0f, 4f);
+                }
+            }
+        }
+
+        /// <summary>Loot within a short reach drifts to the rider.</summary>
+        void UpdateCoinMagnet(float dt)
+        {
+            var b = GeoMath.Expand(player.Bounds, 1.6f);
+            var near = world.Query(b);
+            foreach (var v in near)
+            {
+                if (v.def.kind != ObjectKind.Collectible || !v.runtimeActive) continue;
+                var pos = v.WorldPosition;
+                var d = player.position - pos;
+                float dist = d.magnitude;
+                if (dist > 1.8f || dist < 0.05f) continue;
+                v.runtimeOffset += d / dist * Mathf.Min(dist, (8f + (1.8f - dist) * 12f) * dt);
+                world.MarkDirty(v);
+            }
         }
 
         void UpdateAutoCheckpoint(float dt)
@@ -887,7 +965,26 @@ namespace Geodashy.Gameplay
 
         void Update()
         {
-            if (paused) return;
+            if (paused || crashed) return;
+            try
+            {
+                Tick();
+            }
+            catch (Exception e)
+            {
+                // a bug in play should never freeze the phone: freeze the run, report, and offer the way out
+                crashed = true;
+                Debug.LogException(e);
+                var path = CrashGuard.Report(e, "level " + level.id + " (" + level.name + ") · mount " + (player != null ? player.mount.id : "?") + " · x " + (player != null ? player.position.x.ToString("0.0") : "?") + " · " + DifficultyInfo.Name(difficulty));
+                hud.ShowDeath("The quest stumbled: " + e.GetType().Name, finishX > 0f ? player.position.x / finishX : 0f);
+                hud.ShowHint(string.IsNullOrEmpty(path) ? "Bug report could not be written" : "Bug report written to " + path, 30f);
+                hud.ShowPause(true);
+                paused = true;
+            }
+        }
+
+        void Tick()
+        {
             float dt = Time.deltaTime;
             if (slowMo > 0f)
             {
@@ -937,7 +1034,7 @@ namespace Geodashy.Gameplay
                 pressed |= InputConfig.JumpPressed();
             }
             var gp = Gamepad.current;
-            if (gp != null && gp.startButton.wasPressedThisFrame && !introActive && !complete)
+            if (gp != null && gp.startButton.wasPressedThisFrame && !introActive && !complete && !crashed)
             {
                 TogglePause();
                 return;
@@ -991,6 +1088,8 @@ namespace Geodashy.Gameplay
             player.SetInput(held, pressed);
             player.Tick(dt);
             PlayerMarker.End();
+            UpdateRuneEffects(dt);
+            UpdateCoinMagnet(dt);
             EffectsMarker.Begin();
             RecordReplay();
             RecordBestRunSample(dt);
@@ -1033,13 +1132,32 @@ namespace Geodashy.Gameplay
                 Sfx.Play("complete");
                 hud.SetProgress(1f, true);
                 bool allLoot = coins >= totalCoins && gems >= totalGems && totalCoins + totalGems > 0;
+                float parTime = finishX / MountCatalog.Speed(startSpeed) * 1.03f + 0.5f;
                 if (fullRun)
                 {
                     stats.bestProgress = 1f;
                     stats.completions++;
                     CommitBestRun(1f);
                     if (allLoot) stats.fullLoot = true;
+                    string medals = (elapsed <= parTime ? "S" : "") + (allLoot ? "L" : "") + (attempts == 1 ? "D" : "");
+                    stats.AddRun(new RunRecord { rider = PlayerProfile.Name, seconds = elapsed, dateUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), medals = medals, attempts = attempts });
                     LevelStatsStorage.Save(stats);
+                    Achievements.Unlock("champion_clear");
+                    if (level.id.StartsWith("daily_"))
+                    {
+                        Achievements.Unlock("daily_1");
+                        if (Achievements.AddCounter("daily", 1) >= 10) Achievements.Unlock("daily_10");
+                    }
+                }
+                if (startPos.x <= 0.01f)
+                {
+                    Achievements.Unlock("first_clear");
+                    if (attempts == 1) Achievements.Unlock("deathless");
+                    if (allLoot) Achievements.Unlock("all_loot");
+                    if (elapsed <= parTime) Achievements.Unlock("under_par");
+                    if (player.nearMisses >= 10) Achievements.Unlock("near_miss_10");
+                    if (player.jumps >= 100) Achievements.Unlock("jumps_100");
+                    CheckCampaignComplete();
                 }
                 else if (difficulty == Difficulty.Checkpoints && startPos.x <= 0.01f)
                 {
@@ -1096,6 +1214,23 @@ namespace Geodashy.Gameplay
             deathOverlay.End();
         }
 
+        void CheckCampaignComplete()
+        {
+            try
+            {
+                foreach (var info in LevelStorage.ListLevels())
+                {
+                    if (!info.builtIn) continue;
+                    var st = info.id == level.id ? stats : LevelStatsStorage.Load(info.id);
+                    if (st.completions == 0 && st.checkpointCompletions == 0 && !(info.id == level.id)) return;
+                }
+                Achievements.Unlock("campaign_complete");
+            }
+            catch (Exception)
+            {
+            }
+        }
+
         void UpdatePerf(float dt)
         {
             if (!PerfHud)
@@ -1122,6 +1257,12 @@ namespace Geodashy.Gameplay
         public void OnJumped(Vector2 pos, float up)
         {
             Haptics.Jump();
+            if (level.settings.bpm >= 20f)
+            {
+                float beat = SongBeat();
+                jumpBeats.Add(new Vector3(pos.x, pos.y, beat - Mathf.Round(beat)));
+                if (jumpBeats.Count > 5000) jumpBeats.RemoveAt(0);
+            }
             Sfx.Play("jump_" + player.mount.id, 0.8f, 1f, 0.05f, "jump");
             var feet = pos - new Vector2(0f, up * player.Size.y * 0.45f);
             particles.Emit(feet, new Color(0.9f, 0.85f, 0.75f, 0.7f), 4, 1.8f, 0.3f, 0.08f, 3f, up > 0 ? 270f : 90f, 120f);
@@ -1129,7 +1270,7 @@ namespace Geodashy.Gameplay
 
         public void OnLanded(Vector2 pos, float up, Vector2 size, float fallSpeed = 0f)
         {
-            Sfx.Play("land", 0.5f, 1f, 0.08f);
+            Sfx.Play("land_" + player.mount.id, 0.5f, 1f, 0.08f, "land");
             var feet = pos - new Vector2(0f, up * size.y * 0.5f);
             particles.Emit(feet, new Color(0.85f, 0.8f, 0.7f, 0.75f), 7, 2.4f, 0.35f, 0.09f, 4f, up > 0 ? 90f : 270f, 150f);
             // hard landings thump the camera a little; ordinary hops do not
@@ -1147,7 +1288,10 @@ namespace Geodashy.Gameplay
             replayClock = 0f;
             musicRequest++;
             Haptics.Death();
-            Sfx.Play("death", 1f, 1f, 0.03f);
+            Sfx.Play("death_" + player.mount.id, 1f, 1f, 0.03f, "death");
+            if (Achievements.AddCounter("deaths", 1) >= 100) Achievements.Unlock("deaths_100");
+            combo = 0;
+            hud.ShowCombo(0);
             var c = player.mount.Color;
             particles.Emit(player.position, c, 18, 9f, 0.8f, 0.17f, 22f);
             particles.Emit(player.position, player.mount.Accent, 8, 6f, 0.6f, 0.12f, 18f);
@@ -1197,7 +1341,11 @@ namespace Geodashy.Gameplay
             else
             {
                 coins++;
-                Sfx.Play("coin", 0.7f, 1f, 0.06f);
+                // consecutive coins chime up the scale
+                coinStreak = coinStreakTimer > 0f ? coinStreak + 1 : 1;
+                coinStreakTimer = 1f;
+                Sfx.Play("coin", 0.7f, 1f + 0.06f * Mathf.Min(coinStreak - 1, 12), 0.02f);
+                if (Achievements.AddCounter("coins", 1) >= 1000) Achievements.Unlock("coins_1000");
             }
             hud.SetLoot(coins, totalCoins, gems, totalGems, keys);
             if (!lootBannerShown && coins >= totalCoins && gems >= totalGems && totalCoins + totalGems > 0)
@@ -1230,6 +1378,7 @@ namespace Geodashy.Gameplay
                     particles.Emit(v.WorldPosition, col, mountGate ? 32 : 18, 6f, 0.6f, 0.14f, 0f);
                     particles.Emit(player.position, Color.white, 10, 4f, 0.4f, 0.1f, 0f);
                     hud.Flash(new Color(col.r, col.g, col.b, mountGate ? 0.45f : 0.25f), mountGate ? 0.3f : 0.18f);
+                    if (v.def.portalType == PortalType.GravityFlip || v.def.portalType == PortalType.GravityNormal) hud.Ripple(new Color(col.r, col.g, col.b, 0.8f));
                     playCamera.Shake(mountGate ? 0.15f : 0.06f, 0.03f, 0.18f);
                     if (mountGate) slowMo = 0.32f;
                     pulsingPortal = v;
@@ -1237,6 +1386,11 @@ namespace Geodashy.Gameplay
                     break;
                 }
                 case ObjectKind.Orb:
+                    // chained runes: a rising combo with a higher pitch each time
+                    combo = comboTimer > 0f ? combo + 1 : 1;
+                    comboTimer = 1.4f;
+                    hud.ShowCombo(combo);
+                    if (v.def.orbType == OrbType.GravityFlip || v.def.orbType == OrbType.GravityJump || v.def.orbType == OrbType.DashFlip) hud.Ripple(new Color(col.r, col.g, col.b, 0.8f));
                     switch (v.def.orbType)
                     {
                         case OrbType.GravityFlip:
@@ -1246,7 +1400,7 @@ namespace Geodashy.Gameplay
                         case OrbType.DashFlip: Sfx.Play("rune_dash", 0.9f); break;
                         case OrbType.Slam: Sfx.Play("rune_void", 0.9f); break;
                         case OrbType.Teleport: Sfx.Play("teleport", 0.8f); break;
-                        default: Sfx.Play("rune", 0.9f, 1f, 0.08f); break;
+                        default: Sfx.Play("rune", 0.9f, 1f + 0.08f * Mathf.Min(combo - 1, 8), 0.04f); break;
                     }
                     particles.Emit(v.WorldPosition, col, 10, 5f, 0.4f, 0.1f, 6f);
                     break;
@@ -1325,8 +1479,12 @@ namespace Geodashy.Gameplay
             music.Play();
         }
 
+        System.Action<string> previousAnnounce;
+
         public void Shutdown()
         {
+            Achievements.Announce = previousAnnounce;
+            previousAnnounce = null;
             if (stats != null && fullRun) LevelStatsStorage.Save(stats);
             musicRequest++;
             if (music != null) music.Stop();

@@ -11,9 +11,10 @@ namespace Geodashy.Editing.UI
         EditorUI ui;
         LevelEditor editor;
         Toggle snapToggle, gridToggle, guideToggle, bpmToggle, allLayersToggle, hitboxToggle, beatToggle, gizmoToggle, snapGuidesToggle;
-        RectTransform groupsHost;
-        Text groupsEmpty, budgetLabel;
-        string groupsKey = "";
+        RectTransform groupsHost, bookmarksHost;
+        Text groupsEmpty, budgetLabel, bookmarksEmpty;
+        string groupsKey = "", bookmarksKey = "";
+        readonly System.Collections.Generic.HashSet<int> expandedGroups = new System.Collections.Generic.HashSet<int>();
         RectTransform colorStrip;
         Toggle traceToggle, songEndToggle;
         Text songEndLabel;
@@ -56,6 +57,8 @@ namespace Geodashy.Editing.UI
             UIFactory.Button(qr1, "▶ Test", () => editor.StartPlaytest(false), -1, 32, UIFactory.Good, 14);
             UIFactory.Button(qr1, "▶ Marker", () => editor.StartPlaytest(true), -1, 32, UIFactory.Good, 13);
             UIFactory.Button(c, "▶ Training (your own waystones)", () => editor.StartPlaytest(false, true), -1, 30, UIFactory.Good, 13);
+            UIFactory.Button(c, "♪ Sync check (pulse on the beat)", editor.StartSyncCheck, -1, 28, UIFactory.Good, 12);
+            UIFactory.Label(c, "Plays from the start with a flash on every beat; afterwards each jump shows as a dot: green on the beat, amber close, red off.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 32);
             var diffNames = new[] { "Training", "Checkpoints", "Champion" };
             DropdownField.Create(c, "Test as", diffNames, (int)editor.TestDifficulty, i => editor.TestDifficulty = (Difficulty)i, 60, 26);
             var qr2 = UIFactory.Row(c, 30, 4);
@@ -64,6 +67,9 @@ namespace Geodashy.Editing.UI
             UIFactory.Button(qr2, "Files", ui.OpenFileDialog, -1, 28, null, 13);
             UIFactory.Button(qr2, "History", ui.OpenHistory, -1, 28, null, 13);
             UIFactory.Button(c, "Check quest (lint)", () => LintDialog.Open(ui, editor), -1, 26, null, 12);
+            var ar = UIFactory.Row(c, 26, 3);
+            UIFactory.Button(ar, "Auto-decorate…", () => AutoDecorateDialog.Open(ui, editor), -1, 24, null, 12);
+            UIFactory.Button(ar, "Editor tour", () => EditorTour.Begin(ui), -1, 24, null, 12);
             songEndToggle = UIFactory.Toggle(c, "Song end flag", editor.showSongEnd, v =>
             {
                 editor.showSongEnd = v;
@@ -230,15 +236,61 @@ namespace Geodashy.Editing.UI
             UIFactory.Button(mr, "Clear", () => editor.SetPlaytestMarker(null), 60, 24, null, 11);
             UIFactory.Label(c, "The green rider shows where you spawn (x 0 on the ground, or the right-most Start Position object). The blue rider is the test marker: M sets it at the cursor, Shift+M clears it, Shift+P or ▶ Marker plays from it.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 96);
 
+            UIFactory.SectionHeader(c, "Bookmarks");
+            UIFactory.Label(c, "Named spots in the quest: Go jumps the camera there and sets the test marker, ▶ plays from it.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 30);
+            bookmarksHost = UIFactory.Rect(c, "Bookmarks");
+            UIFactory.VLayout(bookmarksHost, 2, 0);
+            UIFactory.Fitter(bookmarksHost, true, false);
+            bookmarksEmpty = UIFactory.Label(bookmarksHost, "No bookmarks yet.", 11, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 20);
+            UIFactory.Button(c, "+ Bookmark at camera", () =>
+            {
+                ui.Prompt("New bookmark", "Name for x " + editor.editorCamera.Position.x.ToString("0.#") + ":", "Section " + ((editor.level.bookmarks != null ? editor.level.bookmarks.Count : 0) + 1), n =>
+                {
+                    editor.AddBookmark(n, new Vector2(Mathf.Max(0f, editor.editorCamera.Position.x - editor.editorCamera.HalfWidth * 0.5f), editor.level.settings.groundY + 0.5f));
+                    RefreshBookmarks(true);
+                });
+            }, -1, 26, null, 12);
+
             editor.ViewOptionsChanged += Refresh;
             ui.UIScaleChanged += Refresh;
             editor.LevelChanged += RefreshQuest;
             editor.LevelChanged += () => RefreshGroups(false);
+            editor.LevelChanged += () => RefreshBookmarks(false);
             editor.LevelChanged += () => { if (songEndLabel != null) songEndLabel.text = SongEndText(); };
             Refresh();
             RefreshQuest();
             RefreshGroups(true);
+            RefreshBookmarks(true);
             RefreshColorStrip();
+        }
+
+        void RefreshBookmarks(bool force)
+        {
+            if (bookmarksHost == null) return;
+            var bms = editor.level.bookmarks;
+            var sb = new System.Text.StringBuilder();
+            if (bms != null) foreach (var b in bms) sb.Append(b.name).Append('@').Append(b.x.ToString("0.#")).Append(';');
+            var key = sb.ToString();
+            if (!force && key == bookmarksKey) return;
+            bookmarksKey = key;
+            foreach (Transform child in bookmarksHost) if (child.gameObject != bookmarksEmpty.gameObject) Destroy(child.gameObject);
+            int n = bms != null ? bms.Count : 0;
+            bookmarksEmpty.gameObject.SetActive(n == 0);
+            for (int i = 0; i < n; i++)
+            {
+                int idx = i;
+                var b = bms[i];
+                var row = UIFactory.Row(bookmarksHost, 24, 4);
+                var l = UIFactory.Label(row, b.name + "  (x " + b.x.ToString("0.#") + ")", 12, TextAnchor.MiddleLeft, UIFactory.TextColor, -1, 24);
+                l.horizontalOverflow = HorizontalWrapMode.Overflow;
+                UIFactory.Button(row, "Go", () => editor.GoToBookmark(idx, false), 34, 22, null, 11);
+                UIFactory.Button(row, "▶", () => editor.GoToBookmark(idx, true), 30, 22, UIFactory.Good, 11);
+                UIFactory.Button(row, "✕", () =>
+                {
+                    editor.RemoveBookmark(idx);
+                    RefreshBookmarks(true);
+                }, 26, 22, UIFactory.Danger, 11);
+            }
         }
 
         string colorKey = "";
@@ -294,7 +346,7 @@ namespace Geodashy.Editing.UI
         {
             if (groupsHost == null) return;
             var used = editor.UsedGroups();
-            var key = string.Join(",", used);
+            var key = string.Join(",", used) + "|" + (editor.level.groupInfos != null ? editor.level.groupInfos.Count : 0) + "|" + expandedGroups.Count;
             if (!force && key == groupsKey) return;
             groupsKey = key;
             foreach (Transform child in groupsHost) if (child.gameObject != groupsEmpty.gameObject) Destroy(child.gameObject);
@@ -304,11 +356,65 @@ namespace Geodashy.Editing.UI
             {
                 if (shown++ >= 24) break;
                 int gid = g;
+                var info = editor.level.GetGroupInfo(gid, false);
+                var tint = editor.GroupTint(new LevelObject { groups = new System.Collections.Generic.List<int> { gid } });
                 var row = UIFactory.Row(groupsHost, 24, 4);
-                UIFactory.Label(row, "Group " + gid, 12, TextAnchor.MiddleLeft, UIFactory.TextColor, 70, 24);
-                UIFactory.Toggle(row, "Hide", editor.hiddenGroups.Contains(gid), v => editor.SetGroupHidden(gid, v), 24, 62);
-                UIFactory.Toggle(row, "Lock", editor.lockedGroups.Contains(gid), v => editor.SetGroupLocked(gid, v), 24, 62);
-                UIFactory.Button(row, "Sel", () => editor.SelectByGroup(gid), 40, 22, null, 11);
+                var expand = UIFactory.Button(row, expandedGroups.Contains(gid) ? "▾" : "▸", () =>
+                {
+                    if (!expandedGroups.Remove(gid)) expandedGroups.Add(gid);
+                    RefreshGroups(true);
+                }, 20, 22, null, 11);
+                var nameLabel = UIFactory.Label(row, editor.GroupLabel(gid), 12, TextAnchor.MiddleLeft, tint.a > 0f ? tint : UIFactory.TextColor, -1, 24);
+                nameLabel.horizontalOverflow = HorizontalWrapMode.Overflow;
+                UIFactory.Toggle(row, "Hide", editor.hiddenGroups.Contains(gid), v => editor.SetGroupHidden(gid, v), 24, 58);
+                UIFactory.Toggle(row, "Lock", editor.lockedGroups.Contains(gid), v => editor.SetGroupLocked(gid, v), 24, 58);
+                UIFactory.Button(row, "Sel", () => editor.SelectByGroup(gid), 34, 22, null, 11);
+                var more = UIFactory.Button(row, "⋯", null, 24, 22, null, 12);
+                more.onClick.AddListener(() =>
+                {
+                    var pos = RectTransformUtility.WorldToScreenPoint(null, more.transform.position);
+                    ui.ShowMenuAt(pos, new[] { "Rename group…", "Tint colour…", "Clear tint", "Select group", "Move group to this layer" }, i =>
+                    {
+                        switch (i)
+                        {
+                            case 0:
+                                ui.Prompt("Rename group " + gid, "A name for this group (shown in Groups and Properties):", info != null ? info.name : "", n =>
+                                {
+                                    editor.SetGroupName(gid, n);
+                                    RefreshGroups(true);
+                                });
+                                break;
+                            case 1:
+                                ui.ShowColorPicker(groupsHost, tint.a > 0f ? tint : UIFactory.Accent, col =>
+                                {
+                                    editor.SetGroupTint(gid, new Color(col.r, col.g, col.b, 1f));
+                                    RefreshGroups(true);
+                                });
+                                break;
+                            case 2:
+                                editor.SetGroupTint(gid, null);
+                                RefreshGroups(true);
+                                break;
+                            case 3: editor.SelectByGroup(gid); break;
+                            case 4:
+                                editor.SelectByGroup(gid);
+                                editor.EditSelection(o => o.editorLayer = editor.currentEditorLayer, true, "Move group to layer");
+                                break;
+                        }
+                    });
+                });
+                if (expandedGroups.Contains(gid))
+                {
+                    var parts = new System.Collections.Generic.List<string>();
+                    int k = 0;
+                    foreach (var kv in editor.GroupContents(gid))
+                    {
+                        if (k++ >= 6) { parts.Add("…"); break; }
+                        parts.Add(kv.Value + " × " + kv.Key);
+                    }
+                    var contents = UIFactory.Label(groupsHost, "    " + (parts.Count > 0 ? string.Join(", ", parts) : "empty"), 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 30);
+                    contents.horizontalOverflow = HorizontalWrapMode.Wrap;
+                }
             }
             if (used.Count > 24) UIFactory.Label(groupsHost, "… and " + (used.Count - 24) + " more groups", 11, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 18);
         }

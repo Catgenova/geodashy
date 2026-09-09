@@ -90,6 +90,19 @@ namespace Geodashy.Core
         public static string Glyph => CrestGlyphs[Crest];
         public static string CrestName => CrestNames[Crest];
 
+        const string NameKey = "geodashy.heraldry.name";
+        /// <summary>Rider name shown on leaderboards and captures.</summary>
+        public static string Name
+        {
+            get => PlayerPrefs.GetString(NameKey, "Rider");
+            set
+            {
+                PlayerPrefs.SetString(NameKey, string.IsNullOrWhiteSpace(value) ? "Rider" : value.Trim());
+                PlayerPrefs.Save();
+                Changed?.Invoke();
+            }
+        }
+
         /// <summary>Cache key fragment so placeholder art regenerates when the heraldry changes.</summary>
         public static string Signature => Crest + ":" + ColorUtility.ToHtmlStringRGB(Primary) + ":" + ColorUtility.ToHtmlStringRGB(Secondary);
     }

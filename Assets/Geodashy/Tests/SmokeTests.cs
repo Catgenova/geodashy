@@ -46,6 +46,59 @@ namespace Geodashy.Tests
         }
 
         [Test]
+        public void LevelPackRoundTrips()
+        {
+            var a = LevelData.CreateNew("Pack A");
+            a.objects.Add(new LevelObject { uid = 1, type = "castle_stone", x = 1f, y = 1f });
+            var b = LevelData.CreateNew("Pack B");
+            var code = LevelPack.Encode("Test pack", new System.Collections.Generic.List<LevelData> { a, b });
+            Assert.IsTrue(code.StartsWith(LevelPack.Prefix));
+            Assert.IsTrue(LevelPack.TryDecode(code, out var name, out var levels, out var err), err);
+            Assert.AreEqual("Test pack", name);
+            Assert.AreEqual(2, levels.Count);
+            Assert.AreEqual("Pack A", levels[0].name);
+            Assert.AreEqual("Test pack", levels[0].pack);
+            Assert.AreEqual(1, levels[0].objects.Count);
+        }
+
+        [Test]
+        public void BeatDetectorFindsASyntheticTempo()
+        {
+            // 8 seconds of clicks at 120 BPM (a click every 0.5 s), starting 0.25 s in
+            const int rate = 22050;
+            const float bpm = 120f, first = 0.25f;
+            var samples = new float[rate * 8];
+            for (float t = first; t < 8f; t += 60f / bpm)
+            {
+                int start = Mathf.RoundToInt(t * rate);
+                for (int i = 0; i < 600 && start + i < samples.Length; i++) samples[start + i] = Mathf.Sin(i * 0.9f) * Mathf.Exp(-i / 120f);
+            }
+            var clip = AudioClip.Create("clicks", samples.Length, 1, rate, false);
+            clip.SetData(samples, 0);
+            Assert.IsTrue(BeatDetector.Analyse(clip, out float foundBpm, out float offset));
+            Assert.AreEqual(bpm, foundBpm, 3f, "bpm");
+            // the offset may land on any click, so it must be a whole number of beats after the first one
+            float beats = (offset - first) / (60f / bpm);
+            Assert.AreEqual(Mathf.Round(beats), beats, 0.15f, "offset " + offset);
+            var wave = BeatDetector.Waveform(clip, 64);
+            Assert.AreEqual(64, wave.Length);
+        }
+
+        [Test]
+        public void AutoDecoratorStaysOnItsLayer()
+        {
+            var level = LevelData.CreateNew("Decor");
+            for (int i = 0; i < 12; i++) level.objects.Add(new LevelObject { uid = i + 1, type = "castle_stone", x = i, y = 0f });
+            var decor = AutoDecorator.Decorate(level, AutoDecorator.Themes[0], 1f, 42);
+            Assert.Greater(decor.Count, 0);
+            foreach (var o in decor)
+            {
+                Assert.AreEqual(AutoDecorator.Layer, o.editorLayer);
+                Assert.IsNotNull(ObjectCatalog.Get(o.type), o.type);
+            }
+        }
+
+        [Test]
         public void StampsKeepRelativeLayout()
         {
             var a = new LevelObject { uid = 1, type = "castle_stone", x = 2f, y = 0f };
