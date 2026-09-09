@@ -169,6 +169,102 @@ namespace Geodashy.Editing
             return list;
         }
 
+        // ---- song end flag: where the soundtrack runs out at the level's speeds --------------
+        public const string SongEndPref = "geodashy.songEndFlag";
+        public bool showSongEnd = PlayerPrefs.GetInt(SongEndPref, 1) == 1;
+        /// <summary>Level x where the song ends, or null when there is no song or its length is not known yet.</summary>
+        public float? SongEndX { get; private set; }
+        public float SongLength { get; private set; } = -1f;
+        string songKey = "";
+        int songRequest;
+
+        /// <summary>Loads the song's length when the song changed, then recomputes the flag.</summary>
+        public void RefreshSongLength()
+        {
+            var s = level.settings;
+            string key = !string.IsNullOrEmpty(s.songFile) ? "file:" + level.id + "/" + s.songFile : (!string.IsNullOrEmpty(s.songId) ? "id:" + s.songId : "");
+            if (key == songKey)
+            {
+                RecomputeSongEnd();
+                return;
+            }
+            songKey = key;
+            SongLength = -1f;
+            SongEndX = null;
+            int request = ++songRequest;
+            if (key.StartsWith("file:"))
+            {
+                var path = LevelStorage.AssetPath(level.id, s.songFile);
+                AudioLoader.Load(this, path, clip =>
+                {
+                    if (request != songRequest || this == null) return;
+                    SongLength = clip != null ? clip.length : -1f;
+                    RecomputeSongEnd();
+                    ViewOptionsChanged?.Invoke();
+                });
+            }
+            else if (key.StartsWith("id:"))
+            {
+                var clip = Resources.Load<AudioClip>("Songs/" + s.songId);
+                SongLength = clip != null ? clip.length : -1f;
+            }
+            RecomputeSongEnd();
+            ViewOptionsChanged?.Invoke();
+        }
+
+        /// <summary>Walks the speed portals from the start and finds the x reached when the song runs out.</summary>
+        public void RecomputeSongEnd()
+        {
+            float remaining = SongLength - level.settings.songOffset;
+            if (SongLength <= 0f || remaining <= 0f)
+            {
+                SongEndX = null;
+                return;
+            }
+            var portals = new List<KeyValuePair<float, int>>();
+            foreach (var o in level.objects)
+            {
+                var d = ObjectCatalog.Get(o.type);
+                if (d != null && d.kind == ObjectKind.Portal && d.portalType == PortalType.Speed) portals.Add(new KeyValuePair<float, int>(o.x, (int)d.portalSpeed));
+            }
+            portals.Sort((a, b) => a.Key.CompareTo(b.Key));
+            float x = 0f;
+            float speed = MountCatalog.Speed(level.settings.startSpeed);
+            foreach (var p in portals)
+            {
+                if (p.Key <= x) { speed = MountCatalog.Speed(p.Value); continue; }
+                float dt = (p.Key - x) / speed;
+                if (dt >= remaining)
+                {
+                    SongEndX = x + remaining * speed;
+                    return;
+                }
+                remaining -= dt;
+                x = p.Key;
+                speed = MountCatalog.Speed(p.Value);
+            }
+            SongEndX = x + remaining * speed;
+        }
+
+        /// <summary>Drops a Finish Banner object where the song ends.</summary>
+        public void PlaceSongEndBanner()
+        {
+            if (!SongEndX.HasValue)
+            {
+                ui.Toast(SongLength <= 0f ? "No song set (or still loading): pick one in Level Settings" : "The song ends before the level starts; lower the song offset");
+                return;
+            }
+            var def = ObjectCatalog.Get("finish_flag");
+            float x = snapToGrid ? Mathf.Round(SongEndX.Value) : SongEndX.Value;
+            var o = AddObject(def, new Vector2(x, level.settings.groundY + def.height / 2f));
+            selection.Clear();
+            selection.Add(o.uid);
+            RefreshSelectionVisuals();
+            SelectionChanged?.Invoke();
+            editorCamera.Position = new Vector2(x, editorCamera.Position.y);
+            ui.Toast("Finish banner placed at x " + x.ToString("0.#") + " where the song ends");
+        }
+
         // ---- last playtest trace ---------------------------------------------------------
         public readonly List<Vector2> lastRunTrace = new List<Vector2>();
         public Vector2? lastRunDeath;
@@ -442,6 +538,7 @@ namespace Geodashy.Editing
             editorCamera.Position = new Vector2(Mathf.Max(level.editorCameraX, 6f), Mathf.Max(level.editorCameraY, level.settings.groundY + 4f));
             editorCamera.SetZoom(level.editorZoom);
 
+            LevelChanged += RecomputeSongEnd;
             ui = EditorUI.Create(this);
             SetMode(EditorMode.Build);
             SetBuildDef(ObjectCatalog.Get("castle_stone"));
@@ -1110,6 +1207,7 @@ namespace Geodashy.Editing
             cam.backgroundColor = level.settings.backgroundColor;
             editorCamera.minY = level.settings.groundY - 8f;
             RefreshAllViews();
+            RefreshSongLength();
         }
 
         /// <summary>Flags the level as modified and notifies listeners (used after settings edits).</summary>

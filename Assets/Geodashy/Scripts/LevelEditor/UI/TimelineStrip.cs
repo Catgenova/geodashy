@@ -18,7 +18,7 @@ namespace Geodashy.Editing.UI
         EditorUI ui;
         LevelEditor editor;
         RectTransform rt;
-        RectTransform cameraLine, viewBox;
+        RectTransform cameraLine, viewBox, songLine;
         readonly List<Image> barPool = new List<Image>();
         readonly List<TimelineMarker> markerPool = new List<TimelineMarker>();
         Text lengthLabel;
@@ -36,7 +36,7 @@ namespace Geodashy.Editing.UI
             return strip;
         }
 
-        float LevelLength => Mathf.Max(10f, editor.level.GetFinishX() + 6f);
+        float LevelLength => Mathf.Max(10f, editor.level.GetFinishX() + 6f, editor.SongEndX.HasValue ? editor.SongEndX.Value + 6f : 0f);
 
         void Build()
         {
@@ -44,6 +44,8 @@ namespace Geodashy.Editing.UI
             viewBox.GetComponent<Image>().raycastTarget = false;
             cameraLine = UIFactory.Panel(rt, "Camera", new Color(0.4f, 0.85f, 1f, 0.9f));
             cameraLine.GetComponent<Image>().raycastTarget = false;
+            songLine = UIFactory.Panel(rt, "SongEnd", new Color(EditorGrid.SongColor.r, EditorGrid.SongColor.g, EditorGrid.SongColor.b, 0.9f));
+            songLine.GetComponent<Image>().raycastTarget = false;
             lengthLabel = UIFactory.Label(rt, "", 10, TextAnchor.MiddleRight, UIFactory.TextDim);
             lengthLabel.raycastTarget = false;
             UIFactory.Anchor(lengthLabel.rectTransform, new Vector2(1, 0), new Vector2(1, 1), new Vector2(-90, 0), new Vector2(-4, 0));
@@ -149,6 +151,16 @@ namespace Geodashy.Editing.UI
             cameraLine.pivot = new Vector2(0.5f, 0.5f);
             cameraLine.anchoredPosition = new Vector2(cx, 0);
             cameraLine.sizeDelta = new Vector2(2f, 0);
+            bool song = editor.showSongEnd && editor.SongEndX.HasValue;
+            if (songLine.gameObject.activeSelf != song) songLine.gameObject.SetActive(song);
+            if (song)
+            {
+                songLine.anchorMin = new Vector2(0, 0);
+                songLine.anchorMax = new Vector2(0, 1);
+                songLine.pivot = new Vector2(0.5f, 0.5f);
+                songLine.anchoredPosition = new Vector2(ToLocal(Mathf.Min(editor.SongEndX.Value, LevelLength)), 0);
+                songLine.sizeDelta = new Vector2(3f, 0);
+            }
             var view = editor.editorCamera.ViewRect;
             viewBox.anchorMin = new Vector2(0, 0);
             viewBox.anchorMax = new Vector2(0, 1);

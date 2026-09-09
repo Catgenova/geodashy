@@ -26,6 +26,8 @@ namespace Geodashy.Editing
         SpriteRenderer selectionBox;
         SpriteRenderer ceilingLine;
         SpriteRenderer finishLine;
+        SpriteRenderer songLine, songFlag, songLabel;
+        public static readonly Color SongColor = new Color(1f, 0.45f, 0.9f, 1f);
         SpriteRenderer spawnGhost, spawnLabel, spawnLine, spawnArrow;
         SpriteRenderer markerGhost, markerLabel, markerLine;
         float lastGridSize = -1f;
@@ -95,6 +97,14 @@ namespace Geodashy.Editing
             markerGhost = SpriteLibrary.CreateRenderer("MarkerGhost", transform, null, GuideSorting + 2);
             markerLabel = SpriteLibrary.CreateRenderer("MarkerLabel", transform, PlaceholderSpriteFactory.ForText("TEST FROM HERE", Color.white), GuideSorting + 3);
             markerLabel.color = MarkerColor;
+
+            // song end flag: a banner and a line where the soundtrack runs out
+            songLine = SpriteLibrary.CreateRenderer("SongLine", transform, PlaceholderSpriteFactory.WhiteSquare(), GridSorting + 3);
+            songLine.color = new Color(SongColor.r, SongColor.g, SongColor.b, 0.45f);
+            songFlag = SpriteLibrary.CreateRenderer("SongFlag", transform, SpriteLibrary.ForObject(ObjectCatalog.Get("finish_flag")), GuideSorting + 2);
+            songFlag.color = new Color(SongColor.r, SongColor.g, SongColor.b, 0.8f);
+            songLabel = SpriteLibrary.CreateRenderer("SongLabel", transform, PlaceholderSpriteFactory.ForText("SONG ENDS", Color.white), GuideSorting + 3);
+            songLabel.color = SongColor;
         }
 
         void RefreshSpawn()
@@ -243,6 +253,20 @@ namespace Geodashy.Editing
                 finishLine.transform.position = new Vector3(finishX, view.center.y, 0f);
                 finishLine.transform.localScale = new Vector3(0.06f, view.height + 2f, 1f);
                 finishLine.enabled = level.objects.Count > 0;
+
+                bool song = editor.showSongEnd && editor.SongEndX.HasValue;
+                songLine.enabled = songFlag.enabled = songLabel.enabled = song;
+                if (song)
+                {
+                    float sx = editor.SongEndX.Value;
+                    songLine.transform.position = new Vector3(sx, view.center.y, 0f);
+                    songLine.transform.localScale = new Vector3(0.08f, view.height + 2f, 1f);
+                    songFlag.transform.position = new Vector3(sx, groundY + 1.5f, 0f);
+                    songFlag.transform.localScale = Vector3.one;
+                    float bob = Mathf.Sin(Time.unscaledTime * 3f) * 0.08f;
+                    songLabel.transform.position = new Vector3(sx, groundY + 3.6f + bob, 0f);
+                    songLabel.transform.localScale = Vector3.one * 0.5f;
+                }
             }
         }
     }

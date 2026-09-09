@@ -131,6 +131,10 @@ and effect volumes are on the main menu under Options and persist.
   objects and pink guide lines show what matched.
 - **Stamps**: select objects and choose Save as stamp (Edit dock, context menu or ⋯ menu). They appear on
   the Stamps shelf of the palette and place like a brush; stamps live in `geodashy/stamps` next to the saves.
+- **Song end flag** (View dock, also in Level Settings ▸ Music): a pink banner and line mark where the
+  soundtrack runs out, computed from the song length minus the offset and walked through every speed
+  portal; the timeline strip shows it too. "Place banner at song end" drops a Finish Banner there so a
+  quest can be sized to its music.
 - **Timeline strip** under the top bar: bar lines from the BPM, trigger, portal, waystone and start markers
   along the level, the camera window, and the level length. Click to jump; drag a trigger to retime it.
 - **Groups** (View dock): hide or lock any group used in the level; locked groups ignore taps.

@@ -15,7 +15,8 @@ namespace Geodashy.Editing.UI
         Text groupsEmpty, budgetLabel;
         string groupsKey = "";
         RectTransform colorStrip;
-        Toggle traceToggle;
+        Toggle traceToggle, songEndToggle;
+        Text songEndLabel;
         int lastColorChannel = 1;
         Button[] beatButtons;
         Button[] gridButtons;
@@ -63,6 +64,13 @@ namespace Geodashy.Editing.UI
             UIFactory.Button(qr2, "Files", ui.OpenFileDialog, -1, 28, null, 13);
             UIFactory.Button(qr2, "History", ui.OpenHistory, -1, 28, null, 13);
             UIFactory.Button(c, "Check quest (lint)", () => LintDialog.Open(ui, editor), -1, 26, null, 12);
+            songEndToggle = UIFactory.Toggle(c, "Song end flag", editor.showSongEnd, v =>
+            {
+                editor.showSongEnd = v;
+                PlayerPrefs.SetInt(LevelEditor.SongEndPref, v ? 1 : 0);
+            });
+            songEndLabel = UIFactory.Label(c, "", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 32);
+            UIFactory.Button(c, "Place banner at song end", editor.PlaceSongEndBanner, -1, 26, null, 12);
             budgetLabel = UIFactory.Label(c, "", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 46);
             savedLabel = UIFactory.Label(c, "", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 32);
             UIFactory.Button(c, "◀ Main menu", ui.ReturnToMenu, -1, 26, null, 12);
@@ -226,6 +234,7 @@ namespace Geodashy.Editing.UI
             ui.UIScaleChanged += Refresh;
             editor.LevelChanged += RefreshQuest;
             editor.LevelChanged += () => RefreshGroups(false);
+            editor.LevelChanged += () => { if (songEndLabel != null) songEndLabel.text = SongEndText(); };
             Refresh();
             RefreshQuest();
             RefreshGroups(true);
@@ -265,6 +274,19 @@ namespace Geodashy.Editing.UI
                     UIFactory.Stretch(ring);
                 }
             }
+        }
+
+        string SongEndText()
+        {
+            var s = editor.level.settings;
+            if (string.IsNullOrEmpty(s.songFile) && string.IsNullOrEmpty(s.songId)) return "No song set: pick one in Level Settings to see where it ends.";
+            if (editor.SongLength <= 0f) return "Reading the song length…";
+            if (!editor.SongEndX.HasValue) return "The song offset is past the end of the song.";
+            float endX = editor.SongEndX.Value;
+            float finish = editor.level.GetFinishX();
+            float remaining = editor.SongLength - s.songOffset;
+            string cmp = finish <= 0.5f ? "" : (endX > finish + 0.5f ? " — " + (endX - finish).ToString("0.#") + " blocks past the finish" : (endX < finish - 0.5f ? " — " + (finish - endX).ToString("0.#") + " blocks before the finish" : " — right at the finish"));
+            return "Song ends at x " + endX.ToString("0.#") + " (" + remaining.ToString("0.#") + "s of music, speed portals included)" + cmp;
         }
 
         /// <summary>Rebuilds the group rows only when the set of used groups changes (LevelChanged fires on every move).</summary>
@@ -317,6 +339,8 @@ namespace Geodashy.Editing.UI
         {
             if (snapToggle == null) return;
             if (uiScaleLabel != null) uiScaleLabel.text = string.Format("Interface size {0:0}%", EditorUI.UIScale * 100f);
+            if (songEndToggle != null) songEndToggle.SetIsOnWithoutNotify(editor.showSongEnd);
+            if (songEndLabel != null) songEndLabel.text = SongEndText();
             if (layoutButton != null) UIFactory.SetButtonLabel(layoutButton, "Layout: " + EditorUI.PhoneLayoutName);
             snapToggle.SetIsOnWithoutNotify(editor.snapToGrid);
             if (snapGuidesToggle != null) snapGuidesToggle.SetIsOnWithoutNotify(editor.snapGuides);

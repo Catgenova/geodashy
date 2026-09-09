@@ -312,7 +312,14 @@ namespace Geodashy.Editing.UI
             {
                 s.songOffset = v;
                 editor.MarkDirty();
+                editor.RefreshSongLength();
             }, false, 140);
+            UIFactory.Button(c, "Place a banner where the song ends", () =>
+            {
+                editor.RefreshSongLength();
+                editor.PlaceSongEndBanner();
+            }, -1, 28, null, 12);
+            UIFactory.Label(c, "The View dock's Song end flag shows the same spot live; use it to size the quest to its soundtrack.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 18);
             NumberField.Create(c, "BPM", s.bpm, 1, 20, 400, v =>
             {
                 s.bpm = v;
@@ -611,6 +618,7 @@ namespace Geodashy.Editing.UI
             "Training: Z — raise a waystone   ·   X — remove the last one   ·   ← → — scrub between waystones   ·   C — toggle\n" +
             "Waystones restore everything: mount, gravity, speed, moved objects, colours, loot. Auto waystones rise every few seconds on solid ground.\n\n" +
             "EVEN MORE TOOLS\n" +
+            "View dock ▸ Song end flag — a pink banner and line where the soundtrack runs out (song length minus offset, walked through every speed portal); Place banner at song end drops a Finish Banner there\n" +
             "Palette ▸ Path tool — click points, then Lay (grid) or Lay (beat) places the brush along the line\n" +
             "Edit dock ▸ Replace with brush / Replace all of type — swap object types in place\n" +
             "View dock ▸ Colour channels — click a swatch to select its users, Recolour to edit it   ·   Check quest (lint) — finds impossible gaps, buried spikes, empty trigger targets\n" +
