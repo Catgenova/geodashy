@@ -173,10 +173,10 @@ namespace Geodashy.Rendering
         public static bool MountIsAnimated(MountDefinition m) => ForMountAnimation(m) != null;
 
         /// <summary>
-        /// Horizontal scale sign to make the mount face the direction of travel. Placeholders are drawn facing right;
-        /// animation sheets are, by convention, authored facing left (like the shipped knight) and are mirrored.
+        /// Horizontal scale sign to make the mount face the direction of travel. All shipped art (placeholders and
+        /// the generated animation sheets) faces right, so this is 1. Return -1 for a mount whose sheets face left.
         /// </summary>
-        public static float MountFacing(MountDefinition m) => MountIsAnimated(m) ? -1f : 1f;
+        public static float MountFacing(MountDefinition m) => 1f;
 
         public static Sprite ForBackgroundLayer(BackgroundLayerDefinition layer)
         {
