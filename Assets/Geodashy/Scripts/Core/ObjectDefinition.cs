@@ -79,6 +79,10 @@ namespace Geodashy.Core
         public bool spins;
         /// <summary>How the death panel phrases a kill by this object ("Impaled by").</summary>
         public string deathVerb = "";
+        /// <summary>Surface material for procedural decoration art (None = use the colours).</summary>
+        public DecoMaterial material = DecoMaterial.None;
+        /// <summary>Sub-style of a decoration shape (which kind of column, window, lantern…).</summary>
+        public int variant;
 
         public string SpriteId => string.IsNullOrEmpty(spriteId) ? id : spriteId;
 
@@ -155,6 +159,18 @@ namespace Geodashy.Core
         public ObjectDefinition Code(string c)
         {
             code = c;
+            return this;
+        }
+
+        public ObjectDefinition Material(DecoMaterial m)
+        {
+            material = m;
+            return this;
+        }
+
+        public ObjectDefinition Variant(int v)
+        {
+            variant = v;
             return this;
         }
 

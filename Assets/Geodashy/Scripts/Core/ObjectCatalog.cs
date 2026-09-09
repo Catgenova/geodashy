@@ -8,7 +8,7 @@ namespace Geodashy.Core
     /// The complete list of placeable object types. Art is looked up by id
     /// (Resources/Sprites/{id}.png) and falls back to a procedural placeholder.
     /// </summary>
-    public static class ObjectCatalog
+    public static partial class ObjectCatalog
     {
         public const string CatBlocks = "Blocks";
         public const string CatSlopes = "Slopes";
@@ -18,12 +18,18 @@ namespace Geodashy.Core
         public const string CatPortals = "Portals";
         public const string CatCollectibles = "Loot";
         public const string CatDecor = "Decor";
+        public const string CatStone = "Stonework";
+        public const string CatPlants = "Ivy & Plants";
+        public const string CatRoofs = "Roofs & Windows";
+        public const string CatFurnish = "Furnishings";
+        public const string CatLights = "Lights";
+        public const string CatYard = "Yard & Siege";
         public const string CatTriggers = "Triggers";
         public const string CatSpecial = "Special";
 
         public static readonly string[] Categories =
         {
-            CatBlocks, CatSlopes, CatHazards, CatRunes, CatPads, CatPortals, CatCollectibles, CatDecor, CatTriggers, CatSpecial
+            CatBlocks, CatSlopes, CatHazards, CatRunes, CatPads, CatPortals, CatCollectibles, CatDecor, CatStone, CatPlants, CatRoofs, CatFurnish, CatLights, CatYard, CatTriggers, CatSpecial
         };
 
         static readonly List<ObjectDefinition> all = new List<ObjectDefinition>();
@@ -86,6 +92,11 @@ namespace Geodashy.Core
 
         static ObjectDefinition Add(string id, string name, string category, ObjectKind kind)
         {
+            if (byId.TryGetValue(id, out var existing))
+            {
+                Debug.LogWarning("ObjectCatalog: duplicate id '" + id + "' (" + name + ") ignored; keeping " + existing.name);
+                return existing;
+            }
             var d = new ObjectDefinition { id = id, name = name, category = category, kind = kind };
             all.Add(d);
             byId[id] = d;
@@ -104,6 +115,7 @@ namespace Geodashy.Core
             BuildPortals();
             BuildCollectibles();
             BuildDecor();
+            BuildCastleDecor();
             BuildTriggers();
             BuildSpecial();
             foreach (var d in all)

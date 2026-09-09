@@ -185,6 +185,18 @@ To replace art, drop sprites into Resources using these names (Sprite import typ
 - Ground: `Resources/Backgrounds/ground_<ground id>.png` (tiles horizontally, top edge is the surface).
 - Songs: `Resources/Songs/<song id>` audio clips referenced by the Song ID setting or Song trigger.
 
+**Castle decoration shelves.** Besides the original Decor shelf, the palette has Stonework, Ivy &
+Plants, Roofs & Windows, Furnishings, Lights and Yard & Siege: around 340 no-collision pieces
+generated in `ObjectCatalog.Decor.cs` from material × form tables (marble, slate, granite,
+sandstone, limestone, basalt, cobble, mossy stone, plaster, brick, lead, iron, oak, copper,
+terracotta, thatch…) and drawn procedurally by `DecorArt.cs`: wall facades in three sizes,
+columns (plain, Doric, Ionic, Corinthian, twisted, broken, pilaster), arches, merlons and
+parapets, carved reliefs, tombstones and monuments, ivy in three seasons and eleven shapes,
+ferns, roses, wisteria, topiary and trees, roofs in six coverings, tower caps, windows (arrow
+slits to rose windows), doors, thrones, tapestries, armoury pieces, braziers and lanterns,
+fences, hay, wagons and siege engines. Every piece is searchable by name or tag; a real sprite
+named `Resources/Sprites/<id>.png` still overrides any of them.
+
 New object types are one line in `ObjectCatalog.cs`; new mounts go in `MountCatalog.cs`;
 new background layers, themes and ground themes in `ThemeCatalog.cs`.
 

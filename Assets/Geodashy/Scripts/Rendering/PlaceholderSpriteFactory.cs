@@ -394,6 +394,8 @@ namespace Geodashy.Rendering
             var dark = Raster.Darken(p, 0.3f);
             var light = Raster.Lighten(p, 0.25f);
 
+            if (DecorArt.TryDraw(r, def)) return;
+
             switch (def.shape)
             {
                 case PlaceholderShape.Block:

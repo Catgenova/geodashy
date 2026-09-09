@@ -65,7 +65,54 @@ namespace Geodashy.Core
         Lightning,
         Trigger,
         StartMarker,
-        Text
+        Text,
+        // castle decoration families (drawn by DecorArt; the definition's material and variant pick the look)
+        Facade,
+        Column,
+        ArchDeco,
+        Battlement,
+        Relief,
+        Monument,
+        Ivy,
+        Foliage,
+        TreeDeco,
+        Roof,
+        TowerCap,
+        WindowDeco,
+        Door,
+        Furniture,
+        Tapestry,
+        Armoury,
+        Lantern,
+        Yard,
+        Fence,
+        Siege
+    }
+
+    /// <summary>Surface material used by the procedural decoration art.</summary>
+    public enum DecoMaterial
+    {
+        None,
+        Marble,
+        Slate,
+        Granite,
+        Sandstone,
+        Limestone,
+        Basalt,
+        Cobble,
+        MossyStone,
+        Oak,
+        DarkWood,
+        Iron,
+        Gold,
+        Bronze,
+        Copper,
+        Plaster,
+        Terracotta,
+        Thatch,
+        Lead,
+        Ivy,
+        Brick
     }
 
     public enum ColliderShape
