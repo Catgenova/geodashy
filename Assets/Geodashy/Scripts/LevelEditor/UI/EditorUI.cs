@@ -125,6 +125,7 @@ namespace Geodashy.Editing.UI
         public RectTransform leftDock;
 
         public TopBar topBar;
+        public TimelineStrip timeline;
         public PalettePanel palettePanel;
         public EditPanel editPanel;
         public DeletePanel deletePanel;
@@ -250,6 +251,13 @@ namespace Geodashy.Editing.UI
             UIFactory.Anchor(top, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -topHeight), new Vector2(0, 0));
             topBar = TopBar.Create(this, top);
 
+            // timeline strip directly under the top bar; the side docks start below it
+            float stripH = phone ? TimelineStrip.PhoneHeight : TimelineStrip.Height;
+            var strip = UIFactory.Panel(root, "Timeline", UIFactory.PanelBg2);
+            UIFactory.Anchor(strip, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -topHeight - stripH), new Vector2(0, -topHeight));
+            timeline = TimelineStrip.Create(this, strip);
+            topHeight += stripH;
+
             bottomDock = UIFactory.Panel(root, "BottomDock", UIFactory.PanelBg);
             UIFactory.Anchor(bottomDock, new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 0), new Vector2(0, dockHeight));
 
@@ -368,6 +376,7 @@ namespace Geodashy.Editing.UI
             }
             topBar?.Tick();
             viewPanel?.Tick();
+            timeline?.Tick();
         }
 
         // ---- public helpers ---------------------------------------------------
@@ -395,6 +404,71 @@ namespace Geodashy.Editing.UI
         }
 
         public void OpenHelp() => HelpDialog.Open(this);
+        public void OpenHistory() => UndoHistoryDialog.Open(this, editor);
+
+        /// <summary>Shows the properties of the selection: opens the Props drawer on phones (always visible on desktop).</summary>
+        public void OpenPropertiesForSelection()
+        {
+            if (editor.selection.Count == 0)
+            {
+                Toast("Nothing selected");
+                return;
+            }
+            if (phone && !propsDrawerOpen) TogglePropsDrawer();
+        }
+
+        /// <summary>Asks for a name and stores the selection as a stamp for the Stamps shelf.</summary>
+        public void PromptSaveStamp()
+        {
+            if (editor.selection.Count == 0)
+            {
+                Toast("Select the objects to stamp first");
+                return;
+            }
+            Prompt("Save as stamp", "Name for this stamp (" + editor.selection.Count + " objects):", "My stamp", name =>
+            {
+                if (string.IsNullOrWhiteSpace(name)) return;
+                if (editor.SaveSelectionAsStamp(name.Trim())) Toast("Stamp saved: " + name.Trim() + " — find it on the Stamps shelf");
+            });
+        }
+
+        /// <summary>A popup list at a screen position (context menus).</summary>
+        public void ShowMenuAt(Vector2 screenPos, string[] options, Action<int> onPick)
+        {
+            float rowH = phone ? 40f : 28f;
+            float width = phone ? 220f : 180f;
+            float height = options.Length * (rowH + 2f) + 8f;
+            ClosePopup();
+            var backdrop = UIFactory.Panel(popupLayer, "PopupBackdrop", Color.clear);
+            var bb = backdrop.gameObject.AddComponent<Button>();
+            bb.transition = Selectable.Transition.None;
+            bb.onClick.AddListener(ClosePopup);
+            popup = backdrop.gameObject;
+            var frame = UIFactory.Panel(backdrop, "Popup", UIFactory.PanelBg3);
+            var canvasRt = canvas.GetComponent<RectTransform>();
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRt, screenPos, null, out var local);
+            float canvasH = canvasRt.rect.height, canvasW = canvasRt.rect.width;
+            float x = Mathf.Clamp(local.x + 6f, -canvasW / 2f, canvasW / 2f - width);
+            float top = local.y - 6f;
+            if (top - height < -canvasH / 2f) top = Mathf.Min(canvasH / 2f, local.y + height + 6f);
+            frame.anchorMin = frame.anchorMax = new Vector2(0.5f, 0.5f);
+            frame.pivot = new Vector2(0, 1);
+            frame.anchoredPosition = new Vector2(x, top);
+            frame.sizeDelta = new Vector2(width, height);
+            var col = UIFactory.Rect(frame, "Col");
+            UIFactory.Stretch(col, 2, 2, 2, 2);
+            UIFactory.VLayout(col, 2, 2);
+            for (int i = 0; i < options.Length; i++)
+            {
+                int idx = i;
+                var b = UIFactory.Button(col, options[i], () =>
+                {
+                    ClosePopup();
+                    onPick?.Invoke(idx);
+                }, -1, rowH, UIFactory.ButtonBg, 13);
+                b.GetComponentInChildren<Text>().alignment = TextAnchor.MiddleLeft;
+            }
+        }
 
         /// <summary>Leaves the editor for the main menu, asking to save first when there are changes.</summary>
         public void ReturnToMenu()

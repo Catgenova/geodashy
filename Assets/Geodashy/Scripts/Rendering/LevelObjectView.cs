@@ -24,6 +24,8 @@ namespace Geodashy.Rendering
         [System.NonSerialized] public float runtimeRotation;
         [System.NonSerialized] public float runtimeAlpha = 1f;
         [System.NonSerialized] public bool runtimeActive = true;
+        /// <summary>Set by LevelWorld.UpdateCulling when the object is far outside the play camera.</summary>
+        [System.NonSerialized] public bool culled;
         [System.NonSerialized] public float spinAngle;
         [System.NonSerialized] public Color pulseColor = Color.clear;
 

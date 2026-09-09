@@ -276,6 +276,8 @@ namespace Geodashy.Core
 
         /// <summary>Built-in song: file name in Resources/Songs.</summary>
         public string songId = "";
+        /// <summary>Creator's difficulty rating (see LevelRating.Tags); empty = unrated.</summary>
+        public string difficultyTag = "";
         /// <summary>Imported song: file name inside the level's asset folder (wins over songId).</summary>
         public string songFile = "";
         public float songOffset = 0f;

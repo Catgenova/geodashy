@@ -21,6 +21,16 @@ namespace Geodashy.Editing.UI
         Toggle swipeToggle;
         Button swipeButton, categoryButton;   // phone layout
         string lastSearch = "";
+        public const string StampsCategory = "Stamps";
+        Button deleteStampButton;
+        readonly Dictionary<string, Stamp> stampTiles = new Dictionary<string, Stamp>();
+
+        static string[] CategoriesWithStamps()
+        {
+            var list = new List<string>(ObjectCatalog.Categories);
+            list.Add(StampsCategory);
+            return list.ToArray();
+        }
 
         public static PalettePanel Create(EditorUI ui, RectTransform dock)
         {
@@ -46,7 +56,7 @@ namespace Geodashy.Editing.UI
             var left = UIFactory.Column(rt, 150, 4);
             categoryButton = UIFactory.Button(left, currentCategory + "  ▾", () =>
             {
-                var cats = ObjectCatalog.Categories;
+                var cats = CategoriesWithStamps();
                 int cur = System.Array.IndexOf(cats, currentCategory);
                 ui.ShowDropdown(categoryButton.GetComponent<RectTransform>(), cats, cur, i => ShowCategory(cats[i]));
             }, -1, 40, UIFactory.InputBg, 13);
@@ -100,9 +110,57 @@ namespace Geodashy.Editing.UI
                 RefreshPlacement();
                 ui.Toast(editor.swipeBuild ? "Swipe to paint: drag places a row of objects" : "Swipe off: one object per tap");
             }, -1, 40, null, 12);
+            deleteStampButton = UIFactory.Button(left, "Delete stamp", DeleteCurrentStamp, -1, 0, UIFactory.Danger, 12);
+            deleteStampButton.gameObject.SetActive(false);
 
             ShowCategory(currentCategory);
             editor.ViewOptionsChanged += RefreshPlacement;
+            editor.StampsChanged += () => { if (currentCategory == StampsCategory) ShowCategory(StampsCategory); };
+            RefreshPlacement();
+        }
+
+        void DeleteCurrentStamp()
+        {
+            var stamp = editor.StampBrush;
+            if (stamp == null)
+            {
+                ui.Toast("Pick a stamp on the Stamps shelf first");
+                return;
+            }
+            ui.Confirm("Delete stamp " + stamp.name + "?", "The stamp file is removed. Objects already placed with it stay.", () =>
+            {
+                StampStorage.Delete(stamp);
+                editor.SetStampBrush(null);
+                editor.NotifyStampsChanged();
+                ui.Toast("Stamp deleted");
+            }, "Delete");
+        }
+
+        void PopulateStamps()
+        {
+            foreach (Transform child in gridContent) Destroy(child.gameObject);
+            tiles.Clear();
+            stampTiles.Clear();
+            var stamps = StampStorage.List();
+            if (stamps.Count == 0)
+            {
+                var hint = UIFactory.Label(gridContent, "No stamps yet. Select some objects in Edit mode and choose Save as stamp (Edit dock, context menu or ⋯ menu).", 12, TextAnchor.UpperLeft, UIFactory.TextDim, 240, 76);
+                hint.horizontalOverflow = HorizontalWrapMode.Wrap;
+            }
+            foreach (var st in stamps)
+            {
+                var stamp = st;
+                var def = ObjectCatalog.Get(stamp.previewType);
+                var sprite = def != null ? SpriteLibrary.ForObject(def) : null;
+                var b = UIFactory.TileButton(gridContent, sprite, stamp.name + " (" + stamp.objects.Count + ")", () =>
+                {
+                    editor.SetStampBrush(stamp);
+                    RefreshPlacement();
+                });
+                stampTiles[stamp.path] = b;
+            }
+            gridScroll.verticalNormalizedPosition = 1f;
+            gridScroll.horizontalNormalizedPosition = 0f;
             RefreshPlacement();
         }
 
@@ -116,7 +174,7 @@ namespace Geodashy.Editing.UI
             UIFactory.Layout(catScroll.gameObject, 150, -1, -1, 1);
             UIFactory.VLayout(catContent, 3, 4);
             UIFactory.Fitter(catContent, true, false);
-            foreach (var cat in ObjectCatalog.Categories)
+            foreach (var cat in CategoriesWithStamps())
             {
                 var c = cat;
                 var b = UIFactory.Button(catContent, cat, () => ShowCategory(c), -1, 28, null, 13);
@@ -166,9 +224,12 @@ namespace Geodashy.Editing.UI
             transformLabel = UIFactory.Label(right, "", 12, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 20);
             swipeToggle = UIFactory.Toggle(right, "Swipe to paint while dragging", editor.swipeBuild, v => editor.swipeBuild = v, 24);
             UIFactory.Label(right, "Click to place · Ctrl+click to select · Esc clears the brush", 11, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 20);
+            deleteStampButton = UIFactory.Button(right, "Delete this stamp", DeleteCurrentStamp, -1, 24, UIFactory.Danger, 11);
+            deleteStampButton.gameObject.SetActive(false);
 
             ShowCategory(currentCategory);
             editor.ViewOptionsChanged += RefreshPlacement;
+            editor.StampsChanged += () => { if (currentCategory == StampsCategory) ShowCategory(StampsCategory); };
             RefreshPlacement();
         }
 
@@ -188,6 +249,11 @@ namespace Geodashy.Editing.UI
             currentCategory = cat;
             foreach (var kv in categoryButtons) UIFactory.SetButtonActive(kv.Value, kv.Key == cat);
             if (categoryButton != null) UIFactory.SetButtonLabel(categoryButton, cat + "  ▾");
+            if (cat == StampsCategory)
+            {
+                PopulateStamps();
+                return;
+            }
             Populate(ObjectCatalog.InCategory(cat));
         }
 
@@ -195,6 +261,7 @@ namespace Geodashy.Editing.UI
         {
             foreach (Transform child in gridContent) Destroy(child.gameObject);
             tiles.Clear();
+            stampTiles.Clear();
             foreach (var def in defs)
             {
                 var d = def;
@@ -214,9 +281,30 @@ namespace Geodashy.Editing.UI
         {
             if (selectedName == null) return;   // panel destroyed
             var def = editor.BuildDef;
+            var stamp = editor.StampBrush;
             foreach (var kv in tiles) UIFactory.SetButtonActive(kv.Value, def != null && kv.Key == def.id);
-            selectedName.text = def != null ? def.name : "No object selected";
-            selectedDesc.text = def != null ? (string.IsNullOrEmpty(def.description) ? def.category + " · " + def.width + "×" + def.height : def.description) : "Pick an object from the grid.";
+            foreach (var kv in stampTiles) UIFactory.SetButtonActive(kv.Value, stamp != null && kv.Key == stamp.path);
+            if (deleteStampButton != null)
+            {
+                bool showDelete = stamp != null && currentCategory == StampsCategory;
+                if (deleteStampButton.gameObject.activeSelf != showDelete) deleteStampButton.gameObject.SetActive(showDelete);
+                if (ui.IsPhone)
+                {
+                    // the phone column has no spare height: the transform readout gives way to the delete button
+                    if (showDelete) UIFactory.Layout(deleteStampButton.gameObject, -1, 34);
+                    if (transformLabel.gameObject.activeSelf == showDelete) transformLabel.gameObject.SetActive(!showDelete);
+                }
+            }
+            if (stamp != null)
+            {
+                selectedName.text = "Stamp: " + stamp.name;
+                selectedDesc.text = stamp.objects.Count + " objects · " + stamp.width.ToString("0.#") + "×" + stamp.height.ToString("0.#") + " · tap to place";
+            }
+            else
+            {
+                selectedName.text = def != null ? def.name : "No object selected";
+                selectedDesc.text = def != null ? (string.IsNullOrEmpty(def.description) ? def.category + " · " + def.width + "×" + def.height : def.description) : "Pick an object from the grid.";
+            }
             transformLabel.text = string.Format("rot {0:0}°  scale {1:0.##}x  {2}{3}", editor.placeRotation, editor.placeScale, editor.placeFlipX ? "flipH " : "", editor.placeFlipY ? "flipV" : "");
             if (swipeToggle != null) swipeToggle.SetIsOnWithoutNotify(editor.swipeBuild);
             if (swipeButton != null) UIFactory.SetButtonActive(swipeButton, editor.swipeBuild);

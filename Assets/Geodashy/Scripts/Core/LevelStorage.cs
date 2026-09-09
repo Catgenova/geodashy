@@ -20,6 +20,37 @@ namespace Geodashy.Core
         public float lengthSeconds;
         public string backgroundTheme;
         public int campaignOrder;
+        public string difficultyTag;
+        public string LengthTag => LevelRating.LengthName(lengthSeconds);
+        public string DifficultyName => LevelRating.Name(difficultyTag);
+    }
+
+    /// <summary>Difficulty ratings a creator can give a level, and length names derived from its duration.</summary>
+    public static class LevelRating
+    {
+        public static readonly string[] Tags = { "", "easy", "normal", "hard", "harder", "insane", "demon" };
+        public static readonly string[] TagNames = { "Unrated", "Easy", "Normal", "Hard", "Harder", "Insane", "Demon" };
+
+        public static string Name(string tag)
+        {
+            int i = System.Array.IndexOf(Tags, tag ?? "");
+            return i < 0 ? "Unrated" : TagNames[i];
+        }
+
+        public static int Rank(string tag)
+        {
+            int i = System.Array.IndexOf(Tags, tag ?? "");
+            return i < 0 ? 0 : i;
+        }
+
+        public static string LengthName(float seconds)
+        {
+            if (seconds < 15f) return "Tiny";
+            if (seconds < 40f) return "Short";
+            if (seconds < 80f) return "Medium";
+            if (seconds < 150f) return "Long";
+            return "XL";
+        }
     }
 
     /// <summary>Display name of the game. Code, folders and save paths keep the internal "geodashy" name.</summary>
@@ -221,7 +252,8 @@ namespace Geodashy.Core
             {
                 path = path, id = d.id, name = d.name, author = d.author, objectCount = d.objects.Count, modified = modified, builtIn = builtIn,
                 description = d.description, startMount = d.settings.startMount, backgroundTheme = d.settings.backgroundTheme,
-                lengthSeconds = d.GetFinishX() / MountCatalog.Speed(d.settings.startSpeed), campaignOrder = d.campaignOrder
+                lengthSeconds = d.GetFinishX() / MountCatalog.Speed(d.settings.startSpeed), campaignOrder = d.campaignOrder,
+                difficultyTag = d.settings.difficultyTag ?? ""
             };
         }
 

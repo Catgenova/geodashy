@@ -75,6 +75,106 @@ namespace Geodashy.Editing
         /// <summary>Every death from playtests started in this editing session.</summary>
         public readonly List<DeathRecord> sessionDeaths = new List<DeathRecord>();
         public bool showDeathHeatmap;
+
+        // ---- groups hidden / locked while editing --------------------------------
+        public readonly HashSet<int> hiddenGroups = new HashSet<int>();
+        public readonly HashSet<int> lockedGroups = new HashSet<int>();
+        public bool IsHidden(LevelObject o)
+        {
+            if (hiddenGroups.Count == 0) return false;
+            foreach (var g in o.groups) if (hiddenGroups.Contains(g)) return true;
+            return false;
+        }
+        public bool IsLocked(LevelObject o)
+        {
+            if (lockedGroups.Count == 0) return false;
+            foreach (var g in o.groups) if (lockedGroups.Contains(g)) return true;
+            return false;
+        }
+        /// <summary>Visible on the current layer, not in a hidden or locked group.</summary>
+        public bool IsSelectable(LevelObject o) => IsLayerVisible(o) && !IsHidden(o) && !IsLocked(o);
+        public void SetGroupHidden(int g, bool hidden)
+        {
+            if (hidden) hiddenGroups.Add(g); else hiddenGroups.Remove(g);
+            if (hidden) foreach (var o in level.objects) if (selection.Contains(o.uid) && IsHidden(o)) selection.Remove(o.uid);
+            RefreshLayerVisibility();
+            RefreshSelectionVisuals();
+            SelectionChanged?.Invoke();
+            ViewOptionsChanged?.Invoke();
+        }
+        public void SetGroupLocked(int g, bool locked)
+        {
+            if (locked) lockedGroups.Add(g); else lockedGroups.Remove(g);
+            if (locked) foreach (var o in level.objects) if (selection.Contains(o.uid) && IsLocked(o)) selection.Remove(o.uid);
+            RefreshSelectionVisuals();
+            SelectionChanged?.Invoke();
+            ViewOptionsChanged?.Invoke();
+        }
+        /// <summary>Every group id used by at least one object, ascending.</summary>
+        public List<int> UsedGroups()
+        {
+            var set = new HashSet<int>();
+            foreach (var o in level.objects) foreach (var g in o.groups) if (g > 0) set.Add(g);
+            var list = new List<int>(set);
+            list.Sort();
+            return list;
+        }
+
+        // ---- snapping guides -----------------------------------------------------
+        public const string SnapGuidesPref = "geodashy.snapGuides";
+        public bool snapGuides = PlayerPrefs.GetInt(SnapGuidesPref, 1) == 1;
+        readonly List<float> guideXs = new List<float>();
+        readonly List<float> guideYs = new List<float>();
+
+        // ---- stamps ------------------------------------------------------------------
+        public Stamp StampBrush { get; private set; }
+        public void SetStampBrush(Stamp stamp)
+        {
+            StampBrush = stamp;
+            if (stamp != null)
+            {
+                BuildDef = null;
+                ghost.enabled = false;
+                if (Mode != EditorMode.Build) SetMode(EditorMode.Build);
+            }
+            ViewOptionsChanged?.Invoke();
+        }
+        public bool SaveSelectionAsStamp(string name)
+        {
+            var objs = SelectedObjects();
+            if (objs.Count == 0) return false;
+            var stamp = Stamp.FromObjects(name, objs);
+            StampStorage.Save(stamp);
+            StampsChanged?.Invoke();
+            return true;
+        }
+        public event Action StampsChanged;
+        public void NotifyStampsChanged() => StampsChanged?.Invoke();
+
+        // ---- object budget -------------------------------------------------------------
+        public const int BudgetWarn = 1500;
+        public const int BudgetHigh = 3000;
+        /// <summary>Object count per palette shelf, largest first.</summary>
+        public List<KeyValuePair<string, int>> CountByCategory()
+        {
+            var counts = new Dictionary<string, int>();
+            foreach (var o in level.objects)
+            {
+                var d = ObjectCatalog.Get(o.type);
+                var cat = d != null ? d.category : "?";
+                counts[cat] = counts.TryGetValue(cat, out var c) ? c + 1 : 1;
+            }
+            var list = new List<KeyValuePair<string, int>>(counts);
+            list.Sort((a, b) => b.Value.CompareTo(a.Value));
+            return list;
+        }
+
+        // ---- long press / context menu ------------------------------------------------
+        float pressTime;
+        Vector2 pressScreen;
+        bool longPressFired;
+        Vector2 panStartScreen;
+        TapRipple ripple;
         HitboxOverlay heatmapOverlay;
         readonly List<SpriteRenderer> heatmapPool = new List<SpriteRenderer>();
         public event Action DeathsChanged;
@@ -203,6 +303,7 @@ namespace Geodashy.Editing
             ground = GroundRenderer.Create(transform, cam, level.settings);
             groundProps = GroundProps.Create(transform, cam, level.settings, x => GameSession.LevelObjectNear(level, x));
             grid = EditorGrid.Create(transform, editorCamera, this);
+            ripple = TapRipple.Create(transform, 990);
             editorCamera.minY = level.settings.groundY - 8f;
 
             var ghostGo = new GameObject("Ghost");
@@ -286,6 +387,8 @@ namespace Geodashy.Editing
             {
                 bool dim = !showAllLayers && v.data.editorLayer != currentEditorLayer;
                 v.SetDimmed(dim);
+                bool hidden = IsHidden(v.data);
+                if (v.gameObject.activeSelf == hidden) v.gameObject.SetActive(!hidden);
             }
         }
 
@@ -304,6 +407,7 @@ namespace Geodashy.Editing
 
         public void SetBuildDef(ObjectDefinition def)
         {
+            if (def != null) StampBrush = null;
             BuildDef = def;
             if (ghost != null)
             {
@@ -344,9 +448,18 @@ namespace Geodashy.Editing
 
         string Snapshot() => LevelSerializer.ToJson(level, false);
 
-        public void RecordUndo()
+        public void RecordUndo() => RecordUndo("Edit");
+
+        public void RecordUndo(string label)
         {
-            undo.Push(Snapshot());
+            undo.Push(Snapshot(), label);
+        }
+
+        /// <summary>Moves through the history: negative steps undo, positive redo.</summary>
+        public void JumpHistory(int steps)
+        {
+            if (steps < 0) for (int i = 0; i < -steps && undo.CanUndo; i++) RestoreSnapshot(undo.PopUndo(Snapshot()));
+            else for (int i = 0; i < steps && undo.CanRedo; i++) RestoreSnapshot(undo.PopRedo(Snapshot()));
         }
 
         void MarkChanged()
@@ -407,7 +520,7 @@ namespace Geodashy.Editing
 
         public LevelObject AddObject(ObjectDefinition def, Vector2 pos, bool record = true)
         {
-            if (record) RecordUndo();
+            if (record) RecordUndo("Place " + def.name);
             var o = new LevelObject
             {
                 uid = level.AllocateUid(),
@@ -432,7 +545,7 @@ namespace Geodashy.Editing
 
         public void AddObjects(List<LevelObject> objs, bool record = true, bool select = true)
         {
-            if (record) RecordUndo();
+            if (record) RecordUndo("Add " + objs.Count + (objs.Count == 1 ? " object" : " objects"));
             if (select) selection.Clear();
             foreach (var o in objs)
             {
@@ -451,7 +564,7 @@ namespace Geodashy.Editing
         {
             var list = new List<int>(uids);
             if (list.Count == 0) return;
-            if (record) RecordUndo();
+            if (record) RecordUndo("Delete " + list.Count + (list.Count == 1 ? " object" : " objects"));
             var set = new HashSet<int>(list);
             level.objects.RemoveAll(o => set.Contains(o.uid));
             foreach (var uid in list)
@@ -480,10 +593,12 @@ namespace Geodashy.Editing
         }
 
         /// <summary>Applies an edit to every selected object with a single undo step.</summary>
-        public void EditSelection(Action<LevelObject> edit, bool refreshPanel = true)
+        public void EditSelection(Action<LevelObject> edit, bool refreshPanel = true) => EditSelection(edit, refreshPanel, "Edit selection");
+
+        public void EditSelection(Action<LevelObject> edit, bool refreshPanel, string label)
         {
             if (selection.Count == 0) return;
-            RecordUndo();
+            RecordUndo(label);
             foreach (var uid in selection)
             {
                 var o = level.FindByUid(uid);
@@ -499,7 +614,7 @@ namespace Geodashy.Editing
 
         public void EditObject(LevelObject o, Action<LevelObject> edit)
         {
-            RecordUndo();
+            RecordUndo("Edit property");
             edit(o);
             RefreshView(o.uid);
             RefreshSelectionVisuals();
@@ -557,7 +672,7 @@ namespace Geodashy.Editing
             {
                 o.x += delta.x;
                 o.y += delta.y;
-            });
+            }, true, "Nudge");
         }
 
         /// <summary>Rotates the selection; multiple objects rotate around the selection centre.</summary>
@@ -580,7 +695,7 @@ namespace Geodashy.Editing
                     o.y = p.y;
                 }
                 o.rotation = GeoMath.NormalizeAngle(o.rotation + degrees);
-            });
+            }, true, "Rotate");
         }
 
         public void FlipSelection(bool horizontal)
@@ -612,7 +727,7 @@ namespace Geodashy.Editing
                     o.flipY = !o.flipY;
                     o.rotation = GeoMath.NormalizeAngle(-o.rotation);
                 }
-            });
+            }, true, "Flip");
         }
 
         public void ScaleSelection(float factor)
@@ -634,7 +749,7 @@ namespace Geodashy.Editing
                 }
                 o.scaleX = Mathf.Clamp(o.scaleX * factor, 0.125f, 16f);
                 o.scaleY = Mathf.Clamp(o.scaleY * factor, 0.125f, 16f);
-            });
+            }, true, "Scale");
         }
 
         public void AlignSelection(string how)
@@ -654,7 +769,7 @@ namespace Geodashy.Editing
                     case "centerX": o.x = b.center.x; break;
                     case "centerY": o.y = b.center.y; break;
                 }
-            });
+            }, true, "Align " + how);
         }
 
         public void SnapSelectionToGrid()
@@ -667,7 +782,7 @@ namespace Geodashy.Editing
                 var p = GeoMath.SnapCenter(new Vector2(o.x, o.y), size, gridSize);
                 o.x = p.x;
                 o.y = p.y;
-            });
+            }, true, "Snap to grid");
         }
 
         // =====================================================================
@@ -700,7 +815,7 @@ namespace Geodashy.Editing
         public void SelectAll()
         {
             selection.Clear();
-            foreach (var o in level.objects) if (IsLayerVisible(o)) selection.Add(o.uid);
+            foreach (var o in level.objects) if (IsSelectable(o)) selection.Add(o.uid);
             RefreshSelectionVisuals();
             SelectionChanged?.Invoke();
         }
@@ -727,7 +842,7 @@ namespace Geodashy.Editing
             if (!add) selection.Clear();
             foreach (var v in viewList)
             {
-                if (!IsLayerVisible(v.data)) continue;
+                if (!IsSelectable(v.data)) continue;
                 if (GeoMath.RectsOverlap(r, v.Bounds)) selection.Add(v.data.uid);
             }
             RefreshSelectionVisuals();
@@ -764,7 +879,7 @@ namespace Geodashy.Editing
             int bestOrder = int.MinValue;
             foreach (var v in viewList)
             {
-                if (!IsLayerVisible(v.data)) continue;
+                if (!IsSelectable(v.data)) continue;
                 if (!v.Bounds.Contains(world)) continue;
                 if (!v.ContainsPoint(world, 0.02f)) continue;
                 int order = v.renderer2D.sortingOrder;
@@ -880,7 +995,7 @@ namespace Geodashy.Editing
 
         public void NewLevel(string name)
         {
-            RecordUndo();
+            RecordUndo("New level");
             level = LevelData.CreateNew(string.IsNullOrWhiteSpace(name) ? "Untitled Quest" : name);
             level.settings.backgroundColor = ThemeCatalog.GetBackground(level.settings.backgroundTheme).skyBottom;
             currentFilePath = null;
@@ -1035,7 +1150,7 @@ namespace Geodashy.Editing
                 ui.Toast("Import failed: " + err);
                 return false;
             }
-            RecordUndo();
+            RecordUndo("Import JSON");
             LoadLevel(data, null);
             Dirty = true;
             return true;
@@ -1394,6 +1509,7 @@ namespace Geodashy.Editing
             if (drag == DragState.None && panButton && !overUI && (sidePressed || left.wasPressedThisFrame))
             {
                 drag = DragState.Pan;
+                panStartScreen = screen;
                 editorCamera.BeginDragPan(screen);
             }
             if (drag == DragState.Pan)
@@ -1403,7 +1519,27 @@ namespace Geodashy.Editing
                 {
                     editorCamera.EndDragPan();
                     drag = DragState.None;
+                    // a right-click that did not pan opens the context menu on the object under the cursor
+                    if (mouse != null && mouse.rightButton.wasReleasedThisFrame && (screen - panStartScreen).sqrMagnitude < 36f) OpenContextMenu(screen);
                 }
+                ghost.enabled = false;
+                return;
+            }
+
+            // long press (touch): context menu instead of a drag
+            if (mouse == null && left.isPressed && !longPressFired && drag != DragState.None && drag != DragState.SwipeBuild && drag != DragState.SwipeDelete)
+            {
+                if ((screen - pressScreen).sqrMagnitude < 144f && Time.unscaledTime - pressTime > 0.55f)
+                {
+                    longPressFired = true;
+                    CancelDrag();
+                    OpenContextMenu(screen);
+                    return;
+                }
+            }
+            if (longPressFired)
+            {
+                if (left.wasReleasedThisFrame || !left.isPressed) longPressFired = false;
                 ghost.enabled = false;
                 return;
             }
@@ -1438,6 +1574,9 @@ namespace Geodashy.Editing
                 dragStartScreen = screen;
                 dragStartWorld = CursorWorld;
                 dragMoved = false;
+                pressTime = Time.unscaledTime;
+                pressScreen = screen;
+                if (mouse == null && ripple != null) ripple.Spawn(CursorWorld, Mathf.Clamp(0.9f / editorCamera.zoom, 0.4f, 3f));
                 var handle = GizmoActive ? gizmo.HitTest(CursorWorld) : TransformGizmo.Handle.None;
                 if (handle != TransformGizmo.Handle.None) BeginGizmoDrag(handle);
                 else BeginLeftPress(shift, ctrl);
@@ -1459,9 +1598,19 @@ namespace Geodashy.Editing
             switch (Mode)
             {
                 case EditorMode.Build:
+                    if (StampBrush != null && !ctrl)
+                    {
+                        RecordUndo("Stamp " + StampBrush.name);
+                        var placed = StampBrush.Place(CursorSnapped);
+                        foreach (var o in placed) o.editorLayer = currentEditorLayer;
+                        AddObjects(placed, false, false);
+                        Haptics.Place();
+                        return;
+                    }
                     if (BuildDef != null && !ctrl)
                     {
-                        RecordUndo();
+                        RecordUndo("Place " + BuildDef.name);
+                        Haptics.Place();
                         PlaceAt(CursorSnapped);
                         lastSwipeCell = CursorSnapped;
                         drag = DragState.SwipeBuild;
@@ -1473,7 +1622,7 @@ namespace Geodashy.Editing
                     BeginSelectPress(hit, shift);
                     break;
                 case EditorMode.Delete:
-                    RecordUndo();
+                    RecordUndo("Delete");
                     drag = DragState.SwipeDelete;
                     dragMoved = false;
                     if (hit != null && DeleteAllowed(hit)) DeleteObjects(new[] { hit.data.uid }, false);
@@ -1491,7 +1640,7 @@ namespace Geodashy.Editing
             gizmoOriginals.Clear();
             foreach (var o in SelectedObjects())
                 gizmoOriginals[o.uid] = new TransformState { x = o.x, y = o.y, rotation = o.rotation, scaleX = o.scaleX, scaleY = o.scaleY };
-            RecordUndo();
+            RecordUndo("Transform");
             drag = DragState.Gizmo;
         }
 
@@ -1632,7 +1781,7 @@ namespace Geodashy.Editing
                 var o = level.FindByUid(s);
                 if (o != null) dragOriginalPositions[s] = new Vector2(o.x, o.y);
             }
-            RecordUndo();
+            RecordUndo("Move");
         }
 
         void PlaceAt(Vector2 pos)
@@ -1675,18 +1824,100 @@ namespace Geodashy.Editing
                     if (!dragMoved) break;
                     var delta = CursorWorld - dragStartWorld;
                     if (snapToGrid) delta = new Vector2(GeoMath.SnapValue(delta.x, gridSize), GeoMath.SnapValue(delta.y, gridSize));
-                    foreach (var kv in dragOriginalPositions)
+                    ApplyMoveDelta(delta);
+                    if (snapGuides)
                     {
-                        var o = level.FindByUid(kv.Key);
-                        if (o == null) continue;
-                        o.x = kv.Value.x + delta.x;
-                        o.y = kv.Value.y + delta.y;
-                        var v = GetView(kv.Key);
-                        if (v != null) v.ApplyTransform();
+                        var adjust = GuideAdjustment();
+                        if (adjust != Vector2.zero) ApplyMoveDelta(delta + adjust);
                     }
                     break;
                 }
             }
+        }
+
+        void ApplyMoveDelta(Vector2 delta)
+        {
+            foreach (var kv in dragOriginalPositions)
+            {
+                var o = level.FindByUid(kv.Key);
+                if (o == null) continue;
+                o.x = kv.Value.x + delta.x;
+                o.y = kv.Value.y + delta.y;
+                var v = GetView(kv.Key);
+                if (v != null) v.ApplyTransform();
+            }
+        }
+
+        /// <summary>
+        /// Snapping guides: the smallest shift that aligns an edge or centre of the dragged selection with an edge
+        /// or centre of a nearby unselected object. Also records the matched lines so LateUpdate can draw them.
+        /// </summary>
+        Vector2 GuideAdjustment()
+        {
+            guideXs.Clear();
+            guideYs.Clear();
+            var sel = SelectionBounds();
+            if (sel.width <= 0f && sel.height <= 0f) return Vector2.zero;
+            float tol = Mathf.Clamp(0.3f / editorCamera.zoom, 0.08f, 0.6f);
+            var view = GeoMath.Expand(editorCamera.ViewRect, 4f);
+            float bestDx = float.MaxValue, bestDy = float.MaxValue;
+            float lineX = 0f, lineY = 0f;
+            float[] sx = { sel.xMin, sel.center.x, sel.xMax };
+            float[] sy = { sel.yMin, sel.center.y, sel.yMax };
+            foreach (var v in viewList)
+            {
+                if (selection.Contains(v.data.uid) || !IsLayerVisible(v.data) || IsHidden(v.data)) continue;
+                var b = v.Bounds;
+                if (!GeoMath.RectsOverlap(view, b)) continue;
+                float[] ox = { b.xMin, b.center.x, b.xMax };
+                float[] oy = { b.yMin, b.center.y, b.yMax };
+                for (int i = 0; i < 3; i++)
+                for (int k = 0; k < 3; k++)
+                {
+                    float dx = ox[k] - sx[i];
+                    if (Mathf.Abs(dx) < tol && Mathf.Abs(dx) < Mathf.Abs(bestDx)) { bestDx = dx; lineX = ox[k]; }
+                    float dy = oy[k] - sy[i];
+                    if (Mathf.Abs(dy) < tol && Mathf.Abs(dy) < Mathf.Abs(bestDy)) { bestDy = dy; lineY = oy[k]; }
+                }
+            }
+            var adjust = Vector2.zero;
+            if (bestDx != float.MaxValue) { adjust.x = bestDx; guideXs.Add(lineX); }
+            if (bestDy != float.MaxValue) { adjust.y = bestDy; guideYs.Add(lineY); }
+            return adjust;
+        }
+
+        /// <summary>Context menu for the object under a screen point (long press on touch, right-click with a mouse).</summary>
+        void OpenContextMenu(Vector2 screen)
+        {
+            if (Mode == EditorMode.Delete) return;
+            var world = editorCamera.ScreenToWorld(screen);
+            var hit = PickObject(world);
+            if (hit == null)
+            {
+                if (selection.Count == 0) return;
+            }
+            else if (!selection.Contains(hit.data.uid)) Select(hit.data.uid, false);
+            if (Mode == EditorMode.Build) SetMode(EditorMode.Edit);
+            var options = new[] { "Copy", "Duplicate", "Delete", "Properties", "Select same type", "Save as stamp…", "Rotate 90°", "Flip H" };
+            ui.ShowMenuAt(screen, options, i =>
+            {
+                switch (i)
+                {
+                    case 0: CopySelection(); break;
+                    case 1: DuplicateSelection(); break;
+                    case 2: DeleteSelection(); break;
+                    case 3: ui.OpenPropertiesForSelection(); break;
+                    case 4:
+                    {
+                        var objs = SelectedObjects();
+                        if (objs.Count > 0) SelectByType(objs[0].type);
+                        break;
+                    }
+                    case 5: ui.PromptSaveStamp(); break;
+                    case 6: RotateSelection(90); break;
+                    case 7: FlipSelection(true); break;
+                }
+            });
         }
 
         void EndLeftDrag(bool shift)
@@ -1716,6 +1947,8 @@ namespace Geodashy.Editing
                         SelectionChanged?.Invoke();
                     }
                     else undo.DiscardLast();
+                    guideXs.Clear();
+                    guideYs.Clear();
                     break;
                 }
                 case DragState.SwipeDelete:
@@ -1782,6 +2015,27 @@ namespace Geodashy.Editing
             {
                 var size = new Vector2(BuildDef.width * placeScale, BuildDef.height * placeScale);
                 hitboxOverlay.DrawObject(BuildDef, CursorSnapped, placeRotation, size, placeFlipX, placeFlipY, 1f);
+            }
+            // stamp brush footprint at the cursor
+            if (StampBrush != null && Mode == EditorMode.Build && drag == DragState.None && !ui.PointerOverUI)
+            {
+                var r = new Rect(CursorSnapped.x - StampBrush.width / 2f, CursorSnapped.y - StampBrush.height / 2f, StampBrush.width, StampBrush.height);
+                hitboxOverlay.Rect(r, new Color(1f, 0.85f, 0.3f, 0.8f), hitboxOverlay.thickness);
+                foreach (var o in StampBrush.objects)
+                {
+                    var d = ObjectCatalog.Get(o.type);
+                    if (d == null) continue;
+                    var sz = new Vector2(d.width * Mathf.Abs(o.scaleX), d.height * Mathf.Abs(o.scaleY));
+                    hitboxOverlay.Rect(new Rect(CursorSnapped.x + o.x - sz.x / 2f, CursorSnapped.y + o.y - sz.y / 2f, sz.x, sz.y), new Color(1f, 0.85f, 0.3f, 0.35f), hitboxOverlay.thickness * 0.6f);
+                }
+            }
+            // snapping guides while dragging
+            if (drag == DragState.MoveSelection && snapGuides && (guideXs.Count > 0 || guideYs.Count > 0))
+            {
+                var view = editorCamera.ViewRect;
+                var gc = new Color(1f, 0.4f, 0.9f, 0.9f);
+                foreach (var x in guideXs) hitboxOverlay.Segment(new Vector2(x, view.yMin), new Vector2(x, view.yMax), gc, hitboxOverlay.thickness * 0.6f);
+                foreach (var y in guideYs) hitboxOverlay.Segment(new Vector2(view.xMin, y), new Vector2(view.xMax, y), gc, hitboxOverlay.thickness * 0.6f);
             }
             hitboxOverlay.End();
             DrawDeathHeatmap();

@@ -62,6 +62,25 @@ namespace Geodashy.Rendering
             return s;
         }
 
+        /// <summary>Soft radial darkening for the HUD beat pulse: transparent centre, opaque corners.</summary>
+        public static Sprite Vignette()
+        {
+            if (cache.TryGetValue("vignette", out var s) && s != null) return s;
+            const int n = 128;
+            var r = new Raster(n, n);
+            for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++)
+            {
+                float dx = (x + 0.5f) / n * 2f - 1f, dy = (y + 0.5f) / n * 2f - 1f;
+                float d = Mathf.Sqrt(dx * dx + dy * dy);
+                float a = Mathf.Clamp01((d - 0.45f) / 0.75f);
+                r.Plot(x, y, new Color(1f, 1f, 1f, a * a));
+            }
+            s = r.ToSprite(64f);
+            cache["vignette"] = s;
+            return s;
+        }
+
         public static Sprite Circle()
         {
             if (cache.TryGetValue("circle", out var s) && s != null) return s;

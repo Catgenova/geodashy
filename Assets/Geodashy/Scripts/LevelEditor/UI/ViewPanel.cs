@@ -9,7 +9,10 @@ namespace Geodashy.Editing.UI
     {
         EditorUI ui;
         LevelEditor editor;
-        Toggle snapToggle, gridToggle, guideToggle, bpmToggle, allLayersToggle, hitboxToggle, beatToggle, gizmoToggle;
+        Toggle snapToggle, gridToggle, guideToggle, bpmToggle, allLayersToggle, hitboxToggle, beatToggle, gizmoToggle, snapGuidesToggle;
+        RectTransform groupsHost;
+        Text groupsEmpty, budgetLabel;
+        string groupsKey = "";
         Button[] beatButtons;
         Button[] gridButtons;
         readonly float[] gridSizes = { 0.25f, 0.5f, 1f, 2f };
@@ -54,6 +57,8 @@ namespace Geodashy.Editing.UI
             UIFactory.Button(qr2, "Save", ui.SaveWithPrompt, -1, 28, UIFactory.ButtonActive, 13);
             UIFactory.Button(qr2, "Save as…", ui.PromptSaveAs, -1, 28, null, 13);
             UIFactory.Button(qr2, "Files", ui.OpenFileDialog, -1, 28, null, 13);
+            UIFactory.Button(qr2, "History", ui.OpenHistory, -1, 28, null, 13);
+            budgetLabel = UIFactory.Label(c, "", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 46);
             savedLabel = UIFactory.Label(c, "", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 32);
             UIFactory.Button(c, "◀ Main menu", ui.ReturnToMenu, -1, 26, null, 12);
 
@@ -73,6 +78,13 @@ namespace Geodashy.Editing.UI
                 gridButtons[i] = UIFactory.Button(gr, names[i], () => editor.SetGridSize(gridSizes[idx]), -1, 24, null, 12);
             }
 
+            snapGuidesToggle = UIFactory.Toggle(c, "Snap to neighbours (guides)", editor.snapGuides, v =>
+            {
+                editor.snapGuides = v;
+                PlayerPrefs.SetInt(LevelEditor.SnapGuidesPref, v ? 1 : 0);
+                editor.NotifyViewOptionsChanged();
+            });
+            UIFactory.Label(c, "While dragging, edges and centres snap to nearby objects and pink guide lines show the match.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 32);
             beatToggle = UIFactory.Toggle(c, "Snap X to the beat", editor.beatSnap, v =>
             {
                 editor.beatSnap = v;
@@ -113,6 +125,24 @@ namespace Geodashy.Editing.UI
             UIFactory.Button(lr, "▶", () => editor.SetEditorLayer(editor.currentEditorLayer + 1), 34, 26);
             allLayersToggle = UIFactory.Toggle(c, "Show all layers (\\)", editor.showAllLayers, v => editor.SetShowAllLayers(v));
             UIFactory.Button(c, "Move selection to this layer", () => editor.EditSelection(o => o.editorLayer = editor.currentEditorLayer), -1, 26, null, 12);
+
+            UIFactory.SectionHeader(c, "Groups");
+            UIFactory.Label(c, "Hide a group to get it out of the way, lock it so taps pass through it.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 30);
+            groupsHost = UIFactory.Rect(c, "Groups");
+            UIFactory.VLayout(groupsHost, 2, 0);
+            UIFactory.Fitter(groupsHost, true, false);
+            groupsEmpty = UIFactory.Label(groupsHost, "No groups in this level yet (Properties ▸ Groups).", 11, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 20);
+            var gr2 = UIFactory.Row(c, 26, 3);
+            UIFactory.Button(gr2, "Show all", () =>
+            {
+                foreach (var g in new System.Collections.Generic.List<int>(editor.hiddenGroups)) editor.SetGroupHidden(g, false);
+                RefreshGroups(true);
+            }, -1, 24, null, 11);
+            UIFactory.Button(gr2, "Unlock all", () =>
+            {
+                foreach (var g in new System.Collections.Generic.List<int>(editor.lockedGroups)) editor.SetGroupLocked(g, false);
+                RefreshGroups(true);
+            }, -1, 24, null, 11);
 
             UIFactory.SectionHeader(c, "Zoom");
             zoomLabel = UIFactory.Label(c, "", 12, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 18);
@@ -164,8 +194,34 @@ namespace Geodashy.Editing.UI
             editor.ViewOptionsChanged += Refresh;
             ui.UIScaleChanged += Refresh;
             editor.LevelChanged += RefreshQuest;
+            editor.LevelChanged += () => RefreshGroups(false);
             Refresh();
             RefreshQuest();
+            RefreshGroups(true);
+        }
+
+        /// <summary>Rebuilds the group rows only when the set of used groups changes (LevelChanged fires on every move).</summary>
+        void RefreshGroups(bool force)
+        {
+            if (groupsHost == null) return;
+            var used = editor.UsedGroups();
+            var key = string.Join(",", used);
+            if (!force && key == groupsKey) return;
+            groupsKey = key;
+            foreach (Transform child in groupsHost) if (child.gameObject != groupsEmpty.gameObject) Destroy(child.gameObject);
+            groupsEmpty.gameObject.SetActive(used.Count == 0);
+            int shown = 0;
+            foreach (var g in used)
+            {
+                if (shown++ >= 24) break;
+                int gid = g;
+                var row = UIFactory.Row(groupsHost, 24, 4);
+                UIFactory.Label(row, "Group " + gid, 12, TextAnchor.MiddleLeft, UIFactory.TextColor, 70, 24);
+                UIFactory.Toggle(row, "Hide", editor.hiddenGroups.Contains(gid), v => editor.SetGroupHidden(gid, v), 24, 62);
+                UIFactory.Toggle(row, "Lock", editor.lockedGroups.Contains(gid), v => editor.SetGroupLocked(gid, v), 24, 62);
+                UIFactory.Button(row, "Sel", () => editor.SelectByGroup(gid), 40, 22, null, 11);
+            }
+            if (used.Count > 24) UIFactory.Label(groupsHost, "… and " + (used.Count - 24) + " more groups", 11, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 18);
         }
 
         void RefreshQuest()
@@ -174,6 +230,20 @@ namespace Geodashy.Editing.UI
             if (!nameInput.isFocused) nameInput.SetTextWithoutNotify(editor.level.name);
             string state = string.IsNullOrEmpty(editor.currentFilePath) ? "Not saved yet" : (editor.Dirty ? "Unsaved changes" : "Saved");
             savedLabel.text = state + " · P tests, Ctrl+S saves, Esc returns from a test";
+            if (budgetLabel != null)
+            {
+                int n = editor.level.objects.Count;
+                var parts = new System.Collections.Generic.List<string>();
+                int k = 0;
+                foreach (var kv in editor.CountByCategory())
+                {
+                    if (k++ >= 4) break;
+                    parts.Add(kv.Key.ToLowerInvariant() + " " + kv.Value);
+                }
+                string verdict = n >= LevelEditor.BudgetHigh ? " — very heavy, expect slowdown on phones" : (n >= LevelEditor.BudgetWarn ? " — getting heavy for phones" : "");
+                budgetLabel.text = n + " objects" + (parts.Count > 0 ? " (" + string.Join(", ", parts) + ")" : "") + verdict;
+                budgetLabel.color = n >= LevelEditor.BudgetHigh ? new Color(1f, 0.4f, 0.35f) : (n >= LevelEditor.BudgetWarn ? new Color(1f, 0.75f, 0.3f) : UIFactory.TextDim);
+            }
         }
 
         void Refresh()
@@ -182,6 +252,7 @@ namespace Geodashy.Editing.UI
             if (uiScaleLabel != null) uiScaleLabel.text = string.Format("Interface size {0:0}%", EditorUI.UIScale * 100f);
             if (layoutButton != null) UIFactory.SetButtonLabel(layoutButton, "Layout: " + EditorUI.PhoneLayoutName);
             snapToggle.SetIsOnWithoutNotify(editor.snapToGrid);
+            if (snapGuidesToggle != null) snapGuidesToggle.SetIsOnWithoutNotify(editor.snapGuides);
             gridToggle.SetIsOnWithoutNotify(editor.grid.showGrid);
             hitboxToggle.SetIsOnWithoutNotify(editor.showHitboxes);
             gizmoToggle.SetIsOnWithoutNotify(editor.GizmoVisible);

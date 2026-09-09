@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Geodashy.Core;
+using Geodashy.Gameplay;
 using Geodashy.Rendering;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -26,6 +27,12 @@ namespace Geodashy.Editing.UI
         List<LevelFileInfo> levels = new List<LevelFileInfo>();
         LevelFileInfo selected;
         readonly List<Button> rowButtons = new List<Button>();
+        // level select filter and sort (cycle buttons; persisted)
+        static readonly string[] FilterNames = { "All quests", "Not cleared", "Cleared", "Easy", "Normal", "Hard", "Harder", "Insane", "Demon", "Unrated" };
+        static readonly string[] SortNames = { "Default", "Name", "Difficulty", "Length", "Newest" };
+        int filterIndex = PlayerPrefs.GetInt("geodashy.levelFilter", 0);
+        int sortIndex = PlayerPrefs.GetInt("geodashy.levelSort", 0);
+        Button filterButton, sortButton;
         CanvasScaler scaler;
         bool phone;
         /// <summary>Set before the menu is rebuilt so it reopens on the Options screen (used by the layout switch).</summary>
@@ -132,9 +139,24 @@ namespace Geodashy.Editing.UI
             UIFactory.Label(header, "Choose a quest", 26, TextAnchor.MiddleLeft, UIFactory.Accent, -1, 40, true);
             UIFactory.Button(header, "Refresh", RefreshLevels, 100, 40);
             UIFactory.Button(header, "+ New quest", () => app.OpenEditor(LevelData.CreateNew("Untitled Quest"), null), 140, 40, UIFactory.Good);
+            var filters = UIFactory.Rect(frame, "Filters");
+            UIFactory.Anchor(filters, new Vector2(0, 1), new Vector2(0.55f, 1), new Vector2(16, -96), new Vector2(-8, -62));
+            UIFactory.HLayout(filters, 6, 0, true, TextAnchor.MiddleLeft);
+            filterButton = UIFactory.Button(filters, "", () =>
+            {
+                filterIndex = (filterIndex + 1) % FilterNames.Length;
+                PlayerPrefs.SetInt("geodashy.levelFilter", filterIndex);
+                RefreshLevels();
+            }, -1, 32, null, 13);
+            sortButton = UIFactory.Button(filters, "", () =>
+            {
+                sortIndex = (sortIndex + 1) % SortNames.Length;
+                PlayerPrefs.SetInt("geodashy.levelSort", sortIndex);
+                RefreshLevels();
+            }, -1, 32, null, 13);
 
             var listHost = UIFactory.Rect(frame, "ListHost");
-            UIFactory.Anchor(listHost, new Vector2(0, 0), new Vector2(0.55f, 1), new Vector2(16, 16), new Vector2(-8, -64));
+            UIFactory.Anchor(listHost, new Vector2(0, 0), new Vector2(0.55f, 1), new Vector2(16, 16), new Vector2(-8, -100));
             var scroll = UIFactory.ScrollView(listHost, "Levels", out listContent, true, false);
             UIFactory.Stretch(scroll.GetComponent<RectTransform>());
             UIFactory.VLayout(listContent, 4, 6);
@@ -223,6 +245,11 @@ namespace Geodashy.Editing.UI
             }, -1, 36, UIFactory.ButtonActive, 13);
             UIFactory.Label(frame, "The phone layout has finger-sized controls, drawers instead of docks and touch gestures. Auto picks it on Android and the desktop layout elsewhere.", 12, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 34);
             RefreshUiLabel();
+
+            if (Haptics.Supported)
+            {
+                UIFactory.Toggle(frame, "Vibration on jumps, deaths and waystones", Haptics.Enabled, v => Haptics.Enabled = v, 30);
+            }
 
             UIFactory.SectionHeader(frame, "Music volume");
             var musicLabel = UIFactory.Label(frame, "", 13, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 18);
@@ -321,18 +348,54 @@ namespace Geodashy.Editing.UI
             for (int i = 0; i < crestButtons.Count; i++) UIFactory.SetButtonActive(crestButtons[i], i == PlayerProfile.Crest);
         }
 
+        bool PassesFilter(LevelFileInfo i, LevelStats stats)
+        {
+            switch (filterIndex)
+            {
+                case 0: return true;
+                case 1: return stats.completions == 0 && stats.checkpointCompletions == 0;
+                case 2: return stats.completions > 0 || stats.checkpointCompletions > 0;
+                case 9: return string.IsNullOrEmpty(i.difficultyTag);
+                default: return LevelRating.Name(i.difficultyTag) == FilterNames[filterIndex];
+            }
+        }
+
+        void SortLevels(List<LevelFileInfo> list)
+        {
+            switch (sortIndex)
+            {
+                case 1: list.Sort((a, b) => string.Compare(a.name, b.name, StringComparison.OrdinalIgnoreCase)); break;
+                case 2: list.Sort((a, b) => { int c = LevelRating.Rank(a.difficultyTag).CompareTo(LevelRating.Rank(b.difficultyTag)); return c != 0 ? c : string.Compare(a.name, b.name, StringComparison.OrdinalIgnoreCase); }); break;
+                case 3: list.Sort((a, b) => a.lengthSeconds.CompareTo(b.lengthSeconds)); break;
+                case 4: list.Sort((a, b) => b.modified.CompareTo(a.modified)); break;
+            }
+        }
+
         void RefreshLevels()
         {
-            levels = LevelStorage.ListLevels();
+            var all = LevelStorage.ListLevels();
+            var statsById = new Dictionary<string, LevelStats>();
+            levels = new List<LevelFileInfo>();
+            foreach (var i in all)
+            {
+                var st = LevelStatsStorage.Load(i.id);
+                statsById[i.id] = st;
+                if (PassesFilter(i, st)) levels.Add(i);
+            }
+            SortLevels(levels);
+            if (filterButton != null) UIFactory.SetButtonLabel(filterButton, "Filter: " + FilterNames[filterIndex] + " ▸");
+            if (sortButton != null) UIFactory.SetButtonLabel(sortButton, "Sort: " + SortNames[sortIndex] + " ▸");
             foreach (Transform child in listContent) Destroy(child.gameObject);
             rowButtons.Clear();
-            if (levels.Count == 0) UIFactory.Label(listContent, "No quests yet. Press + New quest to build one.", 14, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 40);
+            if (levels.Count == 0) UIFactory.Label(listContent, all.Count == 0 ? "No quests yet. Press + New quest to build one." : "Nothing matches this filter.", 14, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 40);
             foreach (var info in levels)
             {
                 var i = info;
-                var stats = LevelStatsStorage.Load(i.id);
+                var stats = statsById[i.id];
                 string status = stats.completions > 0 ? "✔ cleared" : (stats.bestProgress > 0f ? (stats.bestProgress * 100f).ToString("0") + "%" : "new");
-                var b = UIFactory.Button(listContent, (i.builtIn ? "★ " : "") + i.name + "\n<size=11>" + (string.IsNullOrEmpty(i.author) ? "unknown author" : i.author) + " · " + status + "</size>",
+                if (stats.fullLoot) status += " · all loot";
+                string tags = (string.IsNullOrEmpty(i.difficultyTag) ? "" : LevelRating.Name(i.difficultyTag) + " · ") + i.LengthTag;
+                var b = UIFactory.Button(listContent, (i.builtIn ? "★ " : "") + i.name + "\n<size=11>" + (string.IsNullOrEmpty(i.author) ? "unknown author" : i.author) + " · " + status + "   [" + tags + "]</size>",
                     () => Select(i), -1, 52, null, 15);
                 var t = b.GetComponentInChildren<Text>();
                 t.alignment = TextAnchor.MiddleLeft;
@@ -362,9 +425,11 @@ namespace Geodashy.Editing.UI
             UIFactory.Label(col, "Starts on the " + mount.name, 14, TextAnchor.MiddleLeft, UIFactory.TextColor, -1, 22, true);
             UIFactory.Label(col, mount.control, 12, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 20);
             UIFactory.Label(col, ThemeCatalog.GetBackground(info.backgroundTheme).name + " · " + info.objectCount + " objects · ~" + Mathf.RoundToInt(info.lengthSeconds) + "s", 12, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 20);
+            UIFactory.Label(col, LevelRating.Name(info.difficultyTag) + " · " + info.LengthTag + " (" + Mathf.RoundToInt(info.lengthSeconds) + "s)", 12, TextAnchor.MiddleLeft, UIFactory.Accent, -1, 20);
             UIFactory.SectionHeader(detailPane, "Your record");
             string best = stats.completions > 0 ? "Champion: cleared " + stats.completions + "×" : (stats.bestProgress > 0f ? "Champion best " + (stats.bestProgress * 100f).ToString("0.0") + "%" : "Champion: not attempted");
-            UIFactory.Label(detailPane, best + "  ·  " + stats.attempts + " attempts" + (stats.checkpointCompletions > 0 ? "  ·  Checkpoints: cleared " + stats.checkpointCompletions + "×" : ""), 13, TextAnchor.MiddleLeft, UIFactory.TextColor, -1, 22);
+            UIFactory.Label(detailPane, best + "  ·  " + stats.attempts + " attempts" + (stats.checkpointCompletions > 0 ? "  ·  Checkpoints: cleared " + stats.checkpointCompletions + "×" : "") + (stats.fullLoot ? "  ·  all loot gathered" : ""), 13, TextAnchor.MiddleLeft, UIFactory.TextColor, -1, 22);
+            BuildDeathChart(detailPane, stats);
             UIFactory.SectionHeader(detailPane, "Ride out");
             UIFactory.Button(detailPane, "▶ Training", () => Launch(info, Difficulty.Training), -1, 40, null, 16);
             UIFactory.Label(detailPane, DifficultyInfo.Describe(Difficulty.Training), 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 30);
@@ -383,6 +448,47 @@ namespace Geodashy.Editing.UI
                     Debug.LogError("Could not open level: " + e.Message);
                 }
             }, -1, 42, UIFactory.ButtonActive, 16);
+        }
+
+        /// <summary>Deaths per 10% of the level as a small bar chart, with the average survival and the top killer.</summary>
+        void BuildDeathChart(Transform parent, LevelStats stats)
+        {
+            if (stats.deaths.Count == 0)
+            {
+                UIFactory.Label(parent, "No Champion runs recorded yet: the death chart appears after the first attempts.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 30);
+                return;
+            }
+            var hist = stats.DeathHistogram(10);
+            int max = 1;
+            foreach (var h in hist) max = Mathf.Max(max, h);
+            var chart = UIFactory.Rect(parent, "DeathChart");
+            UIFactory.Layout(chart.gameObject, -1, 64);
+            UIFactory.HLayout(chart, 3, 0, true, TextAnchor.LowerLeft);
+            chart.GetComponent<HorizontalLayoutGroup>().childForceExpandHeight = false;
+            chart.GetComponent<HorizontalLayoutGroup>().childControlHeight = false;
+            for (int i = 0; i < hist.Length; i++)
+            {
+                var barHost = UIFactory.Rect(chart, "Bar" + i);
+                UIFactory.Layout(barHost.gameObject, -1, 64, 1);
+                barHost.sizeDelta = new Vector2(0, 64);
+                var track = UIFactory.Panel(barHost, "Track", new Color(1, 1, 1, 0.06f));
+                UIFactory.Anchor(track, new Vector2(0, 0), new Vector2(1, 1), new Vector2(0, 14), new Vector2(0, 0));
+                float frac = hist[i] / (float)max;
+                var bar = UIFactory.Panel(barHost, "Fill", Color.Lerp(PlayHUD.SessionDeathColor, PlayHUD.AllTimeDeathColor, frac));
+                UIFactory.Anchor(bar, new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 14), new Vector2(-1, 14 + 48f * frac));
+                bar.GetComponent<Image>().raycastTarget = false;
+                var lbl = UIFactory.Label(barHost, (i * 10) + "%", 9, TextAnchor.MiddleCenter, UIFactory.TextDim);
+                UIFactory.Anchor(lbl.rectTransform, new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 0), new Vector2(0, 13));
+                if (hist[i] > 0)
+                {
+                    var count = UIFactory.Label(barHost, hist[i].ToString(), 9, TextAnchor.LowerCenter, UIFactory.TextColor);
+                    UIFactory.Anchor(count.rectTransform, new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 14 + 48f * frac), new Vector2(0, 28 + 48f * frac));
+                }
+            }
+            string killer = stats.TopKiller(out int kills);
+            string summary = "Deaths per 10% of the quest (" + stats.deaths.Count + " recorded)  ·  average run reaches " + (stats.AverageDeathProgress() * 100f).ToString("0") + "%";
+            if (!string.IsNullOrEmpty(killer)) summary += "  ·  most often slain by " + killer + " (" + kills + "×)";
+            UIFactory.Label(parent, summary, 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 32);
         }
 
         void Launch(LevelFileInfo info, Difficulty difficulty)

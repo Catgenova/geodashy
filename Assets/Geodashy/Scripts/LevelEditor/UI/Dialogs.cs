@@ -45,6 +45,12 @@ namespace Geodashy.Editing.UI
                 editor.MarkDirty();
             }, true, 140);
             UIFactory.Label(c, "Sort position in the level select once the map ships as a campaign map (lower comes first).", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 18);
+            DropdownField.Create(c, "Difficulty rating", LevelRating.Tags, Mathf.Max(0, System.Array.IndexOf(LevelRating.Tags, s.difficultyTag)), i =>
+            {
+                s.difficultyTag = LevelRating.Tags[i];
+                editor.MarkDirty();
+            }, 140, 28, LevelRating.TagNames);
+            UIFactory.Label(c, "Shown in the level select next to the length (" + LevelRating.LengthName(level.GetFinishX() / MountCatalog.Speed(s.startSpeed)) + " for this quest) and used by its filters.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 30);
             UIFactory.Button(c, "Reset play stats (deaths, personal best)", () =>
             {
                 ui.Confirm("Reset play stats?", "Death markers and the personal best for this quest will be cleared.", () =>
@@ -248,23 +254,36 @@ namespace Geodashy.Editing.UI
             }
             songLabel = UIFactory.Label(c, "", 13, TextAnchor.MiddleLeft, UIFactory.TextColor, -1, 24);
             var songRow = UIFactory.Row(c, 32, 6);
+            void ImportSongFrom(string path)
+            {
+                if (string.IsNullOrEmpty(path)) return;
+                try
+                {
+                    s.songFile = LevelStorage.ImportAsset(level.id, path);
+                    editor.MarkDirty();
+                    RefreshSongLabel();
+                    ui.Toast("Imported " + s.songFile);
+                    editor.PreviewSong(s.songOffset);
+                }
+                catch (Exception e)
+                {
+                    ui.Toast("Import failed: " + e.Message);
+                }
+            }
             UIFactory.Button(songRow, "Import song…", () =>
             {
-                FileBrowserDialog.Open(ui, "Choose a song", LevelStorage.AudioExtensions, path =>
+                // phones use the system document picker (works with scoped storage); desktops the in-app browser
+                if (SongPicker.Available)
                 {
-                    try
+                    ui.Toast("Choose an audio file…");
+                    SongPicker.Pick(editor, path =>
                     {
-                        s.songFile = LevelStorage.ImportAsset(level.id, path);
-                        editor.MarkDirty();
-                        RefreshSongLabel();
-                        ui.Toast("Imported " + s.songFile);
-                        editor.PreviewSong(s.songOffset);
-                    }
-                    catch (Exception e)
-                    {
-                        ui.Toast("Import failed: " + e.Message);
-                    }
-                });
+                        if (string.IsNullOrEmpty(path)) ui.Toast("No song chosen");
+                        else ImportSongFrom(path);
+                    });
+                    return;
+                }
+                FileBrowserDialog.Open(ui, "Choose a song", LevelStorage.AudioExtensions, ImportSongFrom);
             }, -1, 30, UIFactory.ButtonActive, 13);
             UIFactory.Button(songRow, "▶ Preview", () => editor.PreviewSong(s.songOffset), -1, 30, UIFactory.Good, 13);
             UIFactory.Button(songRow, "■ Stop", editor.StopSongPreview, -1, 30, null, 13);
@@ -322,6 +341,54 @@ namespace Geodashy.Editing.UI
     }
 
     /// <summary>New / save / load / delete / import / export.</summary>
+    /// <summary>The undo history: every recorded change, newest at the bottom; click one to jump back or forward.</summary>
+    public static class UndoHistoryDialog
+    {
+        public static void Open(EditorUI ui, LevelEditor editor)
+        {
+            var c = ui.OpenModal("History", 460, 560);
+            var modal = ui.TopModal;
+            UIFactory.Label(c, "Click an entry to return the level to that point. Entries below the current state are redo steps.", 12, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 34);
+            var scroll = UIFactory.ScrollView(c, "List", out var list, true, false);
+            UIFactory.VLayout(list, 2, 4);
+            UIFactory.Fitter(list, true, false);
+            var undos = editor.undo.UndoEntries;
+            var redos = editor.undo.RedoEntries;
+            int rowH = ui.IsPhone ? 40 : 28;
+            UIFactory.Button(list, "Start of session", () =>
+            {
+                ui.CloseModal(modal);
+                editor.JumpHistory(-undos.Count);
+            }, -1, rowH, null, 12);
+            for (int i = 0; i < undos.Count; i++)
+            {
+                int stepsBack = undos.Count - (i + 1);
+                string label = (i + 1) + ".  " + undos[i].label;
+                if (stepsBack == 0)
+                {
+                    UIFactory.Button(list, label + "   ◀ current", null, -1, rowH, UIFactory.ButtonActive, 12);
+                    continue;
+                }
+                UIFactory.Button(list, label, () =>
+                {
+                    ui.CloseModal(modal);
+                    editor.JumpHistory(-stepsBack);
+                }, -1, rowH, null, 12);
+            }
+            for (int i = redos.Count - 1; i >= 0; i--)
+            {
+                int stepsForward = redos.Count - i;
+                UIFactory.Button(list, "↷  " + redos[i].label, () =>
+                {
+                    ui.CloseModal(modal);
+                    editor.JumpHistory(stepsForward);
+                }, -1, rowH, UIFactory.PanelBg3, 12);
+            }
+            if (undos.Count == 0 && redos.Count == 0) UIFactory.Label(list, "No changes recorded yet.", 13, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 30);
+            scroll.verticalNormalizedPosition = 0f;
+        }
+    }
+
     public static class FileDialog
     {
         public static void Open(EditorUI ui, LevelEditor editor)
@@ -349,6 +416,43 @@ namespace Geodashy.Editing.UI
                 }, "Import");
             }, 120, 32);
             UIFactory.Label(c, "Folder: " + LevelStorage.LevelsDirectory, 11, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 18);
+            var share = UIFactory.Row(c, 34, 6);
+            UIFactory.Button(share, "Copy share code", () =>
+            {
+                try
+                {
+                    var code = LevelShare.Encode(editor.level);
+                    GUIUtility.systemCopyBuffer = code;
+                    ui.Toast("Share code copied (" + (code.Length / 1024) + " KB). Paste it in a message; the other side imports it here.", 5f);
+                }
+                catch (Exception e)
+                {
+                    ui.Toast("Could not make a share code: " + e.Message);
+                }
+            }, 160, 32, UIFactory.ButtonActive);
+            UIFactory.Button(share, "Import share code…", () =>
+            {
+                ui.Prompt("Import share code", "Paste the code (it starts with " + LevelShare.Prefix + "). Your clipboard is filled in below.", GUIUtility.systemCopyBuffer ?? "", text =>
+                {
+                    if (!LevelShare.TryDecode(text, out var data, out var err))
+                    {
+                        ui.Toast(err, 4f);
+                        return;
+                    }
+                    Action load = () =>
+                    {
+                        data.id = System.Guid.NewGuid().ToString("N");
+                        editor.RecordUndo("Import share code");
+                        editor.LoadLevel(data, null);
+                        editor.MarkDirty();
+                        ui.CloseModal(modal);
+                        ui.Toast("Imported " + data.name + " — songs are not carried by share codes; pick one in Settings if it had an imported file.", 6f);
+                    };
+                    if (editor.Dirty) ui.Confirm("Unsaved changes", "The current level has unsaved changes. Import anyway?", load, "Import");
+                    else load();
+                });
+            }, 170, 32);
+            UIFactory.Label(share, "A share code is the whole level as text: send it in a chat and the other phone imports it.", 11, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 34);
             var camp = UIFactory.Row(c, 34, 6);
             UIFactory.Button(camp, "Export as campaign map", () =>
             {
@@ -470,6 +574,13 @@ namespace Geodashy.Editing.UI
             "Difficulties: Training (place your own waystones), Checkpoints (respawn at Waystone objects you placed in the level), Champion (no checkpoints; sets the record)\n" +
             "Training: Z — raise a waystone   ·   X — remove the last one   ·   ← → — scrub between waystones   ·   C — toggle\n" +
             "Waystones restore everything: mount, gravity, speed, moved objects, colours, loot. Auto waystones rise every few seconds on solid ground.\n\n" +
+            "MORE TOOLS\n" +
+            "Right-click (or long-press on touch) an object — context menu: copy, duplicate, delete, properties, select same type, save as stamp\n" +
+            "View dock ▸ Snap to neighbours — dragging snaps edges and centres to nearby objects with pink guide lines\n" +
+            "Stamps shelf (palette) — reusable groups: select objects, Save as stamp, then place them like a brush\n" +
+            "Timeline strip under the top bar — bar lines, triggers and portals along the level; click to jump, drag a trigger to retime it\n" +
+            "View dock ▸ Groups — hide or lock a group while you work   ·   History — jump to any earlier state\n" +
+            "Files ▸ Copy share code / Import share code — the whole level as text you can paste in a chat\n\n" +
             "PHONE LAYOUT (automatic on Android; Options ▸ Switch layout elsewhere)\n" +
             "One finger — place, select, drag   ·   two fingers — pan and pinch to zoom\n" +
             "View / Props — slide-in drawers   ·   ▼ hides the dock   ·   ⋯ holds save, files, settings, marker and help\n" +

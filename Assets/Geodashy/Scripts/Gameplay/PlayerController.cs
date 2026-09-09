@@ -40,6 +40,10 @@ namespace Geodashy.Gameplay
         MountAnimation anim;
         float animTime;
         float airTime;
+        float peakFall;
+        /// <summary>Sprite and scale the rider is drawn with right now (used by the replay ghosts).</summary>
+        public Sprite CurrentSprite => sr != null ? sr.sprite : null;
+        public Vector3 VisualScale => transform.localScale;
 
         // input
         bool held;
@@ -290,10 +294,12 @@ namespace Geodashy.Gameplay
 
             if (pressBuffer > 0f) pressBuffer -= dt;
 
+            if (!onGround) peakFall = Mathf.Max(peakFall, -velocity.y * Up);
             if (!wasGround && onGround)
             {
                 squash = new Vector2(1.22f, 0.8f);
-                runner.OnLanded(position, Up, size);
+                runner.OnLanded(position, Up, size, peakFall);
+                peakFall = 0f;
             }
 
             // triggers & finish ------------------------------------------------------------

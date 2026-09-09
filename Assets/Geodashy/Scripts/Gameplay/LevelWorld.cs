@@ -151,6 +151,25 @@ namespace Geodashy.Gameplay
 
         public void MarkDirty(LevelObjectView v) => dirty.Add(v);
 
+        /// <summary>
+        /// Keeps only objects near the camera rendering. Everything is still simulated; this saves the fill rate
+        /// and draw calls that heavily decorated levels otherwise burn on phones. Moving (trigger-driven) objects
+        /// are never culled since their runtime position can differ from their authored one.
+        /// </summary>
+        public void UpdateCulling(float cameraX, float halfWidth)
+        {
+            float margin = halfWidth + 6f;
+            float minX = cameraX - margin, maxX = cameraX + margin;
+            foreach (var v in all)
+            {
+                if (v == null) continue;
+                bool cull = !dynamicObjects.Contains(v) && (v.data.x + v.Size.x / 2f + 2f < minX || v.data.x - v.Size.x / 2f - 2f > maxX);
+                if (cull == v.culled) continue;
+                v.culled = cull;
+                v.renderer2D.enabled = !cull && v.runtimeActive && !v.def.HiddenInPlay && v.def.id != "invisible_block";
+            }
+        }
+
         /// <summary>Pushes runtime state (offsets, rotation, alpha, active) into the scene objects.</summary>
         public void FlushDirty()
         {
@@ -159,7 +178,7 @@ namespace Geodashy.Gameplay
                 if (v == null) continue;
                 v.ApplyTransform();
                 v.ApplyColor();
-                bool visible = v.runtimeActive && !v.def.HiddenInPlay && v.def.id != "invisible_block";
+                bool visible = v.runtimeActive && !v.def.HiddenInPlay && v.def.id != "invisible_block" && !v.culled;
                 v.renderer2D.enabled = visible;
             }
             dirty.Clear();

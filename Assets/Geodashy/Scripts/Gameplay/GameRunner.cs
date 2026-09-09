@@ -65,6 +65,31 @@ namespace Geodashy.Gameplay
         LevelStats stats;
         readonly List<float> sessionDeaths = new List<float>();
         bool fullRun;
+        bool lootBannerShown;
+        /// <summary>Tests and bots: when set, replaces device input with (held, pressed).</summary>
+        public Func<(bool held, bool pressed)> autoInput;
+
+        // ---- death replay ghost: the last two seconds of the run, replayed at the crash site --------
+        struct ReplaySample
+        {
+            public Vector2 pos;
+            public float rot;
+            public Sprite sprite;
+            public Vector3 scale;
+            public float time;
+        }
+        const float ReplayWindow = 2f;
+        readonly List<ReplaySample> replay = new List<ReplaySample>();
+        SpriteRenderer replayGhost;
+        float replayClock;
+
+        // ---- personal-best ghost (Champion): a faint rider following the best recorded run ----------
+        SpriteRenderer bestGhost;
+        readonly List<float> runX = new List<float>();
+        readonly List<float> runY = new List<float>();
+        float runSampleTimer;
+        float runStartBest;
+        float mountTrailTimer;
 
         // ---- practice mode ---------------------------------------------------
         class Checkpoint
@@ -134,6 +159,8 @@ namespace Geodashy.Gameplay
             particles = ParticleBurst.Create(transform, "Particles", 40);
             trailRibbon = HitboxOverlay.Create(transform, "Wisp Trail", -3);
             hud.SetExitTarget(exitTarget);
+            replayGhost = MakeGhost("Replay Ghost", 4);
+            bestGhost = MakeGhost("Best Run Ghost", 3);
 
             ComputeStart(start);
             fullRun = start == null && difficulty == Difficulty.Champion;
@@ -147,6 +174,101 @@ namespace Geodashy.Gameplay
                 hud.ShowIntro(level.name, level.description, SpriteLibrary.ForMount(m), m.name, m.control + "\n" + DifficultyInfo.Name(difficulty) + ": " + DifficultyInfo.Describe(difficulty), SpriteLibrary.MountFacing(m));
                 playCamera.Update(0f);
             }
+        }
+
+        SpriteRenderer MakeGhost(string name, int order)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(transform, false);
+            var sr = go.AddComponent<SpriteRenderer>();
+            SpriteLibrary.ApplyMaterial(sr);
+            sr.sortingOrder = order;
+            sr.enabled = false;
+            return sr;
+        }
+
+        void RecordReplay()
+        {
+            float now = elapsed;
+            replay.Add(new ReplaySample { pos = player.position, rot = player.rotationDeg, sprite = player.CurrentSprite, scale = player.VisualScale, time = now });
+            while (replay.Count > 0 && now - replay[0].time > ReplayWindow) replay.RemoveAt(0);
+        }
+
+        /// <summary>Loops the recorded window as a translucent rider while the death freeze is on screen.</summary>
+        void UpdateReplayGhost(float dt)
+        {
+            if (replay.Count < 2)
+            {
+                replayGhost.enabled = false;
+                return;
+            }
+            float span = replay[replay.Count - 1].time - replay[0].time;
+            if (span < 0.15f)
+            {
+                replayGhost.enabled = false;
+                return;
+            }
+            replayClock += dt;
+            float loop = span + 0.5f;   // hold on the crash for half a second before looping
+            float t = replayClock % loop;
+            if (t > span) t = span;
+            float target = replay[0].time + t;
+            int i = 0;
+            while (i < replay.Count - 1 && replay[i + 1].time < target) i++;
+            var s = replay[i];
+            replayGhost.enabled = s.sprite != null;
+            replayGhost.sprite = s.sprite;
+            replayGhost.transform.position = new Vector3(s.pos.x, s.pos.y, 0f);
+            replayGhost.transform.rotation = Quaternion.Euler(0f, 0f, s.rot);
+            replayGhost.transform.localScale = s.scale;
+            float fade = t > span - 0.05f ? 0f : 1f;
+            replayGhost.color = new Color(0.6f, 0.9f, 1f, 0.4f * fade);
+        }
+
+        void RecordBestRunSample(float dt)
+        {
+            if (!fullRun) return;
+            runSampleTimer += dt;
+            while (runSampleTimer >= LevelStats.BestRunStep)
+            {
+                runSampleTimer -= LevelStats.BestRunStep;
+                runX.Add(player.position.x);
+                runY.Add(player.position.y);
+            }
+        }
+
+        /// <summary>Keeps this run as the personal-best recording when it went further than any before.</summary>
+        void CommitBestRun(float progress)
+        {
+            if (!fullRun || runX.Count == 0) return;
+            if (progress <= stats.bestRunProgress + 0.0005f && stats.bestRunX.Count > 0) return;
+            stats.bestRunProgress = progress;
+            stats.bestRunX = new List<float>(runX);
+            stats.bestRunY = new List<float>(runY);
+        }
+
+        void UpdateBestGhost()
+        {
+            if (!fullRun || stats.bestRunX.Count == 0 || player.dead)
+            {
+                bestGhost.enabled = false;
+                return;
+            }
+            int i = Mathf.FloorToInt(elapsed / LevelStats.BestRunStep);
+            if (i >= stats.bestRunX.Count - 1)
+            {
+                bestGhost.enabled = false;
+                return;
+            }
+            float f = (elapsed - i * LevelStats.BestRunStep) / LevelStats.BestRunStep;
+            float x = Mathf.Lerp(stats.bestRunX[i], stats.bestRunX[i + 1], f);
+            float y = Mathf.Lerp(stats.bestRunY[i], stats.bestRunY[i + 1], f);
+            bestGhost.enabled = true;
+            if (bestGhost.sprite == null) bestGhost.sprite = SpriteLibrary.ForMount(player.mount);
+            float baseScale = bestGhost.sprite != null ? player.mount.width / Mathf.Max(0.01f, bestGhost.sprite.bounds.size.x) : 1f;
+            bestGhost.transform.position = new Vector3(x, y, 0f);
+            bestGhost.transform.localScale = new Vector3(baseScale * SpriteLibrary.MountFacing(player.mount), baseScale, 1f);
+            bestGhost.color = new Color(1f, 0.9f, 0.5f, 0.28f);
         }
 
         /// <summary>Resolved spawn state: where the rider appears and with what mount/speed/gravity/size.</summary>
@@ -251,6 +373,16 @@ namespace Geodashy.Gameplay
             lastBeat = -1;
             autoCheckpointTimer = 0f;
             lastCheckpointX = -100f;
+            lootBannerShown = false;
+            hud.HideLootBanner();
+            replay.Clear();
+            replayClock = 0f;
+            if (replayGhost != null) replayGhost.enabled = false;
+            runX.Clear();
+            runY.Clear();
+            runSampleTimer = 0f;
+            runStartBest = stats != null ? stats.bestProgress : 0f;
+            if (bestGhost != null) bestGhost.sprite = null;
             ClearTrail();
             ResetWorld();
             player.Spawn(startPos, startMount, startSpeed, startFlipped, startMini);
@@ -290,6 +422,7 @@ namespace Geodashy.Gameplay
                 v.renderer2D.color = new Color(0.75f, 1f, 0.8f, 1f);
                 particles.Emit(v.WorldPosition, new Color(0.5f, 1f, 0.6f), 14, 3f, 0.6f, 0.1f, 2f);
                 Sfx.Play("waystone", 0.7f);
+                Haptics.Waystone();
                 PlaceCheckpoint(false);
                 hud.ShowHint("Waystone reached — you will return here if you fall.", 2.5f);
             }
@@ -505,6 +638,7 @@ namespace Geodashy.Gameplay
             }
             trail.RemoveAll(tp => now - tp.time > TrailLife);
             if (trail.Count > 200) trail.RemoveRange(0, trail.Count - 200);
+            UpdateMountTrail(dt);
 
             trailRibbon.Begin();
             if (trail.Count > 1)
@@ -529,6 +663,46 @@ namespace Geodashy.Gameplay
             if (trailRibbon != null) trailRibbon.Clear();
         }
 
+        /// <summary>Mount-specific particles: embers, feathers, dirt, dust, shadow wisps.</summary>
+        void UpdateMountTrail(float dt)
+        {
+            if (player.dead || !player.visible) return;
+            string id = player.mount.id;
+            if (id == "wisp") return;
+            mountTrailTimer += dt;
+            var back = player.position - new Vector2(player.direction * player.Size.x * 0.45f, 0f);
+            var feet = player.position - new Vector2(player.direction * player.Size.x * 0.2f, player.Up * player.Size.y * 0.45f);
+            float rand = UnityEngine.Random.value;
+            switch (id)
+            {
+                case "dragon":
+                    if (mountTrailTimer < 0.05f) return;
+                    particles.Emit(back, Color.Lerp(new Color(1f, 0.45f, 0.1f), new Color(1f, 0.85f, 0.3f), rand), 1, 1.5f, 0.6f, 0.08f, -1.5f, 180f, 70f);
+                    break;
+                case "griffin":
+                    if (mountTrailTimer < 0.11f) return;
+                    particles.Emit(back, rand < 0.7f ? new Color(0.95f, 0.9f, 0.8f) : new Color(0.85f, 0.7f, 0.35f), 1, 0.8f, 1.1f, 0.1f, 1.2f, 180f, 50f);
+                    break;
+                case "boar":
+                    if (mountTrailTimer < 0.05f || !player.onGround) return;
+                    particles.Emit(feet, new Color(0.45f, 0.3f, 0.18f), 2, 3.5f, 0.45f, 0.08f, 9f, player.Up > 0 ? 110f : 250f, 60f);
+                    break;
+                case "cart":
+                    if (mountTrailTimer < 0.06f || !player.onGround) return;
+                    particles.Emit(feet, new Color(0.7f, 0.65f, 0.55f, 0.6f), 2, 1.2f, 0.7f, 0.16f, 0.4f, player.Up > 0 ? 120f : 240f, 70f);
+                    break;
+                case "shadowcat":
+                    if (mountTrailTimer < 0.05f) return;
+                    particles.Emit(back, Color.Lerp(new Color(0.35f, 0.2f, 0.6f), new Color(0.7f, 0.45f, 1f), rand), 1, 0.9f, 0.55f, 0.12f, -0.6f, 180f, 40f);
+                    break;
+                default:   // horse: hoof dust while running
+                    if (mountTrailTimer < 0.08f || !player.onGround) return;
+                    particles.Emit(feet, new Color(0.85f, 0.78f, 0.65f, 0.55f), 1, 1.5f, 0.4f, 0.09f, 2f, player.Up > 0 ? 120f : 240f, 60f);
+                    break;
+            }
+            mountTrailTimer = 0f;
+        }
+
         void UpdateBeat()
         {
             var s = level.settings;
@@ -540,6 +714,7 @@ namespace Geodashy.Gameplay
             bool bar = beat % 4 == 0;
             ground.Pulse(bar ? 1f : 0.55f);
             background.Pulse(bar ? 0.9f : 0.35f);
+            hud.PulseVignette(bar ? 0.45f : 0.18f);
         }
 
         void UpdateAutoCheckpoint(float dt)
@@ -640,6 +815,12 @@ namespace Geodashy.Gameplay
                 held |= ts.primaryTouch.press.isPressed;
                 pressed |= ts.primaryTouch.press.wasPressedThisFrame;
             }
+            if (autoInput != null)
+            {
+                var ai = autoInput();
+                held = ai.held;
+                pressed = ai.pressed;
+            }
             if (kb != null)
             {
                 held |= kb.spaceKey.isPressed || kb.upArrowKey.isPressed || kb.wKey.isPressed;
@@ -681,6 +862,7 @@ namespace Geodashy.Gameplay
                 deathTimer += dt;
                 playCamera.Update(dt); // keeps the shake alive during the freeze
                 DrawDeathOverlay();
+                UpdateReplayGhost(dt);
                 if (deathTimer > 0.35f && (pressed || (kb != null && kb.enterKey.wasPressedThisFrame))) Retry();
                 return;
             }
@@ -688,6 +870,9 @@ namespace Geodashy.Gameplay
             elapsed += dt;
             player.SetInput(held, pressed);
             player.Tick(dt);
+            RecordReplay();
+            RecordBestRunSample(dt);
+            UpdateBestGhost();
             UpdateTrail(dt);
             UpdateAuthoredWaystones();
             UpdateAutoCheckpoint(dt);
@@ -697,6 +882,7 @@ namespace Geodashy.Gameplay
             world.FlushDirty();
             ground.showCeiling = player.mount.flying || player.flipped;
             playCamera.Update(dt);
+            world.UpdateCulling(cam.transform.position.x, playCamera.HalfWidth);
             float progress = finishX > 0f ? player.position.x / finishX : 0f;
             hud.SetProgress(progress);
             if (fullRun && progress > stats.bestProgress + 0.002f)
@@ -710,17 +896,22 @@ namespace Geodashy.Gameplay
                 complete = true;
                 Sfx.Play("complete");
                 hud.SetProgress(1f, true);
+                bool allLoot = coins >= totalCoins && gems >= totalGems && totalCoins + totalGems > 0;
                 if (fullRun)
                 {
                     stats.bestProgress = 1f;
                     stats.completions++;
+                    CommitBestRun(1f);
+                    if (allLoot) stats.fullLoot = true;
                     LevelStatsStorage.Save(stats);
                 }
                 else if (difficulty == Difficulty.Checkpoints && startPos.x <= 0.01f)
                 {
                     stats.checkpointCompletions++;
+                    if (allLoot) stats.fullLoot = true;
                     LevelStatsStorage.Save(stats);
                 }
+                if (bestGhost != null) bestGhost.enabled = false;
                 hud.SetMarkers(stats.deaths, sessionDeaths, stats.bestProgress);
                 hud.ShowComplete(attempts, elapsed, player.jumps, coins, totalCoins, stats.attempts, stats.completions, gems, totalGems, DifficultyInfo.Name(difficulty));
                 if (music != null && level.settings.fadeOut) music.Stop();
@@ -767,22 +958,32 @@ namespace Geodashy.Gameplay
 
         public void OnJumped(Vector2 pos, float up)
         {
+            Haptics.Jump();
             Sfx.Play("jump_" + player.mount.id, 0.8f, 1f, 0.05f, "jump");
             var feet = pos - new Vector2(0f, up * player.Size.y * 0.45f);
             particles.Emit(feet, new Color(0.9f, 0.85f, 0.75f, 0.7f), 4, 1.8f, 0.3f, 0.08f, 3f, up > 0 ? 270f : 90f, 120f);
         }
 
-        public void OnLanded(Vector2 pos, float up, Vector2 size)
+        public void OnLanded(Vector2 pos, float up, Vector2 size, float fallSpeed = 0f)
         {
             Sfx.Play("land", 0.5f, 1f, 0.08f);
             var feet = pos - new Vector2(0f, up * size.y * 0.5f);
             particles.Emit(feet, new Color(0.85f, 0.8f, 0.7f, 0.75f), 7, 2.4f, 0.35f, 0.09f, 4f, up > 0 ? 90f : 270f, 150f);
+            // hard landings thump the camera a little; ordinary hops do not
+            if (fallSpeed > 16f)
+            {
+                float k = Mathf.Clamp01((fallSpeed - 16f) / 16f);
+                playCamera.Shake(0.06f + 0.16f * k, 0.02f, 0.1f + 0.08f * k);
+                particles.Emit(feet, new Color(0.85f, 0.8f, 0.7f, 0.6f), Mathf.RoundToInt(6 * k), 3.5f, 0.4f, 0.1f, 5f, up > 0 ? 90f : 270f, 170f);
+            }
         }
 
         public void OnPlayerDied()
         {
             deathTimer = 0f;
+            replayClock = 0f;
             musicRequest++;
+            Haptics.Death();
             Sfx.Play("death", 1f, 1f, 0.03f);
             var c = player.mount.Color;
             particles.Emit(player.position, c, 18, 9f, 0.8f, 0.17f, 22f);
@@ -795,9 +996,12 @@ namespace Geodashy.Gameplay
             if (fullRun)
             {
                 stats.RecordDeath(progress);
+                stats.RecordKiller(player.killer != null ? player.killer.def.name : "the world");
                 if (progress > stats.bestProgress) stats.bestProgress = progress;
+                if (progress > runStartBest) CommitBestRun(progress);
                 LevelStatsStorage.Save(stats);
             }
+            if (bestGhost != null) bestGhost.enabled = false;
             hud.SetMarkers(stats.deaths, sessionDeaths, stats.bestProgress);
             if (music != null) music.Stop();
         }
@@ -833,6 +1037,14 @@ namespace Geodashy.Gameplay
                 Sfx.Play("coin", 0.7f, 1f, 0.06f);
             }
             hud.SetLoot(coins, totalCoins, gems, totalGems, keys);
+            if (!lootBannerShown && coins >= totalCoins && gems >= totalGems && totalCoins + totalGems > 0)
+            {
+                lootBannerShown = true;
+                hud.ShowLootBanner("All loot gathered!");
+                hud.Flash(new Color(1f, 0.85f, 0.3f, 0.3f), 0.25f);
+                Sfx.Play("gem", 1f, 1.2f);
+                particles.Emit(player.position, new Color(1f, 0.85f, 0.3f), 20, 5f, 0.7f, 0.12f, 6f);
+            }
         }
 
         public void OnInteract(LevelObjectView v)

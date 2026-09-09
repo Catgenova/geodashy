@@ -123,6 +123,39 @@ landing, death, five rune types, two pads, five portal types, coin/gem/key, gate
 completion fanfare, horn and UI click. Replace any file with real audio of the same name. Music
 and effect volumes are on the main menu under Options and persist.
 
+## Editing aids and play feel
+
+- **Context menu**: right-click an object (long-press on touch) for copy, duplicate, delete, properties,
+  select same type and save as stamp.
+- **Snapping guides** (View ▸ Snap to neighbours): while dragging, edges and centres snap to nearby
+  objects and pink guide lines show what matched.
+- **Stamps**: select objects and choose Save as stamp (Edit dock, context menu or ⋯ menu). They appear on
+  the Stamps shelf of the palette and place like a brush; stamps live in `geodashy/stamps` next to the saves.
+- **Timeline strip** under the top bar: bar lines from the BPM, trigger, portal, waystone and start markers
+  along the level, the camera window, and the level length. Click to jump; drag a trigger to retime it.
+- **Groups** (View dock): hide or lock any group used in the level; locked groups ignore taps.
+- **History**: every change is named; the History dialog jumps to any earlier or later state.
+- **Object budget**: the status readout and the View dock turn amber past 1500 objects and red past 3000,
+  with a per-shelf breakdown; in play only objects near the camera are rendered.
+- **Share codes** (Files dialog): the whole level as pasteable text (`LYRE1:…`, gzip + base64); import one
+  on another device. Songs are not carried, only the built-in song id.
+- **Rating tags**: Settings ▸ Difficulty rating (Easy to Demon) plus an automatic length tag; the level
+  select filters by rating and completion and sorts by name, difficulty, length or date.
+- **Play feel**: per-mount trails (embers, feathers, dirt, dust, shadow wisps, hoof dust), a camera thump on
+  hard landings, an edge vignette on the beat, a death replay ghost that loops your last two seconds at the
+  crash site, a faint personal-best ghost on Champion runs, an "All loot gathered" banner (recorded in the
+  stats and level select), a per-level death chart with the average survival and the most frequent killer,
+  and vibration on phones (Options).
+- **Android song picker**: Import song uses the system document picker on Android
+  (`Assets/Plugins/Android/SongPickerFragment.java`), so files from Music or Downloads work under scoped storage.
+
+## Tests
+
+`Assets/Geodashy/Tests` holds play-mode smoke tests (Window ▸ General ▸ Test Runner): every catalog entry
+renders, ids are unique, share codes and stamps round-trip, and every built-in level runs a few seconds
+under an auto-jump bot without logging an error. The Android workflow runs them before building the apk.
+The code is split into three assemblies (`Geodashy`, `Geodashy.Editor`, `Geodashy.Tests`).
+
 ## Building the APK
 
 The project is set up to ship as a sideloadable Android APK (landscape only, IL2CPP, ARM64,

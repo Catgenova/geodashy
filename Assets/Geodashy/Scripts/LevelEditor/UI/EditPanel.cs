@@ -78,11 +78,12 @@ namespace Geodashy.Editing.UI
             UIFactory.Button(s2, "× 1.25", () => editor.ScaleSelection(1.25f), -1, h, null, 12);
             UIFactory.Button(s2, "× 0.8", () => editor.ScaleSelection(0.8f), -1, h, null, 12);
 
-            var clip = Group("Clipboard", 210);
+            var clip = Group("Clipboard", 280);
             var c1 = UIFactory.Row(clip, h, 4);
             UIFactory.Button(c1, "Copy", editor.CopySelection, -1, h, null, 12);
             UIFactory.Button(c1, "Paste", () => editor.Paste(false), -1, h, null, 12);
             UIFactory.Button(c1, "Dup", editor.DuplicateSelection, -1, h, null, 12);
+            UIFactory.Button(c1, "Stamp…", ui.PromptSaveStamp, -1, h, UIFactory.ButtonActive, 12);
             var c2 = UIFactory.Row(clip, h, 4);
             UIFactory.Button(c2, "Cut", editor.CutSelection, -1, h, null, 12);
             UIFactory.Button(c2, "Delete", editor.DeleteSelection, -1, h, UIFactory.Danger, 12);
@@ -209,6 +210,7 @@ namespace Geodashy.Editing.UI
             UIFactory.Button(clip, "Paste (Ctrl+V)", () => editor.Paste(false), -1, 28, null, 12);
             UIFactory.Button(clip, "Duplicate (Ctrl+D)", editor.DuplicateSelection, -1, 28, null, 12);
             UIFactory.Button(clip, "Delete (Del)", editor.DeleteSelection, -1, 28, UIFactory.Danger, 12);
+            UIFactory.Button(clip, "Save as stamp…", ui.PromptSaveStamp, -1, 28, UIFactory.ButtonActive, 12);
 
             // selection ---------------------------------------------------------------
             var sel = Col(rt, "Select", 190);

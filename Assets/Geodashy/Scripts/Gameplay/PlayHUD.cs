@@ -34,6 +34,11 @@ namespace Geodashy.Gameplay
         Image flash;
         float flashTimer, flashDuration;
         Color flashColor;
+        Image vignette;
+        float vignetteStrength;
+        RectTransform lootBanner;
+        Text lootText;
+        float lootTimer;
         Image crestIcon, sealCrest;
         RectTransform introPanel;
         Text introTitle, introBody, introMount;
@@ -73,6 +78,13 @@ namespace Geodashy.Gameplay
             flash = flashRt.gameObject.AddComponent<Image>();
             flash.color = Color.clear;
             flash.raycastTarget = false;
+            // beat vignette: darkens the edges for a moment on each beat
+            var vigRt = UIFactory.Rect(root, "Vignette");
+            UIFactory.Stretch(vigRt);
+            vignette = vigRt.gameObject.AddComponent<Image>();
+            vignette.sprite = PlaceholderSpriteFactory.Vignette();
+            vignette.color = Color.clear;
+            vignette.raycastTarget = false;
 
             // progress bar
             var barBg = UIFactory.Panel(root, "ProgressBg", new Color(0, 0, 0, 0.5f));
@@ -131,6 +143,16 @@ namespace Geodashy.Gameplay
             UIFactory.Button(checkpointButtons, phone ? "+ Waystone" : "+ Waystone (Z)", () => onCheckpoint(), -1, phone ? 48 : 40, UIFactory.Good, 14);
             UIFactory.Button(checkpointButtons, phone ? "− Remove" : "− Remove (X)", () => onRemoveCheckpoint(), -1, phone ? 48 : 40, UIFactory.Danger, 14);
             checkpointButtons.gameObject.SetActive(false);
+
+            // loot banner: crest + text, slides in under the progress bar when every piece is gathered
+            lootBanner = UIFactory.Panel(root, "LootBanner", new Color(0.12f, 0.08f, 0.02f, 0.85f));
+            UIFactory.Anchor(lootBanner, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(-220, -140), new Vector2(220, -84));
+            lootBanner.GetComponent<Image>().raycastTarget = false;
+            UIFactory.HLayout(lootBanner, 10, 8, false, TextAnchor.MiddleCenter);
+            var lootCrest = UIFactory.Icon(lootBanner, PlaceholderSpriteFactory.Crest(PlayerProfile.Crest, PlayerProfile.Primary, PlayerProfile.Secondary), 40);
+            lootText = UIFactory.Label(lootBanner, "", 18, TextAnchor.MiddleLeft, BestColor, -1, 40, true);
+            UIFactory.Layout(lootText.gameObject, -1, 40, 1);
+            lootBanner.gameObject.SetActive(false);
 
             // death panel (bottom centre so the crash site stays visible)
             deathPanel = UIFactory.Panel(root, "Death", new Color(0.35f, 0.05f, 0.05f, 0.85f));
@@ -313,6 +335,26 @@ namespace Geodashy.Gameplay
 
         public void ShowPause(bool on) => pausePanel.gameObject.SetActive(on);
 
+        /// <summary>Momentary edge darkening; strength 0..1 decays over about a third of a second.</summary>
+        public void PulseVignette(float strength)
+        {
+            vignetteStrength = Mathf.Max(vignetteStrength, Mathf.Clamp01(strength));
+        }
+
+        public void ShowLootBanner(string text, float seconds = 3f)
+        {
+            lootText.text = text;
+            lootBanner.gameObject.SetActive(true);
+            lootBanner.localScale = Vector3.one * 0.6f;
+            lootTimer = seconds;
+        }
+
+        public void HideLootBanner()
+        {
+            lootTimer = 0f;
+            if (lootBanner != null) lootBanner.gameObject.SetActive(false);
+        }
+
         public void ShowComplete(int attempts, float seconds, int jumps, int coins, int totalCoins, int totalAttempts = 0, int completions = 0, int gems = 0, int totalGems = 0, string difficultyName = "")
         {
             string loot = "Gold " + coins + "/" + totalCoins + (totalGems > 0 ? "   Gems " + gems + "/" + totalGems : "");
@@ -337,6 +379,19 @@ namespace Geodashy.Gameplay
                 var c = flashColor;
                 c.a *= Mathf.Clamp01(flashTimer / flashDuration);
                 flash.color = c;
+            }
+            if (vignetteStrength > 0f)
+            {
+                vignette.color = new Color(0.05f, 0.02f, 0.08f, vignetteStrength * 0.55f);
+                vignetteStrength = Mathf.Max(0f, vignetteStrength - Time.unscaledDeltaTime * 3f);
+                if (vignetteStrength <= 0f) vignette.color = Color.clear;
+            }
+            if (lootTimer > 0f)
+            {
+                lootTimer -= Time.unscaledDeltaTime;
+                float s = Mathf.Lerp(lootBanner.localScale.x, 1f, 1f - Mathf.Exp(-12f * Time.unscaledDeltaTime));
+                lootBanner.localScale = Vector3.one * s;
+                if (lootTimer <= 0f) lootBanner.gameObject.SetActive(false);
             }
             if (hintTimer > 0f)
             {

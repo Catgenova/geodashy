@@ -45,6 +45,7 @@ namespace Geodashy.Editing.UI
             UIFactory.Button(parent, "Files", ui.OpenFileDialog, 70, 36);
             UIFactory.Button(parent, "Settings", ui.OpenSettings, 84, 36);
             UIFactory.Button(parent, "Help (F1)", ui.OpenHelp, 84, 36);
+            UIFactory.Button(parent, "History", ui.OpenHistory, 70, 36);
             UIFactory.Button(parent, "Menu", ui.ReturnToMenu, 64, 36);
             UIFactory.Spacer(parent, 36, 10);
             nameInput = UIFactory.Input(parent, "Level name", editor.level.name, s =>
@@ -95,7 +96,7 @@ namespace Geodashy.Editing.UI
         {
             string[] options =
             {
-                "Save", "Save as…", "Files…", "Level settings…", "▶ Training test", "⚑ Marker at camera", "Clear marker", "Rename quest…", "Help", "◀ Main menu"
+                "Save", "Save as…", "Files…", "Level settings…", "▶ Training test", "⚑ Marker at camera", "Clear marker", "Rename quest…", "Help", "◀ Main menu", "History…", "Save selection as stamp…"
             };
             ui.ShowDropdown(menuBtn.GetComponent<RectTransform>(), options, -1, i =>
             {
@@ -118,6 +119,8 @@ namespace Geodashy.Editing.UI
                         break;
                     case 8: ui.OpenHelp(); break;
                     case 9: ui.ReturnToMenu(); break;
+                    case 10: ui.OpenHistory(); break;
+                    case 11: ui.PromptSaveStamp(); break;
                 }
             });
         }
@@ -158,6 +161,9 @@ namespace Geodashy.Editing.UI
             }
             undoBtn.interactable = editor.undo.CanUndo;
             redoBtn.interactable = editor.undo.CanRedo;
+            // object budget: the info text turns amber, then red, as the level grows heavy for phones
+            int n = editor.level.objects.Count;
+            info.color = n >= LevelEditor.BudgetHigh ? new Color(1f, 0.4f, 0.35f) : (n >= LevelEditor.BudgetWarn ? new Color(1f, 0.75f, 0.3f) : UIFactory.TextDim);
         }
     }
 }
