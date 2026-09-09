@@ -5,6 +5,7 @@ using Geodashy.Rendering;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
+using Unity.Profiling;
 
 namespace Geodashy.Gameplay
 {
@@ -91,6 +92,43 @@ namespace Geodashy.Gameplay
         float runStartBest;
         float mountTrailTimer;
 
+        // ---- run trace for the editor (every frame since the last respawn) and the report card profile ----
+        public readonly List<Vector2> runTrace = new List<Vector2>();
+        readonly List<float> profile = new List<float>();
+        float profileTimer;
+
+        // ---- reactive crowd: banners sway, lights flare, bells swing on the beat and as the rider passes ----
+        class Reactive
+        {
+            public LevelObjectView view;
+            public int kind;   // 0 sway, 1 flare, 2 swing
+            public float phase;
+            public float energy;
+        }
+        readonly List<Reactive> reactive = new List<Reactive>();
+        float beatEnergy;
+
+        // ---- captures, performance readout, profiler markers ----
+        CaptureRecorder recorder;
+        float perfTimer, perfFps;
+        int perfDrawn;
+        public const string PerfHudPref = "geodashy.perfHud";
+        public const string RecordClipsPref = "geodashy.recordClips";
+        public static bool PerfHud
+        {
+            get => PlayerPrefs.GetInt(PerfHudPref, 0) == 1;
+            set { PlayerPrefs.SetInt(PerfHudPref, value ? 1 : 0); PlayerPrefs.Save(); }
+        }
+        public static bool RecordClips
+        {
+            get => PlayerPrefs.GetInt(RecordClipsPref, 0) == 1;
+            set { PlayerPrefs.SetInt(RecordClipsPref, value ? 1 : 0); PlayerPrefs.Save(); }
+        }
+        static readonly ProfilerMarker PlayerMarker = new ProfilerMarker("LyreFlyer.Player");
+        static readonly ProfilerMarker TriggersMarker = new ProfilerMarker("LyreFlyer.Triggers");
+        static readonly ProfilerMarker WorldMarker = new ProfilerMarker("LyreFlyer.World");
+        static readonly ProfilerMarker EffectsMarker = new ProfilerMarker("LyreFlyer.Effects");
+
         // ---- practice mode ---------------------------------------------------
         class Checkpoint
         {
@@ -161,6 +199,16 @@ namespace Geodashy.Gameplay
             hud.SetExitTarget(exitTarget);
             replayGhost = MakeGhost("Replay Ghost", 4);
             bestGhost = MakeGhost("Best Run Ghost", 3);
+            CollectReactive();
+            recorder = CaptureRecorder.Create(transform, level.name);
+            recorder.recording = RecordClips;
+            hud.onScreenshot = () => recorder.SaveScreenshot(path => hud.ShowHint(string.IsNullOrEmpty(path) ? "Screenshot failed" : "Screenshot saved: " + path, 5f));
+            hud.onClip = () =>
+            {
+                var path = recorder.SaveClip();
+                hud.ShowHint(string.IsNullOrEmpty(path) ? "No clip recorded yet (enable clip recording in Options)" : "Clip saved: " + path, 5f);
+            };
+            hud.SetClipAvailable(RecordClips);
 
             ComputeStart(start);
             fullRun = start == null && difficulty == Difficulty.Champion;
@@ -173,6 +221,63 @@ namespace Geodashy.Gameplay
                 var m = MountCatalog.Get(startMount);
                 hud.ShowIntro(level.name, level.description, SpriteLibrary.ForMount(m), m.name, m.control + "\n" + DifficultyInfo.Name(difficulty) + ": " + DifficultyInfo.Describe(difficulty), SpriteLibrary.MountFacing(m));
                 playCamera.Update(0f);
+            }
+        }
+
+        /// <summary>Finds decorations that react to the beat and the rider by their catalog tags.</summary>
+        void CollectReactive()
+        {
+            reactive.Clear();
+            foreach (var v in world.all)
+            {
+                if (v.def.kind != ObjectKind.Decoration) continue;
+                int kind = -1;
+                foreach (var t in v.def.tags)
+                {
+                    if (t == "flag" || t == "banner" || t == "tent" || t == "pavilion" || t == "tapestry" || t == "garland") kind = 0;
+                    else if (t == "fire" || t == "light" || t == "candle" || t == "lantern" || t == "brazier") kind = 1;
+                    else if (t == "bell") kind = 2;
+                    if (kind >= 0) break;
+                }
+                if (kind < 0) continue;
+                reactive.Add(new Reactive { view = v, kind = kind, phase = UnityEngine.Random.value * 6.28f });
+            }
+        }
+
+        void UpdateReactive(float dt)
+        {
+            if (reactive.Count == 0) return;
+            beatEnergy = Mathf.Max(0f, beatEnergy - dt * 2.5f);
+            float camX = cam.transform.position.x;
+            float halfW = playCamera.HalfWidth + 3f;
+            float px = player.position.x;
+            float now = Time.time;
+            foreach (var r in reactive)
+            {
+                var v = r.view;
+                float dx = v.data.x - camX;
+                bool near = Mathf.Abs(dx) < halfW;
+                if (!near)
+                {
+                    if (v.visualWobble != 0f || v.visualPulse != 0f)
+                    {
+                        v.visualWobble = 0f;
+                        v.visualPulse = 0f;
+                        v.ApplyTransform();
+                    }
+                    continue;
+                }
+                // the rider passing close by adds a gust
+                float pass = Mathf.Clamp01(1f - Mathf.Abs(v.data.x - px) / 3f);
+                r.energy = Mathf.Max(r.energy - dt * 1.8f, pass * 0.8f);
+                float e = Mathf.Clamp01(beatEnergy * 0.7f + r.energy);
+                switch (r.kind)
+                {
+                    case 0: v.visualWobble = Mathf.Sin(now * 5f + r.phase) * (2f + 9f * e); v.visualPulse = 0f; break;
+                    case 1: v.visualPulse = (0.03f + 0.18f * e) * (0.5f + 0.5f * Mathf.Sin(now * 14f + r.phase)); v.visualWobble = 0f; break;
+                    default: v.visualWobble = Mathf.Sin(now * 4f + r.phase) * 14f * e; v.visualPulse = 0f; break;
+                }
+                v.ApplyTransform();
             }
         }
 
@@ -380,6 +485,9 @@ namespace Geodashy.Gameplay
             if (replayGhost != null) replayGhost.enabled = false;
             runX.Clear();
             runY.Clear();
+            runTrace.Clear();
+            profile.Clear();
+            profileTimer = 0f;
             runSampleTimer = 0f;
             runStartBest = stats != null ? stats.bestProgress : 0f;
             if (bestGhost != null) bestGhost.sprite = null;
@@ -715,6 +823,7 @@ namespace Geodashy.Gameplay
             ground.Pulse(bar ? 1f : 0.55f);
             background.Pulse(bar ? 0.9f : 0.35f);
             hud.PulseVignette(bar ? 0.45f : 0.18f);
+            beatEnergy = bar ? 1f : 0.55f;
         }
 
         void UpdateAutoCheckpoint(float dt)
@@ -821,10 +930,20 @@ namespace Geodashy.Gameplay
                 held = ai.held;
                 pressed = ai.pressed;
             }
+            // keyboard (rebindable jump key plus Space / Up / W) and any gamepad button
+            if (autoInput == null)
+            {
+                held |= InputConfig.JumpHeld();
+                pressed |= InputConfig.JumpPressed();
+            }
+            var gp = Gamepad.current;
+            if (gp != null && gp.startButton.wasPressedThisFrame && !introActive && !complete)
+            {
+                TogglePause();
+                return;
+            }
             if (kb != null)
             {
-                held |= kb.spaceKey.isPressed || kb.upArrowKey.isPressed || kb.wKey.isPressed;
-                pressed |= kb.spaceKey.wasPressedThisFrame || kb.upArrowKey.wasPressedThisFrame || kb.wKey.wasPressedThisFrame;
                 if (kb.rKey.wasPressedThisFrame) RestartFromStart();
                 if (kb.zKey.wasPressedThisFrame) PlaceCheckpoint();
                 if (kb.xKey.wasPressedThisFrame) RemoveCheckpoint();
@@ -834,7 +953,7 @@ namespace Geodashy.Gameplay
             }
             if (introActive)
             {
-                if (pressed || (kb != null && kb.enterKey.wasPressedThisFrame))
+                if (pressed || InputConfig.ConfirmPressed())
                 {
                     introActive = false;
                     hud.HideIntro();
@@ -863,26 +982,43 @@ namespace Geodashy.Gameplay
                 playCamera.Update(dt); // keeps the shake alive during the freeze
                 DrawDeathOverlay();
                 UpdateReplayGhost(dt);
-                if (deathTimer > 0.35f && (pressed || (kb != null && kb.enterKey.wasPressedThisFrame))) Retry();
+                if (deathTimer > 0.35f && (pressed || InputConfig.ConfirmPressed())) Retry();
                 return;
             }
 
             elapsed += dt;
+            PlayerMarker.Begin();
             player.SetInput(held, pressed);
             player.Tick(dt);
+            PlayerMarker.End();
+            EffectsMarker.Begin();
             RecordReplay();
             RecordBestRunSample(dt);
+            if (runTrace.Count < 20000) runTrace.Add(player.position);
+            profileTimer += dt;
+            if (profileTimer >= 0.1f)
+            {
+                profileTimer -= 0.1f;
+                profile.Add(Mathf.Clamp01((player.position.y - level.settings.groundY) / Mathf.Max(1f, level.settings.ceilingHeight)));
+            }
             UpdateBestGhost();
             UpdateTrail(dt);
+            UpdateReactive(dt);
+            EffectsMarker.End();
             UpdateAuthoredWaystones();
             UpdateAutoCheckpoint(dt);
             UpdateBeat();
+            TriggersMarker.Begin();
             triggers.Update(dt);
+            TriggersMarker.End();
+            WorldMarker.Begin();
             world.UpdateSpinners(dt);
             world.FlushDirty();
             ground.showCeiling = player.mount.flying || player.flipped;
             playCamera.Update(dt);
             world.UpdateCulling(cam.transform.position.x, playCamera.HalfWidth);
+            WorldMarker.End();
+            UpdatePerf(dt);
             float progress = finishX > 0f ? player.position.x / finishX : 0f;
             hud.SetProgress(progress);
             if (fullRun && progress > stats.bestProgress + 0.002f)
@@ -913,7 +1049,18 @@ namespace Geodashy.Gameplay
                 }
                 if (bestGhost != null) bestGhost.enabled = false;
                 hud.SetMarkers(stats.deaths, sessionDeaths, stats.bestProgress);
-                hud.ShowComplete(attempts, elapsed, player.jumps, coins, totalCoins, stats.attempts, stats.completions, gems, totalGems, DifficultyInfo.Name(difficulty));
+                float par = finishX / MountCatalog.Speed(startSpeed) * 1.03f + 0.5f;
+                var card = new ReportCard
+                {
+                    attempts = attempts, seconds = elapsed, par = par, jumps = player.jumps, coins = coins, totalCoins = totalCoins, gems = gems, totalGems = totalGems,
+                    totalAttempts = stats.attempts, completions = stats.completions, difficultyName = DifficultyInfo.Name(difficulty), nearMisses = player.nearMisses,
+                    medalTime = elapsed <= par, medalLoot = allLoot, medalDeathless = attempts == 1 && startPos.x <= 0.01f
+                };
+                // compress the height profile to ~60 columns
+                int cols = Mathf.Min(60, profile.Count);
+                for (int i = 0; i < cols; i++) card.profile.Add(profile[i * profile.Count / cols]);
+                card.deaths.AddRange(sessionDeaths);
+                hud.ShowComplete(card);
                 if (music != null && level.settings.fadeOut) music.Stop();
             }
         }
@@ -947,6 +1094,22 @@ namespace Geodashy.Gameplay
             deathOverlay.Dot(player.deathPoint, 0.13f, new Color(1f, 0.2f, 0.2f, pulse));
             deathOverlay.Dot(player.deathPoint, 0.07f, Color.white);
             deathOverlay.End();
+        }
+
+        void UpdatePerf(float dt)
+        {
+            if (!PerfHud)
+            {
+                if (perfTimer >= 0f) { perfTimer = -1f; hud.SetPerf(""); }
+                return;
+            }
+            perfFps = Mathf.Lerp(perfFps <= 0f ? 60f : perfFps, 1f / Mathf.Max(0.0001f, Time.unscaledDeltaTime), 0.1f);
+            perfTimer += dt;
+            if (perfTimer < 0.5f && perfTimer >= 0f) return;
+            perfTimer = 0f;
+            perfDrawn = 0;
+            foreach (var v in world.all) if (v != null && v.renderer2D.enabled) perfDrawn++;
+            hud.SetPerf(string.Format("{0:0} fps · {1} objects · {2} drawn · {3} reactive · {4:0.0} MB", perfFps, world.all.Count, perfDrawn, reactive.Count, System.GC.GetTotalMemory(false) / 1048576f));
         }
 
         void Retry()

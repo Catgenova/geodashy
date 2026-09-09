@@ -71,6 +71,8 @@ namespace Geodashy.Editing.UI
         {
             suppress = true;
             input.SetTextWithoutNotify("");
+            var ph = input.placeholder as Text;
+            if (ph != null) ph.text = "— mixed —";
             suppress = false;
         }
     }

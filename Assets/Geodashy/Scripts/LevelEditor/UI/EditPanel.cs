@@ -110,6 +110,7 @@ namespace Geodashy.Editing.UI
             {
                 if (int.TryParse(v, out var g)) editor.SelectByGroup(g);
             }), -1, h, null, 12);
+            UIFactory.Button(e2, "→ Brush", editor.ReplaceSelectionWithBrush, -1, h, UIFactory.ButtonActive, 12);
 
             var align = Group("Align", 210);
             var a1 = UIFactory.Row(align, h, 4);
@@ -222,6 +223,14 @@ namespace Geodashy.Editing.UI
             {
                 var objs = editor.SelectedObjects();
                 if (objs.Count > 0) editor.SelectByType(objs[0].type);
+            }, -1, 28, null, 11);
+            var rp = UIFactory.Row(sel, 30, 4);
+            UIFactory.Button(rp, "Replace with brush", editor.ReplaceSelectionWithBrush, -1, 28, UIFactory.ButtonActive, 11);
+            UIFactory.Button(rp, "Replace all of type", () =>
+            {
+                var objs = editor.SelectedObjects();
+                if (objs.Count == 0) { ui.Toast("Select an object of the type to replace"); return; }
+                editor.ReplaceAllOfTypeWithBrush(objs[0].type);
             }, -1, 28, null, 11);
             var s2 = UIFactory.Row(sel, 30, 4);
             UIFactory.Label(s2, "Group", 12, TextAnchor.MiddleLeft, UIFactory.TextDim, 44, 28);

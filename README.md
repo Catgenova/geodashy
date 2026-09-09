@@ -149,6 +149,33 @@ and effect volumes are on the main menu under Options and persist.
 - **Android song picker**: Import song uses the system document picker on Android
   (`Assets/Plugins/Android/SongPickerFragment.java`), so files from Music or Downloads work under scoped storage.
 
+## Round three
+
+- **Campaign map**: the title's Campaign button shows the built-in quests as castles along a road; each
+  unlocks when the one before is cleared and wears your seal once cleared on Champion.
+- **Three new campaign quests**: Dragon's Cavern, Griffin Cliffs and the Boar Hunt, each teaching one mount.
+- **Daily Quest**: a procedural Champion run seeded by the date (`DailyQuest.cs`), the same for everyone;
+  its stats are kept per day.
+- **Volley trigger**: boss fire. Shows a target group again and again on an interval; put spawn-triggered
+  Move triggers in the group to fling projectiles.
+- **Editor**: mixed-value property fields, Replace with brush / Replace all of type, the Path tool (click
+  points, lay the brush at grid or beat spacing), a colour-channel strip with select and recolour, the
+  last playtest path drawn over the level, and Check quest (lint) with click-to-jump findings.
+- **Play**: a mount-switch flash and pop, banners, tents, lights and bells that react to the beat and to
+  the rider passing, and an end-of-run report card with medals (under par, all loot, deathless), near
+  misses and a run profile.
+- **Controls**: any gamepad face button, trigger or shoulder jumps and Start pauses; the keyboard jump key
+  is rebindable in Options.
+- **Localisation**: `L10n.T("English text")` looks up `Resources/Strings/<code>.json`; English is the key
+  and the fallback. `es.json` translates the menus as an example; Options cycles languages.
+- **Accessibility**: colour-blind and high-contrast edge palettes, reduce flashing and shake, larger hitbox
+  overlays, and a hold-to-jump assist.
+- **Performance**: an fps / objects / drawn overlay (Options) and profiler markers (LyreFlyer.Player,
+  Triggers, World, Effects).
+- **Captures**: pause during a run for a stamped screenshot or a looping 5-second GIF of the last moments
+  (clip recording is an Options toggle). Files go to Pictures/LyreFlyer on desktop and the app's captures
+  folder on phones; both carry your crest and the quest name.
+
 ## Tests
 
 `Assets/Geodashy/Tests` holds play-mode smoke tests (Window ▸ General ▸ Test Runner): every catalog entry

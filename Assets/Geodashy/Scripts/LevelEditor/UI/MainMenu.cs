@@ -17,7 +17,9 @@ namespace Geodashy.Editing.UI
         ParallaxBackground background;
         GroundRenderer ground;
         LevelSettings backdropSettings;
-        RectTransform root, titleScreen, levelScreen, heraldryScreen, optionsScreen;
+        RectTransform root, titleScreen, levelScreen, heraldryScreen, optionsScreen, campaignScreen;
+        Button jumpKeyButton;
+        bool remapping;
         AudioSource menuMusic;
         Image titleCrest, heraldryCrestPreview, heraldryMountPreview;
         readonly List<Button> crestButtons = new List<Button>();
@@ -118,11 +120,15 @@ namespace Geodashy.Editing.UI
             title.horizontalOverflow = HorizontalWrapMode.Overflow;
             UIFactory.Label(titleCard, "One button. Seven mounts. A kingdom of spikes.", phone ? 13 : 16, TextAnchor.MiddleCenter, UIFactory.TextDim, -1, phone ? 22 : 28);
             UIFactory.Spacer(titleCard, phone ? 4 : 10);
-            UIFactory.Button(titleCard, "Play", ShowLevelSelect, -1, phone ? 46 : 54, UIFactory.Good, phone ? 18 : 22);
-            UIFactory.Button(titleCard, "Level Editor", () => app.OpenEditor(null, null), -1, phone ? 46 : 54, UIFactory.ButtonActive, phone ? 18 : 22);
-            UIFactory.Button(titleCard, "Heraldry", ShowHeraldry, -1, phone ? 40 : 44, null, phone ? 15 : 18);
-            UIFactory.Button(titleCard, "Options", ShowOptions, -1, phone ? 40 : 44, null, phone ? 15 : 18);
-            UIFactory.Button(titleCard, "Quit", app.Quit, -1, phone ? 40 : 44, UIFactory.Danger, phone ? 15 : 18);
+            UIFactory.Button(titleCard, L10n.T("Campaign"), ShowCampaign, -1, phone ? 44 : 50, UIFactory.Good, phone ? 17 : 20);
+            var playRow = UIFactory.Row(titleCard, phone ? 42 : 46, 8);
+            UIFactory.Button(playRow, L10n.T("All quests"), ShowLevelSelect, -1, phone ? 42 : 46, UIFactory.Good, phone ? 15 : 17);
+            UIFactory.Button(playRow, L10n.T("Daily Quest"), PlayDaily, -1, phone ? 42 : 46, UIFactory.ButtonActive, phone ? 15 : 17);
+            UIFactory.Button(titleCard, L10n.T("Level Editor"), () => app.OpenEditor(null, null), -1, phone ? 42 : 46, UIFactory.ButtonActive, phone ? 16 : 18);
+            var smallRow = UIFactory.Row(titleCard, phone ? 36 : 40, 8);
+            UIFactory.Button(smallRow, L10n.T("Heraldry"), ShowHeraldry, -1, phone ? 36 : 40, null, phone ? 14 : 16);
+            UIFactory.Button(smallRow, L10n.T("Options"), ShowOptions, -1, phone ? 36 : 40, null, phone ? 14 : 16);
+            UIFactory.Button(smallRow, L10n.T("Quit"), app.Quit, -1, phone ? 36 : 40, UIFactory.Danger, phone ? 14 : 16);
             UIFactory.Spacer(titleCard, phone ? 2 : 6);
             UIFactory.Label(titleCard, phone ? "Tap anywhere to ride · ❚❚ pauses" : "Click or Space to ride · Esc pauses", 13, TextAnchor.MiddleCenter, UIFactory.TextDim, -1, phone ? 20 : 24);
 
@@ -190,17 +196,106 @@ namespace Geodashy.Editing.UI
             return screen;
         }
 
+        void PlayDaily()
+        {
+            var level = DailyQuest.Generate(DailyQuest.TodayKey);
+            app.PlayLevel(level, Difficulty.Champion);
+        }
+
+        // ---- campaign map -------------------------------------------------------
+
+        void ShowCampaign()
+        {
+            titleScreen.gameObject.SetActive(false);
+            levelScreen.gameObject.SetActive(false);
+            if (heraldryScreen != null) heraldryScreen.gameObject.SetActive(false);
+            if (optionsScreen != null) optionsScreen.gameObject.SetActive(false);
+            if (campaignScreen != null) Destroy(campaignScreen.gameObject);
+            BuildCampaign();
+            campaignScreen.gameObject.SetActive(true);
+        }
+
+        /// <summary>The built-in quests as castles along a road: each unlocks when the one before it is cleared.</summary>
+        void BuildCampaign()
+        {
+            campaignScreen = UIFactory.Rect(root, "Campaign");
+            UIFactory.Stretch(campaignScreen);
+            var frame = UIFactory.Panel(campaignScreen, "Frame", new Color(0.11f, 0.09f, 0.14f, 0.92f));
+            if (phone) UIFactory.Stretch(frame, 12, 12, 12, 12);
+            else UIFactory.Anchor(frame, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-620, -300), new Vector2(620, 300));
+            var header = UIFactory.Rect(frame, "Header");
+            UIFactory.Anchor(header, new Vector2(0, 1), new Vector2(1, 1), new Vector2(16, -56), new Vector2(-16, -8));
+            UIFactory.HLayout(header, 10, 0, false, TextAnchor.MiddleLeft);
+            UIFactory.Button(header, "◀ " + L10n.T("Back"), ShowTitle, 100, 40);
+            UIFactory.Label(header, L10n.T("The Realm's Road"), phone ? 22 : 26, TextAnchor.MiddleLeft, UIFactory.Accent, -1, 40, true);
+
+            var host = UIFactory.Rect(frame, "RoadHost");
+            UIFactory.Anchor(host, new Vector2(0, 0), new Vector2(1, 1), new Vector2(16, 16), new Vector2(-16, -64));
+            var scroll = UIFactory.ScrollView(host, "Road", out var content, false, true, Color.clear);
+            UIFactory.Stretch(scroll.GetComponent<RectTransform>());
+            UIFactory.HLayout(content, 0, 24, false, TextAnchor.MiddleLeft);
+            UIFactory.Fitter(content, false, true);
+
+            var all = LevelStorage.ListLevels();
+            var campaign = new List<LevelFileInfo>();
+            foreach (var l in all) if (l.builtIn) campaign.Add(l);
+            campaign.Sort((a, b) => a.campaignOrder != b.campaignOrder ? a.campaignOrder.CompareTo(b.campaignOrder) : string.Compare(a.name, b.name, StringComparison.OrdinalIgnoreCase));
+            var castle = ObjectCatalog.Get("tower_cap_slate");
+            var gate = ObjectCatalog.Get("gate_deco");
+            bool previousCleared = true;
+            for (int i = 0; i < campaign.Count; i++)
+            {
+                var info = campaign[i];
+                var stats = LevelStatsStorage.Load(info.id);
+                bool cleared = stats.completions > 0 || stats.checkpointCompletions > 0;
+                bool unlocked = i == 0 || previousCleared;
+                previousCleared = cleared;
+
+                var node = UIFactory.Rect(content, "Node");
+                UIFactory.Layout(node.gameObject, 190, -1, -1, 1);
+                UIFactory.VLayout(node, 6, 6, true, true, TextAnchor.MiddleCenter);
+                // road segment drawn as a thick bar behind the node row
+                var road = UIFactory.Panel(node, "Road", new Color(0.55f, 0.45f, 0.3f, 0.6f));
+                UIFactory.Layout(road.gameObject, -1, 10);
+                var icon = UIFactory.Icon(node, SpriteLibrary.ForObject(cleared ? castle : gate), 88, unlocked ? Color.white : new Color(0.35f, 0.35f, 0.4f, 1f));
+                var name = UIFactory.Label(node, (i + 1) + ". " + info.name, 15, TextAnchor.MiddleCenter, unlocked ? UIFactory.Accent : UIFactory.TextDim, -1, 40, true);
+                name.horizontalOverflow = HorizontalWrapMode.Wrap;
+                string state = !unlocked ? L10n.T("Locked: clear the quest before it") : (cleared ? L10n.T("Cleared") + (stats.completions > 0 ? " · " + L10n.T("Champion seal") : "") : (stats.bestProgress > 0f ? L10n.T("Best") + " " + (stats.bestProgress * 100f).ToString("0") + "%" : L10n.T("Unexplored")));
+                UIFactory.Label(node, state + "\n" + LevelRating.Name(info.difficultyTag) + " · " + info.LengthTag, 11, TextAnchor.MiddleCenter, UIFactory.TextDim, -1, 34);
+                if (stats.completions > 0)
+                {
+                    var sealRow = UIFactory.Row(node, 34, 0, TextAnchor.MiddleCenter);
+                    var seal = UIFactory.Icon(sealRow, PlaceholderSpriteFactory.Circle(), 34, new Color(0.62f, 0.12f, 0.1f, 1f));
+                    var crest = UIFactory.Icon(seal.transform, PlaceholderSpriteFactory.Crest(PlayerProfile.Crest, PlayerProfile.Primary, PlayerProfile.Secondary), 20);
+                    UIFactory.Anchor(crest.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-10, -10), new Vector2(10, 10));
+                    crest.color = new Color(1f, 0.85f, 0.7f, 0.9f);
+                }
+                else UIFactory.Spacer(node, 34);
+                if (unlocked)
+                {
+                    var lvl = info;
+                    var br = UIFactory.Row(node, 34, 4);
+                    UIFactory.Button(br, "▶ " + L10n.T("Ride"), () => Launch(lvl, Difficulty.Checkpoints), -1, 32, UIFactory.Good, 12);
+                    UIFactory.Button(br, L10n.T("Champion"), () => Launch(lvl, Difficulty.Champion), -1, 32, UIFactory.ButtonActive, 12);
+                }
+                else UIFactory.Label(node, "🔒", 22, TextAnchor.MiddleCenter, UIFactory.TextDim, -1, 34);
+            }
+            if (campaign.Count == 0) UIFactory.Label(content, L10n.T("No campaign quests are shipped yet."), 14, TextAnchor.MiddleLeft, UIFactory.TextDim, 400, 40);
+        }
+
         void ShowTitle()
         {
             titleScreen.gameObject.SetActive(true);
             levelScreen.gameObject.SetActive(false);
             if (heraldryScreen != null) heraldryScreen.gameObject.SetActive(false);
             if (optionsScreen != null) optionsScreen.gameObject.SetActive(false);
+            if (campaignScreen != null) campaignScreen.gameObject.SetActive(false);
             titleCrest.sprite = PlaceholderSpriteFactory.Crest(PlayerProfile.Crest, PlayerProfile.Primary, PlayerProfile.Secondary);
         }
 
         void ShowLevelSelect()
         {
+            if (campaignScreen != null) campaignScreen.gameObject.SetActive(false);
             titleScreen.gameObject.SetActive(false);
             levelScreen.gameObject.SetActive(true);
             if (heraldryScreen != null) heraldryScreen.gameObject.SetActive(false);
@@ -212,6 +307,7 @@ namespace Geodashy.Editing.UI
 
         void ShowOptions()
         {
+            if (campaignScreen != null) campaignScreen.gameObject.SetActive(false);
             titleScreen.gameObject.SetActive(false);
             levelScreen.gameObject.SetActive(false);
             if (heraldryScreen != null) heraldryScreen.gameObject.SetActive(false);
@@ -250,6 +346,41 @@ namespace Geodashy.Editing.UI
             {
                 UIFactory.Toggle(frame, "Vibration on jumps, deaths and waystones", Haptics.Enabled, v => Haptics.Enabled = v, 30);
             }
+            UIFactory.Button(frame, L10n.T("Language") + ": " + L10n.LanguageName + "  ▸", () =>
+            {
+                L10n.CycleLanguage();
+                reopenOptions = true;
+                app.ShowMenu();
+            }, -1, 34, null, 13);
+            UIFactory.Label(frame, "Add a language by dropping <code>.json into Assets/Geodashy/Resources/Strings (see es.json).", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 18);
+
+            UIFactory.SectionHeader(frame, L10n.T("Controls"));
+            jumpKeyButton = UIFactory.Button(frame, "", () =>
+            {
+                remapping = true;
+                UIFactory.SetButtonLabel(jumpKeyButton, L10n.T("Press the new jump key… (Esc cancels)"));
+            }, -1, 34, UIFactory.ButtonActive, 13);
+            RefreshJumpKeyLabel();
+            UIFactory.Label(frame, "Space, Up and W always jump too. Any gamepad face button, trigger or shoulder jumps; Start pauses. Menus follow the gamepad d-pad.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 30);
+
+            UIFactory.SectionHeader(frame, L10n.T("Accessibility"));
+            UIFactory.Button(frame, L10n.T("Edge colours") + ": " + Accessibility.PaletteNames[Accessibility.Palette] + "  ▸", () =>
+            {
+                Accessibility.Palette = (Accessibility.Palette + 1) % Accessibility.PaletteNames.Length;
+                reopenOptions = true;
+                app.ShowMenu();
+            }, -1, 34, null, 13);
+            UIFactory.Toggle(frame, L10n.T("Reduce flashing and camera shake"), Accessibility.ReduceFlash, v => Accessibility.ReduceFlash = v, 30);
+            UIFactory.Toggle(frame, L10n.T("Larger hitbox overlays in the editor"), Accessibility.BigOverlays, v => Accessibility.BigOverlays = v, 30);
+            UIFactory.Toggle(frame, L10n.T("Hold-to-jump assist (cart keeps hopping, griffin keeps flapping)"), Accessibility.HoldAssist, v => Accessibility.HoldAssist = v, 30);
+
+            UIFactory.SectionHeader(frame, L10n.T("Captures and performance"));
+            UIFactory.Toggle(frame, L10n.T("Record the last 5 seconds for clips (costs some performance)"), GameRunner.RecordClips, v => GameRunner.RecordClips = v, 30);
+            UIFactory.Toggle(frame, L10n.T("Performance overlay in play"), GameRunner.PerfHud, v => GameRunner.PerfHud = v, 30);
+            var capRow = UIFactory.Row(frame, 30, 6);
+            UIFactory.Label(capRow, L10n.T("Captures folder") + ": " + CaptureRecorder.CapturesFolder, 11, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 30);
+            if (!Application.isMobilePlatform) UIFactory.Button(capRow, L10n.T("Open"), () => Application.OpenURL("file://" + CaptureRecorder.CapturesFolder), 70, 28, null, 12);
+            UIFactory.Label(frame, "Pause during a run for Screenshot and Save 5 s clip; both are stamped with your crest and the quest name.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 18);
 
             UIFactory.SectionHeader(frame, "Music volume");
             var musicLabel = UIFactory.Label(frame, "", 13, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 18);
@@ -278,6 +409,7 @@ namespace Geodashy.Editing.UI
 
         void ShowHeraldry()
         {
+            if (campaignScreen != null) campaignScreen.gameObject.SetActive(false);
             titleScreen.gameObject.SetActive(false);
             levelScreen.gameObject.SetActive(false);
             if (optionsScreen != null) optionsScreen.gameObject.SetActive(false);
@@ -503,13 +635,39 @@ namespace Geodashy.Editing.UI
             }
         }
 
+        void RefreshJumpKeyLabel()
+        {
+            if (jumpKeyButton != null) UIFactory.SetButtonLabel(jumpKeyButton, L10n.T("Jump key") + ": " + InputConfig.JumpKeyName + "   (" + L10n.T("click to rebind") + ")");
+        }
+
         void Update()
         {
             // slow camera drift so the parallax layers move behind the menu
             drift += Time.deltaTime * 2.5f;
             cam.transform.position = new Vector3(drift, 4f + Mathf.Sin(drift * 0.15f) * 0.5f, -10f);
+            if (remapping)
+            {
+                var k = InputConfig.PollNewKey();
+                var kbd = Keyboard.current;
+                if (kbd != null && kbd.escapeKey.wasPressedThisFrame)
+                {
+                    remapping = false;
+                    RefreshJumpKeyLabel();
+                    return;
+                }
+                if (k != Key.None)
+                {
+                    InputConfig.JumpKey = k;
+                    remapping = false;
+                    RefreshJumpKeyLabel();
+                }
+                return;
+            }
             var kb = Keyboard.current;
-            if (kb != null && kb[Key.Escape].wasPressedThisFrame && levelScreen != null && levelScreen.gameObject.activeSelf) ShowTitle();
+            bool onSub = (levelScreen != null && levelScreen.gameObject.activeSelf) || (campaignScreen != null && campaignScreen.gameObject.activeSelf) || (optionsScreen != null && optionsScreen.gameObject.activeSelf) || (heraldryScreen != null && heraldryScreen.gameObject.activeSelf);
+            if (kb != null && kb[Key.Escape].wasPressedThisFrame && onSub) ShowTitle();
+            var pad = Gamepad.current;
+            if (pad != null && pad.buttonEast.wasPressedThisFrame && onSub) ShowTitle();
         }
     }
 }

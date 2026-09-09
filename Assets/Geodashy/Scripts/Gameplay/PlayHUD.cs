@@ -8,9 +8,27 @@ using UnityEngine.UI;
 
 namespace Geodashy.Gameplay
 {
+    /// <summary>Everything the end-of-run report card shows.</summary>
+    public class ReportCard
+    {
+        public int attempts, jumps, coins, totalCoins, gems, totalGems, totalAttempts, completions, nearMisses;
+        public float seconds, par;
+        public string difficultyName = "";
+        public bool medalTime, medalLoot, medalDeathless;
+        /// <summary>Rider height over the run, 0..1 of the room, sampled evenly.</summary>
+        public List<float> profile = new List<float>();
+        /// <summary>Where this session's deaths happened (0..1 progress).</summary>
+        public List<float> deaths = new List<float>();
+    }
+
     /// <summary>Progress bar, attempt counter, mount hint, pause and completion panels.</summary>
     public class PlayHUD : MonoBehaviour
     {
+        public Action onScreenshot, onClip;
+        Text perfText;
+        RectTransform medalRow, profileChart;
+        Text completeTitle;
+        Button clipButton;
         Image progressFill;
         RectTransform barRoot, markerLayer;
         Image bestMarker;
@@ -171,8 +189,17 @@ namespace Geodashy.Gameplay
             UIFactory.Button(pw, "Resume", () => onResume(), -1, 40, UIFactory.Good, 16);
             practiceToggle = UIFactory.Button(pw, "Switch to Training (C)", () => onTogglePractice(), -1, 40, null, 16);
             UIFactory.Button(pw, "Restart from start", () => onRestart(), -1, 40, null, 16);
+            var capRow = UIFactory.Row(pw, 36, 6);
+            UIFactory.Button(capRow, "📷 Screenshot", () => onScreenshot?.Invoke(), -1, 34, null, 13);
+            clipButton = UIFactory.Button(capRow, "🎞 Save 5 s clip", () => onClip?.Invoke(), -1, 34, null, 13);
             pauseExitButton = UIFactory.Button(pw, "Back to editor", () => onExit(), -1, 40, UIFactory.Danger, 16);
+            UIFactory.Anchor(pw, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-200, -180), new Vector2(200, 180));
             pausePanel.gameObject.SetActive(false);
+
+            // performance readout (Options ▸ Performance overlay)
+            perfText = UIFactory.Label(root, "", 12, TextAnchor.UpperLeft, new Color(0.6f, 1f, 0.7f, 0.9f));
+            UIFactory.Anchor(perfText.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(16, -96), new Vector2(400, -64));
+            perfText.gameObject.SetActive(false);
 
             // quest scroll (intro card)
             introPanel = UIFactory.Panel(root, "Intro", new Color(0, 0, 0, 0.55f));
@@ -198,19 +225,24 @@ namespace Geodashy.Gameplay
             // complete panel
             completePanel = UIFactory.Panel(root, "Complete", new Color(0, 0, 0, 0.6f));
             var cw = UIFactory.Panel(completePanel, "Window", Parchment);
-            UIFactory.Anchor(cw, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-260, -215), new Vector2(260, 215));
-            UIFactory.VLayout(cw, 10, 20, true, true, TextAnchor.UpperCenter);
-            var sealRow = UIFactory.Row(cw, 84, 0, TextAnchor.MiddleCenter);
-            var seal = UIFactory.Icon(sealRow, PlaceholderSpriteFactory.Circle(), 84, new Color(0.62f, 0.12f, 0.1f, 1f));
-            var sealInner = UIFactory.Icon(seal.transform, PlaceholderSpriteFactory.Circle(), 70, new Color(0.72f, 0.16f, 0.13f, 1f));
-            UIFactory.Anchor(sealInner.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-35, -35), new Vector2(35, 35));
-            sealCrest = UIFactory.Icon(seal.transform, PlaceholderSpriteFactory.Crest(PlayerProfile.Crest, PlayerProfile.Primary, PlayerProfile.Secondary), 46);
-            UIFactory.Anchor(sealCrest.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-23, -23), new Vector2(23, 23));
+            UIFactory.Anchor(cw, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-280, -240), new Vector2(280, 240));
+            UIFactory.VLayout(cw, 8, 16, true, true, TextAnchor.UpperCenter);
+            var sealRow = UIFactory.Row(cw, 64, 0, TextAnchor.MiddleCenter);
+            var seal = UIFactory.Icon(sealRow, PlaceholderSpriteFactory.Circle(), 64, new Color(0.62f, 0.12f, 0.1f, 1f));
+            var sealInner = UIFactory.Icon(seal.transform, PlaceholderSpriteFactory.Circle(), 54, new Color(0.72f, 0.16f, 0.13f, 1f));
+            UIFactory.Anchor(sealInner.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-27, -27), new Vector2(27, 27));
+            sealCrest = UIFactory.Icon(seal.transform, PlaceholderSpriteFactory.Crest(PlayerProfile.Crest, PlayerProfile.Primary, PlayerProfile.Secondary), 36);
+            UIFactory.Anchor(sealCrest.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-18, -18), new Vector2(18, 18));
             sealCrest.color = new Color(1f, 0.85f, 0.7f, 0.9f);
-            UIFactory.Label(cw, "QUEST COMPLETE", 28, TextAnchor.MiddleCenter, Ink, -1, 44, true);
-            completeStats = UIFactory.Label(cw, "", 16, TextAnchor.MiddleCenter, Ink, -1, 96);
-            UIFactory.Button(cw, "Play again", () => onRestart(), -1, 40, UIFactory.Good, 16);
-            completeExitButton = UIFactory.Button(cw, "Back to editor", () => onExit(), -1, 40, null, 16);
+            completeTitle = UIFactory.Label(cw, "QUEST COMPLETE", 26, TextAnchor.MiddleCenter, Ink, -1, 36, true);
+            completeStats = UIFactory.Label(cw, "", 14, TextAnchor.MiddleCenter, Ink, -1, 78);
+            medalRow = UIFactory.Row(cw, 40, 8, TextAnchor.MiddleCenter);
+            profileChart = UIFactory.Rect(cw, "Profile");
+            UIFactory.Layout(profileChart.gameObject, -1, 60);
+            profileChart.gameObject.AddComponent<Image>().color = new Color(0.2f, 0.12f, 0.05f, 0.12f);
+            var btnRow = UIFactory.Row(cw, 36, 8);
+            UIFactory.Button(btnRow, "Play again", () => onRestart(), -1, 36, UIFactory.Good, 15);
+            completeExitButton = UIFactory.Button(btnRow, "Back to editor", () => onExit(), -1, 36, null, 15);
             completePanel.gameObject.SetActive(false);
         }
 
@@ -338,6 +370,7 @@ namespace Geodashy.Gameplay
         /// <summary>Momentary edge darkening; strength 0..1 decays over about a third of a second.</summary>
         public void PulseVignette(float strength)
         {
+            if (Accessibility.ReduceFlash) return;
             vignetteStrength = Mathf.Max(vignetteStrength, Mathf.Clamp01(strength));
         }
 
@@ -355,17 +388,66 @@ namespace Geodashy.Gameplay
             if (lootBanner != null) lootBanner.gameObject.SetActive(false);
         }
 
-        public void ShowComplete(int attempts, float seconds, int jumps, int coins, int totalCoins, int totalAttempts = 0, int completions = 0, int gems = 0, int totalGems = 0, string difficultyName = "")
+        public void ShowComplete(ReportCard c)
         {
-            string loot = "Gold " + coins + "/" + totalCoins + (totalGems > 0 ? "   Gems " + gems + "/" + totalGems : "");
-            completeStats.text = string.Format("{6}   ·   Progress: 100.000%\nAttempts: {0}   (champion runs: {4}, cleared {5}x)\nTime: {1:0.0}s   Jumps: {2}\n{3}", attempts, seconds, jumps, loot, totalAttempts, completions, difficultyName);
+            string loot = "Gold " + c.coins + "/" + c.totalCoins + (c.totalGems > 0 ? "   Gems " + c.gems + "/" + c.totalGems : "");
+            completeStats.text = string.Format("{0}   ·   Progress 100.000%   ·   {1:0.0}s (par {2:0.0}s)\nAttempts {3}   ·   Jumps {4}   ·   Near misses {5}\n{6}   ·   champion runs {7}, cleared {8}×",
+                c.difficultyName, c.seconds, c.par, c.attempts, c.jumps, c.nearMisses, loot, c.totalAttempts, c.completions);
+            foreach (Transform child in medalRow) Destroy(child.gameObject);
+            void Medal(string name, bool earned, Color color)
+            {
+                var chip = UIFactory.Panel(medalRow, "Medal", earned ? color : new Color(0.3f, 0.25f, 0.2f, 0.25f));
+                UIFactory.Layout(chip.gameObject, 150, 36);
+                var t = UIFactory.Label(chip, (earned ? "★ " : "☆ ") + name, 13, TextAnchor.MiddleCenter, earned ? Color.white : new Color(0.4f, 0.3f, 0.2f, 0.8f), -1, -1, earned);
+                UIFactory.Stretch(t.rectTransform, 4, 2, 4, 2);
+            }
+            Medal("Swift (under par)", c.medalTime, new Color(0.2f, 0.55f, 0.9f));
+            Medal("All loot", c.medalLoot, new Color(0.85f, 0.65f, 0.15f));
+            Medal("Deathless", c.medalDeathless, new Color(0.62f, 0.12f, 0.1f));
+            // run profile: rider height over the level with this session's deaths ticked underneath
+            foreach (Transform child in profileChart) Destroy(child.gameObject);
+            int n = c.profile.Count;
+            for (int i = 0; i < n; i++)
+            {
+                var bar = UIFactory.Rect(profileChart, "P");
+                var img = bar.gameObject.AddComponent<Image>();
+                img.color = new Color(0.45f, 0.28f, 0.1f, 0.85f);
+                img.raycastTarget = false;
+                float x0 = i / (float)n, x1 = (i + 1) / (float)n;
+                float h = Mathf.Clamp01(c.profile[i]);
+                UIFactory.Anchor(bar, new Vector2(x0, 0), new Vector2(x1, 0), new Vector2(0.5f, 8), new Vector2(-0.5f, 8 + 44f * h));
+            }
+            foreach (var d in c.deaths)
+            {
+                var tick = UIFactory.Rect(profileChart, "D");
+                var img = tick.gameObject.AddComponent<Image>();
+                img.color = AllTimeDeathColor;
+                img.raycastTarget = false;
+                UIFactory.Anchor(tick, new Vector2(Mathf.Clamp01(d), 0), new Vector2(Mathf.Clamp01(d), 0), new Vector2(-1.5f, 0), new Vector2(1.5f, 7));
+            }
+            var lbl = UIFactory.Label(profileChart, "run profile · red = this session's deaths", 9, TextAnchor.UpperRight, new Color(0.4f, 0.3f, 0.2f, 0.9f));
+            lbl.raycastTarget = false;
+            UIFactory.Anchor(lbl.rectTransform, new Vector2(0, 1), new Vector2(1, 1), new Vector2(4, -14), new Vector2(-4, 0));
             completePanel.gameObject.SetActive(true);
+        }
+
+        public void SetPerf(string text)
+        {
+            bool on = !string.IsNullOrEmpty(text);
+            if (perfText.gameObject.activeSelf != on) perfText.gameObject.SetActive(on);
+            perfText.text = text;
+        }
+
+        public void SetClipAvailable(bool on)
+        {
+            if (clipButton != null) clipButton.gameObject.SetActive(on);
         }
 
         public void HideComplete() => completePanel.gameObject.SetActive(false);
 
         public void Flash(Color color, float duration)
         {
+            if (Accessibility.ReduceFlash) color.a *= 0.25f;
             flashColor = color;
             flashDuration = Mathf.Max(0.01f, duration);
             flashTimer = flashDuration;

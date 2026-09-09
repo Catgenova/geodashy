@@ -341,6 +341,42 @@ namespace Geodashy.Editing.UI
     }
 
     /// <summary>New / save / load / delete / import / export.</summary>
+    /// <summary>Static checks on the level with click-to-jump results.</summary>
+    public static class LintDialog
+    {
+        public static void Open(EditorUI ui, LevelEditor editor)
+        {
+            var issues = LevelLint.Check(editor.level);
+            var c = ui.OpenModal("Quest check", 620, 520);
+            var modal = ui.TopModal;
+            int errors = 0;
+            foreach (var i in issues) if (i.severity == "error") errors++;
+            UIFactory.Label(c, issues.Count == 0 ? "No problems found. Ride on!" : issues.Count + " finding" + (issues.Count == 1 ? "" : "s") + " (" + errors + " serious). Click one to jump there.", 13, TextAnchor.MiddleLeft, issues.Count == 0 ? UIFactory.Good : UIFactory.TextColor, -1, 26);
+            var scroll = UIFactory.ScrollView(c, "List", out var list, true, false);
+            UIFactory.VLayout(list, 3, 4);
+            UIFactory.Fitter(list, true, false);
+            int rowH = ui.IsPhone ? 44 : 34;
+            foreach (var issue in issues)
+            {
+                var it = issue;
+                var b = UIFactory.Button(list, (it.severity == "error" ? "✖  " : "⚠  ") + it.message, () =>
+                {
+                    ui.CloseModal(modal);
+                    editor.editorCamera.Position = new Vector2(it.x, Mathf.Max(editor.level.settings.groundY + 3f, it.y));
+                    if (it.uid > 0)
+                    {
+                        editor.Select(it.uid, false);
+                        if (editor.Mode != EditorMode.Edit) editor.SetMode(EditorMode.Edit);
+                    }
+                }, -1, rowH, it.severity == "error" ? new Color(0.5f, 0.18f, 0.18f) : UIFactory.ButtonBg, 12);
+                var t = b.GetComponentInChildren<Text>();
+                t.alignment = TextAnchor.MiddleLeft;
+                t.horizontalOverflow = HorizontalWrapMode.Wrap;
+            }
+            UIFactory.Label(c, "Checks: jump gaps for the current mount and speed (runes, shrooms and ledges excuse them), hazards hidden inside blocks, triggers aimed at empty groups, start positions past the finish, objects under the ground or beyond the finish.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 44);
+        }
+    }
+
     /// <summary>The undo history: every recorded change, newest at the bottom; click one to jump back or forward.</summary>
     public static class UndoHistoryDialog
     {
@@ -574,6 +610,13 @@ namespace Geodashy.Editing.UI
             "Difficulties: Training (place your own waystones), Checkpoints (respawn at Waystone objects you placed in the level), Champion (no checkpoints; sets the record)\n" +
             "Training: Z — raise a waystone   ·   X — remove the last one   ·   ← → — scrub between waystones   ·   C — toggle\n" +
             "Waystones restore everything: mount, gravity, speed, moved objects, colours, loot. Auto waystones rise every few seconds on solid ground.\n\n" +
+            "EVEN MORE TOOLS\n" +
+            "Palette ▸ Path tool — click points, then Lay (grid) or Lay (beat) places the brush along the line\n" +
+            "Edit dock ▸ Replace with brush / Replace all of type — swap object types in place\n" +
+            "View dock ▸ Colour channels — click a swatch to select its users, Recolour to edit it   ·   Check quest (lint) — finds impossible gaps, buried spikes, empty trigger targets\n" +
+            "View dock ▸ Show last playtest path — the rider's route and death point drawn over the level\n" +
+            "Properties with several objects — blank fields differ; typing a value sets it on all of them\n" +
+            "Volley trigger — boss fire: shows a group again and again on a beat (pair with spawn-triggered Move triggers)\n\n" +
             "MORE TOOLS\n" +
             "Right-click (or long-press on touch) an object — context menu: copy, duplicate, delete, properties, select same type, save as stamp\n" +
             "View dock ▸ Snap to neighbours — dragging snaps edges and centres to nearby objects with pink guide lines\n" +

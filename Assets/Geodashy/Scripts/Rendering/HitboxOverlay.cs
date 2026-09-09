@@ -7,9 +7,9 @@ namespace Geodashy.Rendering
     /// <summary>Draws classified hitbox edges (green safe, red danger, cyan interact) with a pool of thin sprites.</summary>
     public class HitboxOverlay : MonoBehaviour
     {
-        public static readonly Color SafeColor = new Color(0.3f, 1f, 0.45f, 0.95f);
-        public static readonly Color DangerColor = new Color(1f, 0.22f, 0.22f, 0.95f);
-        public static readonly Color InteractColor = new Color(0.4f, 0.9f, 1f, 0.9f);
+        public static Color SafeColor => Accessibility.SafeColor;
+        public static Color DangerColor => Accessibility.DangerColor;
+        public static Color InteractColor => Accessibility.InteractColor;
 
         public int sortingOrder = 960;
         public float thickness = 0.06f;

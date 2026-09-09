@@ -41,6 +41,13 @@ namespace Geodashy.Gameplay
         float animTime;
         float airTime;
         float peakFall;
+        /// <summary>0..1 burst when the mount changes (silhouette flash + scale pop).</summary>
+        float morph;
+        float assistTimer;
+        /// <summary>Hazards the rider brushed past without dying this run.</summary>
+        public int nearMisses;
+        readonly HashSet<int> nearZone = new HashSet<int>();
+        readonly HashSet<int> nearZoneNow = new HashSet<int>();
         /// <summary>Sprite and scale the rider is drawn with right now (used by the replay ghosts).</summary>
         public Sprite CurrentSprite => sr != null ? sr.sprite : null;
         public Vector3 VisualScale => transform.localScale;
@@ -122,6 +129,10 @@ namespace Geodashy.Gameplay
 
         public void Spawn(Vector2 pos, string mountId, int speed, bool gravityFlipped, bool isMini)
         {
+            nearMisses = 0;
+            nearZone.Clear();
+            nearZoneNow.Clear();
+            morph = 0f;
             position = pos;
             prevPosition = pos;
             velocity = Vector2.zero;
@@ -223,6 +234,8 @@ namespace Geodashy.Gameplay
                 if (dead || finished) break;
             }
             squash = Vector2.Lerp(squash, Vector2.one, 1f - Mathf.Exp(-11f * dt));
+            if (morph > 0f) morph = Mathf.Max(0f, morph - dt * 2.8f);
+            if (assistTimer > 0f) assistTimer -= dt;
             animTime += dt * (Speed / 10.4f);
             airTime = onGround ? 0f : airTime + dt;
             ApplyVisual();
@@ -282,6 +295,14 @@ namespace Geodashy.Gameplay
                     case ObjectKind.Collectible: TouchCollectible(v); break;
                 }
             }
+            // near misses: hazards that entered the danger halo and left it again with the rider alive
+            if (!dead)
+            {
+                foreach (var uid in nearZone) if (!nearZoneNow.Contains(uid)) nearMisses++;
+                nearZone.Clear();
+                nearZone.UnionWith(nearZoneNow);
+                nearZoneNow.Clear();
+            }
             // forget interactables we are no longer touching so pads/portals can re-fire later
             var stale = new List<int>();
             foreach (var uid in touching) if (!touchingNow.Contains(uid)) stale.Add(uid);
@@ -337,7 +358,7 @@ namespace Geodashy.Gameplay
                     velocity.y -= g * up * dt;
                     break;
                 case "cart":
-                    if (onGround && press)
+                    if (onGround && (press || (held && Accessibility.HoldAssist)))
                     {
                         velocity.y = mount.jumpVelocity * up;
                         onGround = false;
@@ -354,8 +375,9 @@ namespace Geodashy.Gameplay
                     velocity.y = Mathf.Clamp(velocity.y, -mount.maxFallSpeed, mount.maxRiseSpeed);
                     break;
                 case "griffin":
-                    if (press)
+                    if (press || (held && Accessibility.HoldAssist && assistTimer <= 0f))
                     {
+                        assistTimer = 0.28f;
                         velocity.y = mount.jumpVelocity * (mini ? 0.9f : 1f) * up;
                         pressBuffer = 0f;
                         onGround = false;
@@ -556,6 +578,7 @@ namespace Geodashy.Gameplay
         void CollideHazard(LevelObjectView v)
         {
             var inner = InnerBounds;
+            if (GeoMath.RectsOverlap(GeoMath.Expand(inner, 0.22f), v.Bounds)) nearZoneNow.Add(v.data.uid);
             if (!GeoMath.RectsOverlap(inner, v.Bounds)) return;
             var size = v.Size;
             var shape = Hitboxes.Hazard(v.def, size);
@@ -689,6 +712,7 @@ namespace Geodashy.Gameplay
                 case PortalType.Mount:
                     SetMount(def.portalMount);
                     if (!mount.flying) onGround = false;
+                    morph = 1f;
                     break;
                 case PortalType.GravityNormal: flipped = false; break;
                 case PortalType.GravityFlip: flipped = true; break;
@@ -787,10 +811,14 @@ namespace Geodashy.Gameplay
             }
             else if (anim == null && sr.sprite != null) baseScale = mount.width / Mathf.Max(0.01f, sr.sprite.bounds.size.x);
             float facing = SpriteLibrary.MountFacing(mount);
-            transform.localScale = new Vector3(baseScale * s * direction * facing * squash.x, baseScale * s * (flipped ? -1f : 1f) * squash.y, 1f);
+            // mount switch: the silhouette flares white and pops in size for a moment
+            float pop = 1f + 0.35f * Mathf.Sin(morph * Mathf.PI);
+            transform.localScale = new Vector3(baseScale * s * direction * facing * squash.x * pop, baseScale * s * (flipped ? -1f : 1f) * squash.y * pop, 1f);
             sr.enabled = visible;
             // stay visible but ghosted at the death spot so the contact point can be read
-            sr.color = dead ? new Color(1f, 1f, 1f, 0.45f) : Color.white;
+            var tint = dead ? new Color(1f, 1f, 1f, 0.45f) : Color.white;
+            if (morph > 0f && !dead) tint = Color.Lerp(tint, new Color(3f, 3f, 3f, 1f), Mathf.Clamp01(morph * 1.5f) * 0.8f);
+            sr.color = tint;
         }
     }
 }

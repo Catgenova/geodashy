@@ -26,6 +26,9 @@ namespace Geodashy.Rendering
         [System.NonSerialized] public bool runtimeActive = true;
         /// <summary>Set by LevelWorld.UpdateCulling when the object is far outside the play camera.</summary>
         [System.NonSerialized] public bool culled;
+        /// <summary>Crowd reactions in play: extra rotation (degrees) and scale (fraction) on top of the authored transform.</summary>
+        [System.NonSerialized] public float visualWobble;
+        [System.NonSerialized] public float visualPulse;
         [System.NonSerialized] public float spinAngle;
         [System.NonSerialized] public Color pulseColor = Color.clear;
 
@@ -84,8 +87,8 @@ namespace Geodashy.Rendering
         {
             var pos = WorldPosition;
             transform.localPosition = new Vector3(pos.x, pos.y, 0f);
-            transform.localRotation = Quaternion.Euler(0, 0, WorldRotation);
-            float textScale = def.kind == ObjectKind.Text ? data.GetFloat("size", 1f) : 1f;
+            transform.localRotation = Quaternion.Euler(0, 0, WorldRotation + visualWobble);
+            float textScale = (def.kind == ObjectKind.Text ? data.GetFloat("size", 1f) : 1f) * (1f + visualPulse);
             transform.localScale = new Vector3(data.scaleX * textScale * (data.flipX ? -1f : 1f), data.scaleY * textScale * (data.flipY ? -1f : 1f), 1f);
         }
 

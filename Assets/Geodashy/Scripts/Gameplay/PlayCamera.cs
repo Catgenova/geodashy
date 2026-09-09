@@ -103,6 +103,7 @@ namespace Geodashy.Gameplay
 
         public void Shake(float strength, float interval, float duration)
         {
+            if (Accessibility.ReduceFlash) strength *= 0.3f;
             shakeStrength = strength;
             shakeInterval = Mathf.Max(0.005f, interval);
             shakeDuration = duration;

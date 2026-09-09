@@ -1,4 +1,5 @@
 using Geodashy.Core;
+using Geodashy.Rendering;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -13,6 +14,9 @@ namespace Geodashy.Editing.UI
         RectTransform groupsHost;
         Text groupsEmpty, budgetLabel;
         string groupsKey = "";
+        RectTransform colorStrip;
+        Toggle traceToggle;
+        int lastColorChannel = 1;
         Button[] beatButtons;
         Button[] gridButtons;
         readonly float[] gridSizes = { 0.25f, 0.5f, 1f, 2f };
@@ -58,6 +62,7 @@ namespace Geodashy.Editing.UI
             UIFactory.Button(qr2, "Save as…", ui.PromptSaveAs, -1, 28, null, 13);
             UIFactory.Button(qr2, "Files", ui.OpenFileDialog, -1, 28, null, 13);
             UIFactory.Button(qr2, "History", ui.OpenHistory, -1, 28, null, 13);
+            UIFactory.Button(c, "Check quest (lint)", () => LintDialog.Open(ui, editor), -1, 26, null, 12);
             budgetLabel = UIFactory.Label(c, "", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 46);
             savedLabel = UIFactory.Label(c, "", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 32);
             UIFactory.Button(c, "◀ Main menu", ui.ReturnToMenu, -1, 26, null, 12);
@@ -115,6 +120,11 @@ namespace Geodashy.Editing.UI
                 editor.NotifyViewOptionsChanged();
             });
             UIFactory.Label(c, "Green = safe to land on, red = kills, blue = interacts. The brush preview always shows them.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 36);
+            traceToggle = UIFactory.Toggle(c, "Show last playtest path", editor.showRunTrace, v =>
+            {
+                editor.showRunTrace = v;
+                PlayerPrefs.SetInt(LevelEditor.RunTracePref, v ? 1 : 0);
+            });
             guideToggle = UIFactory.Toggle(c, "Camera frame", editor.grid.showCameraGuide, v => editor.grid.showCameraGuide = v);
             bpmToggle = UIFactory.Toggle(c, "BPM beat lines", editor.grid.showBpmGuide, v => editor.grid.showBpmGuide = v);
 
@@ -125,6 +135,27 @@ namespace Geodashy.Editing.UI
             UIFactory.Button(lr, "▶", () => editor.SetEditorLayer(editor.currentEditorLayer + 1), 34, 26);
             allLayersToggle = UIFactory.Toggle(c, "Show all layers (\\)", editor.showAllLayers, v => editor.SetShowAllLayers(v));
             UIFactory.Button(c, "Move selection to this layer", () => editor.EditSelection(o => o.editorLayer = editor.currentEditorLayer), -1, 26, null, 12);
+
+            UIFactory.SectionHeader(c, "Colour channels");
+            UIFactory.Label(c, "Click a swatch to select every object using it; Recolour edits the last clicked channel.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 30);
+            colorStrip = UIFactory.Rect(c, "Colours");
+            UIFactory.Grid(colorStrip, new Vector2(22, 22), new Vector2(3, 3), 0);
+            UIFactory.Layout(colorStrip.gameObject, -1, 50, 1);
+            var cr = UIFactory.Row(c, 26, 3);
+            UIFactory.Button(cr, "Recolour…", () =>
+            {
+                var ch = editor.level.GetOrCreateColorChannel(lastColorChannel);
+                ui.ShowColorPicker(colorStrip, ch.color, col =>
+                {
+                    ch.color = new Color(col.r, col.g, col.b, 1f);
+                    ch.opacity = col.a;
+                    editor.MarkDirty();
+                    editor.RefreshAllViews();
+                    RefreshColorStrip();
+                });
+            }, -1, 24, null, 11);
+            UIFactory.Button(cr, "Apply to selection", () => editor.EditSelection(o => o.baseColor = lastColorChannel, true, "Recolour"), -1, 24, null, 11);
+            editor.LevelChanged += RefreshColorStrip;
 
             UIFactory.SectionHeader(c, "Groups");
             UIFactory.Label(c, "Hide a group to get it out of the way, lock it so taps pass through it.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 30);
@@ -198,6 +229,42 @@ namespace Geodashy.Editing.UI
             Refresh();
             RefreshQuest();
             RefreshGroups(true);
+            RefreshColorStrip();
+        }
+
+        string colorKey = "";
+        void RefreshColorStrip()
+        {
+            if (colorStrip == null) return;
+            var sb = new System.Text.StringBuilder();
+            for (int i = 1; i <= 20; i++) sb.Append(ColorUtility.ToHtmlStringRGBA(editor.level.ResolveColor(i, Color.white)));
+            var key = sb.ToString() + lastColorChannel;
+            if (key == colorKey) return;
+            colorKey = key;
+            foreach (Transform child in colorStrip) Destroy(child.gameObject);
+            for (int i = 1; i <= 20; i++)
+            {
+                int ch = i;
+                var sw = UIFactory.Swatch(colorStrip, editor.level.ResolveColor(i, Color.white), 22);
+                var b = sw.gameObject.AddComponent<Button>();
+                b.targetGraphic = sw;
+                b.onClick.AddListener(() =>
+                {
+                    lastColorChannel = ch;
+                    editor.SelectByColorChannel(ch);
+                    RefreshColorStrip();
+                });
+                if (ch == lastColorChannel)
+                {
+                    var ring = UIFactory.Rect(sw.transform, "Ring");
+                    var img = ring.gameObject.AddComponent<Image>();
+                    img.sprite = PlaceholderSpriteFactory.Outline();
+                    img.type = Image.Type.Sliced;
+                    img.color = UIFactory.Accent;
+                    img.raycastTarget = false;
+                    UIFactory.Stretch(ring);
+                }
+            }
         }
 
         /// <summary>Rebuilds the group rows only when the set of used groups changes (LevelChanged fires on every move).</summary>

@@ -194,6 +194,17 @@ namespace Geodashy.Gameplay
         public GameRunner runner;
         public Vector2 playerDelta;
 
+        /// <summary>A Volley in progress: shows the group for 'visible' seconds every 'interval' seconds, 'remaining' times.</summary>
+        class Volley
+        {
+            public int group;
+            public int remaining;
+            public float interval, visible;
+            public float timer;
+            public bool showing;
+        }
+        readonly List<Volley> volleys = new List<Volley>();
+
         readonly List<Tween> tweens = new List<Tween>();
         readonly List<SpawnDelay> spawnQueue = new List<SpawnDelay>();
         readonly List<TouchListener> touchListeners = new List<TouchListener>();
@@ -240,6 +251,7 @@ namespace Geodashy.Gameplay
         {
             tweens.Clear();
             spawnQueue.Clear();
+            volleys.Clear();
             channelPulse.Clear();
             nextTriggerIndex = s.nextTriggerIndex;
             fired.Clear();
@@ -255,6 +267,7 @@ namespace Geodashy.Gameplay
         {
             tweens.Clear();
             spawnQueue.Clear();
+            volleys.Clear();
             touchListeners.Clear();
             fired.Clear();
             channelPulse.Clear();
@@ -286,6 +299,31 @@ namespace Geodashy.Gameplay
 
         public void Update(float dt)
         {
+            for (int i = volleys.Count - 1; i >= 0; i--)
+            {
+                var v = volleys[i];
+                v.timer -= dt;
+                if (v.timer > 0f) continue;
+                if (v.showing)
+                {
+                    SetGroupActive(v.group, false);
+                    v.showing = false;
+                    v.remaining--;
+                    if (v.remaining <= 0)
+                    {
+                        volleys.RemoveAt(i);
+                        continue;
+                    }
+                    v.timer = Mathf.Max(0.01f, v.interval - v.visible);
+                }
+                else
+                {
+                    SetGroupActive(v.group, true);
+                    FireGroup(v.group);   // spawn-triggered movers in the group fling the shot
+                    v.showing = true;
+                    v.timer = v.visible;
+                }
+            }
             for (int i = spawnQueue.Count - 1; i >= 0; i--)
             {
                 spawnQueue[i].remaining -= dt;
@@ -460,6 +498,18 @@ namespace Geodashy.Gameplay
                     break;
                 case TriggerType.Count:
                     // handled on collect; store the trigger so OnCollect can evaluate it
+                    break;
+                case TriggerType.Volley:
+                    SetGroupActive(target, false);
+                    volleys.Add(new Volley
+                    {
+                        group = target,
+                        remaining = Mathf.Max(1, d.GetInt("count", 6)),
+                        interval = Mathf.Max(0.05f, d.GetFloat("interval", 0.5f)),
+                        visible = Mathf.Max(0.05f, d.GetFloat("visible", 0.3f)),
+                        timer = d.GetFloat("delay", 0f),
+                        showing = false
+                    });
                     break;
             }
         }

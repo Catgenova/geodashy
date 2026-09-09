@@ -20,6 +20,7 @@ namespace Geodashy.Editing.UI
         Text selectedName, selectedDesc, transformLabel;
         Toggle swipeToggle;
         Button swipeButton, categoryButton;   // phone layout
+        Button pathButton;
         string lastSearch = "";
         public const string StampsCategory = "Stamps";
         Button deleteStampButton;
@@ -110,6 +111,14 @@ namespace Geodashy.Editing.UI
                 RefreshPlacement();
                 ui.Toast(editor.swipeBuild ? "Swipe to paint: drag places a row of objects" : "Swipe off: one object per tap");
             }, -1, 40, null, 12);
+            var r4 = UIFactory.Row(right, 40, 4);
+            pathButton = UIFactory.Button(r4, "Path", () =>
+            {
+                editor.SetPathTool(!editor.pathTool);
+                ui.Toast(editor.pathTool ? "Path tool: tap points, then Lay" : "Path tool off");
+            }, -1, 40, null, 12);
+            UIFactory.Button(r4, "Lay grid", () => editor.LayPath(false), -1, 40, UIFactory.Good, 12);
+            UIFactory.Button(r4, "Lay beat", () => editor.LayPath(true), -1, 40, UIFactory.Good, 12);
             deleteStampButton = UIFactory.Button(left, "Delete stamp", DeleteCurrentStamp, -1, 0, UIFactory.Danger, 12);
             deleteStampButton.gameObject.SetActive(false);
 
@@ -226,6 +235,11 @@ namespace Geodashy.Editing.UI
             UIFactory.Label(right, "Click to place · Ctrl+click to select · Esc clears the brush", 11, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 20);
             deleteStampButton = UIFactory.Button(right, "Delete this stamp", DeleteCurrentStamp, -1, 24, UIFactory.Danger, 11);
             deleteStampButton.gameObject.SetActive(false);
+            var pr = UIFactory.Row(right, 26, 3);
+            pathButton = UIFactory.Button(pr, "Path tool", () => editor.SetPathTool(!editor.pathTool), -1, 24, null, 11);
+            UIFactory.Button(pr, "Lay (grid)", () => editor.LayPath(false), -1, 24, UIFactory.Good, 11);
+            UIFactory.Button(pr, "Lay (beat)", () => editor.LayPath(true), -1, 24, UIFactory.Good, 11);
+            UIFactory.Button(pr, "Clear", editor.ClearPath, 48, 24, null, 11);
 
             ShowCategory(currentCategory);
             editor.ViewOptionsChanged += RefreshPlacement;
@@ -308,6 +322,7 @@ namespace Geodashy.Editing.UI
             transformLabel.text = string.Format("rot {0:0}°  scale {1:0.##}x  {2}{3}", editor.placeRotation, editor.placeScale, editor.placeFlipX ? "flipH " : "", editor.placeFlipY ? "flipV" : "");
             if (swipeToggle != null) swipeToggle.SetIsOnWithoutNotify(editor.swipeBuild);
             if (swipeButton != null) UIFactory.SetButtonActive(swipeButton, editor.swipeBuild);
+            if (pathButton != null) UIFactory.SetButtonActive(pathButton, editor.pathTool);
         }
     }
 }

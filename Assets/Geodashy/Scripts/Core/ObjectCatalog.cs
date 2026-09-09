@@ -429,6 +429,12 @@ namespace Geodashy.Core
                 .Prop(new PropDef("offset", "Offset (s)", PropType.Float, "0").Range(0, 6000, 0.1f))
                 .Prop(new PropDef("loop", "Loop", PropType.Bool, "0"));
             Trig("trig_reverse", "Reverse", TriggerType.Reverse, "RV", "ff80ff", "Reverses the travel direction.");
+            Trig("trig_volley", "Volley", TriggerType.Volley, "VY", "ff6a3a", "Boss fire: shows a group again and again on a beat, hiding it between shots. Pair it with a Move trigger in the same group to fling projectiles.")
+                .Prop(new PropDef("target", "Target Group", PropType.Group, "0"))
+                .Prop(new PropDef("count", "Shots", PropType.Int, "6").Range(1, 200, 1))
+                .Prop(new PropDef("interval", "Interval (s)", PropType.Float, "0.5").Range(0.05f, 30, 0.05f).Help("Time between shots; use the beat length for rhythm."))
+                .Prop(new PropDef("visible", "Visible (s)", PropType.Float, "0.3").Range(0.05f, 30, 0.05f).Help("How long each shot stays active."))
+                .Prop(new PropDef("delay", "Start Delay (s)", PropType.Float, "0").Range(0, 30, 0.1f));
             Trig("trig_count", "Count", TriggerType.Count, "CT", "e0e0a0", "Activates a group when an item count is reached.")
                 .Prop(new PropDef("itemId", "Item ID", PropType.Int, "1").Range(1, 999, 1))
                 .Prop(new PropDef("count", "Count", PropType.Int, "1").Range(0, 9999, 1))

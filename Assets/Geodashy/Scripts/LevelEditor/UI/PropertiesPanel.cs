@@ -116,9 +116,22 @@ namespace Geodashy.Editing.UI
                     Apply(o => o.y += d);
                 }
             }, false, 70);
+            // with several objects, a field only shows a value when they all agree; blank means "mixed" and
+            // typing a number sets just that field on every object
+            bool Mixed(Func<LevelObject, float> get)
+            {
+                if (objs.Count < 2) return false;
+                float v0 = get(objs[0]);
+                foreach (var o in objs) if (Mathf.Abs(get(o) - v0) > 0.0001f) return true;
+                return false;
+            }
             rotField = NumberField.Create(content, "Rotation", first.rotation, 15, -3600, 3600, v => Apply(o => o.rotation = GeoMath.NormalizeAngle(v)), false, 70);
+            if (Mixed(o => o.rotation)) rotField.SetMixed();
             sxField = NumberField.Create(content, "Scale X", first.scaleX, 0.25f, 0.125f, 16, v => Apply(o => o.scaleX = v), false, 70);
+            if (Mixed(o => o.scaleX)) sxField.SetMixed();
             syField = NumberField.Create(content, "Scale Y", first.scaleY, 0.25f, 0.125f, 16, v => Apply(o => o.scaleY = v), false, 70);
+            if (Mixed(o => o.scaleY)) syField.SetMixed();
+            if (objs.Count > 1) UIFactory.Label(content, "Blank fields differ between the selected objects; enter a value to set it on all of them.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 30);
             var fr = UIFactory.Row(content, 26, 8);
             flipXField = BoolField.Create(fr, "Flip X", first.flipX, v => Apply(o => o.flipX = v));
             flipYField = BoolField.Create(fr, "Flip Y", first.flipY, v => Apply(o => o.flipY = v));
@@ -128,7 +141,9 @@ namespace Geodashy.Editing.UI
             int zIdx = Array.IndexOf(zLayerValues, first.zLayer == 0 ? 1 : first.zLayer);
             zLayerField = DropdownField.Create(content, "Z layer", zLayerNames, Mathf.Max(0, zIdx), i => Apply(o => o.zLayer = zLayerValues[i]), 70);
             zOrderField = NumberField.Create(content, "Z order", first.zOrder, 1, -50, 50, v => Apply(o => o.zOrder = Mathf.RoundToInt(v)), true, 70);
+            if (Mixed(o => o.zOrder)) zOrderField.SetMixed();
             layerField = NumberField.Create(content, "Editor layer", first.editorLayer, 1, 0, 99, v => Apply(o => o.editorLayer = Mathf.RoundToInt(v)), true, 70);
+            if (Mixed(o => o.editorLayer)) layerField.SetMixed();
 
             // colour ----------------------------------------------------------------------
             UIFactory.SectionHeader(content, "Colour");

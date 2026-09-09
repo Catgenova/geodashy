@@ -169,6 +169,128 @@ namespace Geodashy.Editing
             return list;
         }
 
+        // ---- last playtest trace ---------------------------------------------------------
+        public readonly List<Vector2> lastRunTrace = new List<Vector2>();
+        public Vector2? lastRunDeath;
+        public const string RunTracePref = "geodashy.runTrace";
+        public bool showRunTrace = PlayerPrefs.GetInt(RunTracePref, 1) == 1;
+
+        // ---- path tool: click points, lay the brush along them ---------------------------
+        public bool pathTool;
+        public readonly List<Vector2> pathPoints = new List<Vector2>();
+        public void SetPathTool(bool on)
+        {
+            pathTool = on;
+            if (!on) pathPoints.Clear();
+            if (on && Mode != EditorMode.Build) SetMode(EditorMode.Build);
+            ViewOptionsChanged?.Invoke();
+        }
+        public void ClearPath()
+        {
+            pathPoints.Clear();
+            ViewOptionsChanged?.Invoke();
+        }
+        /// <summary>Places the brush along the clicked polyline at a spacing (grid size, or the beat when onBeat).</summary>
+        public void LayPath(bool onBeat)
+        {
+            if (BuildDef == null)
+            {
+                ui.Toast("Pick a brush object first");
+                return;
+            }
+            if (pathPoints.Count < 2)
+            {
+                ui.Toast("Click at least two points for the path");
+                return;
+            }
+            float spacing = onBeat ? BeatLength / Mathf.Max(1, beatDivision) : Mathf.Max(0.25f, gridSize);
+            var placed = new List<LevelObject>();
+            float carry = 0f;
+            for (int i = 1; i < pathPoints.Count; i++)
+            {
+                var a = pathPoints[i - 1];
+                var b = pathPoints[i];
+                float len = Vector2.Distance(a, b);
+                if (len < 0.001f) continue;
+                var dir = (b - a) / len;
+                float t = carry;
+                while (t <= len + 0.001f)
+                {
+                    var p = a + dir * t;
+                    if (snapToGrid) p = GeoMath.SnapCenter(p, new Vector2(BuildDef.width * placeScale, BuildDef.height * placeScale), gridSize);
+                    bool dup = false;
+                    foreach (var q in placed) if ((new Vector2(q.x, q.y) - p).sqrMagnitude < 0.0001f) { dup = true; break; }
+                    if (!dup)
+                    {
+                        var o = new LevelObject { type = BuildDef.id, x = p.x, y = p.y, rotation = placeRotation, scaleX = placeScale * (placeFlipX ? -1f : 1f), scaleY = placeScale * (placeFlipY ? -1f : 1f), zLayer = BuildDef.defaultZLayer, zOrder = BuildDef.defaultZOrder, editorLayer = currentEditorLayer };
+                        o.flipX = placeFlipX;
+                        o.flipY = placeFlipY;
+                        o.scaleX = placeScale;
+                        o.scaleY = placeScale;
+                        placed.Add(o);
+                    }
+                    t += spacing;
+                }
+                carry = t - len;
+            }
+            if (placed.Count == 0) return;
+            RecordUndo("Lay path of " + BuildDef.name);
+            AddObjects(placed, false, true);
+            pathPoints.Clear();
+            ui.Toast("Placed " + placed.Count + " × " + BuildDef.name + " along the path");
+            Haptics.Place();
+            ViewOptionsChanged?.Invoke();
+        }
+
+        // ---- replace ---------------------------------------------------------------------
+        /// <summary>Swaps every selected object's type for the brush, keeping position, rotation and scale.</summary>
+        public void ReplaceSelectionWithBrush()
+        {
+            if (BuildDef == null)
+            {
+                ui.Toast("Pick a brush object in Build mode first");
+                return;
+            }
+            if (selection.Count == 0)
+            {
+                ui.Toast("Select the objects to replace");
+                return;
+            }
+            var def = BuildDef;
+            int n = 0;
+            EditSelection(o =>
+            {
+                if (o.type == def.id) return;
+                o.type = def.id;
+                o.props.Clear();
+                n++;
+            }, true, "Replace with " + def.name);
+            RebuildViews();
+            SelectionChanged?.Invoke();
+            ui.Toast("Replaced " + n + " objects with " + def.name);
+        }
+
+        public void ReplaceAllOfTypeWithBrush(string fromType)
+        {
+            if (BuildDef == null) return;
+            var list = new List<int>();
+            foreach (var o in level.objects) if (o.type == fromType) list.Add(o.uid);
+            if (list.Count == 0) return;
+            selection.Clear();
+            selection.UnionWith(list);
+            ReplaceSelectionWithBrush();
+        }
+
+        /// <summary>Selects everything painted with a colour channel (base or detail).</summary>
+        public void SelectByColorChannel(int channel)
+        {
+            selection.Clear();
+            foreach (var o in level.objects) if (IsSelectable(o) && (o.baseColor == channel || o.detailColor == channel)) selection.Add(o.uid);
+            RefreshSelectionVisuals();
+            SelectionChanged?.Invoke();
+            ui.Toast(selection.Count + " objects use channel " + ColorChannelIds.Name(channel));
+        }
+
         // ---- long press / context menu ------------------------------------------------
         float pressTime;
         Vector2 pressScreen;
@@ -1229,6 +1351,10 @@ namespace Geodashy.Editing
             if (runner == null) return;
             var r = runner;
             runner = null;
+            // keep the run's path so it can be drawn over the level
+            lastRunTrace.Clear();
+            lastRunTrace.AddRange(r.runTrace);
+            lastRunDeath = r.player != null && r.player.dead ? r.player.deathPoint : (Vector2?)null;
             r.Shutdown();
             Destroy(r.gameObject);
             objectsRoot.gameObject.SetActive(true);
@@ -1598,6 +1724,12 @@ namespace Geodashy.Editing
             switch (Mode)
             {
                 case EditorMode.Build:
+                    if (pathTool && !ctrl)
+                    {
+                        pathPoints.Add(CursorSnapped);
+                        ViewOptionsChanged?.Invoke();
+                        return;
+                    }
                     if (StampBrush != null && !ctrl)
                     {
                         RecordUndo("Stamp " + StampBrush.name);
@@ -1999,7 +2131,7 @@ namespace Geodashy.Editing
                 hitboxOverlay.Clear();
                 return;
             }
-            hitboxOverlay.thickness = Mathf.Clamp(0.05f / editorCamera.zoom, 0.03f, 0.25f);
+            hitboxOverlay.thickness = Mathf.Clamp(0.05f / editorCamera.zoom, 0.03f, 0.25f) * Accessibility.OverlayThicknessMultiplier;
             hitboxOverlay.Begin();
             if (showHitboxes)
             {
@@ -2028,6 +2160,29 @@ namespace Geodashy.Editing
                     var sz = new Vector2(d.width * Mathf.Abs(o.scaleX), d.height * Mathf.Abs(o.scaleY));
                     hitboxOverlay.Rect(new Rect(CursorSnapped.x + o.x - sz.x / 2f, CursorSnapped.y + o.y - sz.y / 2f, sz.x, sz.y), new Color(1f, 0.85f, 0.3f, 0.35f), hitboxOverlay.thickness * 0.6f);
                 }
+            }
+            // last playtest path
+            if (showRunTrace && lastRunTrace.Count > 1)
+            {
+                var view = GeoMath.Expand(editorCamera.ViewRect, 2f);
+                var tc = new Color(0.4f, 0.85f, 1f, 0.55f);
+                int step = Mathf.Max(1, lastRunTrace.Count / 4000);
+                for (int i = step; i < lastRunTrace.Count; i += step)
+                {
+                    var a = lastRunTrace[i - step];
+                    var b = lastRunTrace[i];
+                    if (b.x < view.xMin || a.x > view.xMax) continue;
+                    hitboxOverlay.Segment(a, b, tc, hitboxOverlay.thickness * 0.8f);
+                }
+                if (lastRunDeath.HasValue) hitboxOverlay.Dot(lastRunDeath.Value, 0.16f, new Color(1f, 0.25f, 0.25f, 0.9f));
+            }
+            // path tool polyline
+            if (pathTool && pathPoints.Count > 0)
+            {
+                var pc = new Color(1f, 0.6f, 0.2f, 0.9f);
+                for (int i = 1; i < pathPoints.Count; i++) hitboxOverlay.Segment(pathPoints[i - 1], pathPoints[i], pc, hitboxOverlay.thickness);
+                foreach (var p in pathPoints) hitboxOverlay.Dot(p, 0.12f, pc);
+                if (drag == DragState.None && !ui.PointerOverUI) hitboxOverlay.Segment(pathPoints[pathPoints.Count - 1], CursorSnapped, new Color(1f, 0.6f, 0.2f, 0.4f), hitboxOverlay.thickness * 0.6f);
             }
             // snapping guides while dragging
             if (drag == DragState.MoveSelection && snapGuides && (guideXs.Count > 0 || guideYs.Count > 0))

@@ -191,7 +191,8 @@ namespace Geodashy.Core
         Random,
         Song,
         Reverse,
-        Count
+        Count,
+        Volley
     }
 
     public enum Easing
