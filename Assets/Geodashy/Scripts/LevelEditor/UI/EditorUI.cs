@@ -150,13 +150,51 @@ namespace Geodashy.Editing.UI
 
         public bool ModalOpen => modals.Count > 0;
 
-        public bool PointerOverUI
+        /// <summary>
+        /// True when the active pointer (the touch if one is down or just ended, else the mouse) is over interface.
+        /// Uses a position raycast rather than IsPointerOverGameObject, which is unreliable for touches and for the
+        /// phantom mouse device Android reports.
+        /// </summary>
+        public bool PointerOverUI => IsScreenPointOverUI(ActivePointerPosition(), false);
+
+        static readonly List<RaycastResult> raycastResults = new List<RaycastResult>();
+
+        /// <summary>Screen position of whichever pointer the player is actually using.</summary>
+        public static Vector2 ActivePointerPosition()
         {
-            get
+            var touch = UnityEngine.InputSystem.Touchscreen.current;
+            if (touch != null && (TouchActive(touch) || UnityEngine.InputSystem.Mouse.current == null || Application.isMobilePlatform)) return touch.primaryTouch.position.ReadValue();
+            var mouse = UnityEngine.InputSystem.Mouse.current;
+            return mouse != null ? mouse.position.ReadValue() : new Vector2(-1000, -1000);
+        }
+
+        /// <summary>A finger is down, went down or lifted this frame.</summary>
+        public static bool TouchActive(UnityEngine.InputSystem.Touchscreen touch)
+        {
+            if (touch == null) return false;
+            var press = touch.primaryTouch.press;
+            return press.isPressed || press.wasPressedThisFrame || press.wasReleasedThisFrame;
+        }
+
+        /// <summary>
+        /// Raycasts the UI at a screen position. With interactiveOnly, only buttons, toggles, sliders, inputs and
+        /// scroll views count, so plain HUD text never swallows a tap.
+        /// </summary>
+        public static bool IsScreenPointOverUI(Vector2 screenPos, bool interactiveOnly)
+        {
+            var es = EventSystem.current;
+            if (es == null) return false;
+            var ped = new PointerEventData(es) { position = screenPos };
+            raycastResults.Clear();
+            es.RaycastAll(ped, raycastResults);
+            if (!interactiveOnly) return raycastResults.Count > 0;
+            for (int i = 0; i < raycastResults.Count; i++)
             {
-                if (EventSystem.current == null) return false;
-                return EventSystem.current.IsPointerOverGameObject();
+                var go = raycastResults[i].gameObject;
+                if (go == null) continue;
+                if (go.GetComponentInParent<Selectable>() != null || go.GetComponentInParent<ScrollRect>() != null) return true;
             }
+            return false;
         }
 
         public bool IsTyping

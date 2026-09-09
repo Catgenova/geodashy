@@ -629,13 +629,13 @@ namespace Geodashy.Gameplay
             var mouse = Mouse.current;
             var kb = Keyboard.current;
             var ts = Touchscreen.current;
-            bool overUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
-            if (mouse != null && !overUI)
+            // only a press that lands on a button / slider counts as "over UI"; HUD text never swallows a tap
+            if (mouse != null && !Application.isMobilePlatform && !Geodashy.Editing.UI.EditorUI.IsScreenPointOverUI(mouse.position.ReadValue(), true))
             {
                 held |= mouse.leftButton.isPressed;
                 pressed |= mouse.leftButton.wasPressedThisFrame;
             }
-            if (ts != null && !overUI)
+            if (ts != null && !Geodashy.Editing.UI.EditorUI.IsScreenPointOverUI(ts.primaryTouch.position.ReadValue(), true))
             {
                 held |= ts.primaryTouch.press.isPressed;
                 pressed |= ts.primaryTouch.press.wasPressedThisFrame;

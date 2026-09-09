@@ -1143,7 +1143,12 @@ namespace Geodashy.Editing
             var kb = Keyboard.current;
             var mouse = Mouse.current;
             var touch = Touchscreen.current;
-            Pointer pointer = mouse != null ? (Pointer)mouse : touch;   // phones have no mouse: drive the editor from touch
+            // Android reports a mouse device even with no mouse attached, so the touchscreen wins whenever a finger
+            // is active, whenever there is no mouse, and always on handhelds. The mouse is then passed as null so
+            // its stale buttons and wheel are ignored.
+            bool useTouch = touch != null && (EditorUI.TouchActive(touch) || mouse == null || Application.isMobilePlatform);
+            Pointer pointer = useTouch ? (Pointer)touch : mouse;
+            if (useTouch) mouse = null;
             bool typing = ui.IsTyping;
             bool modal = ui.ModalOpen;
 
@@ -1318,7 +1323,7 @@ namespace Geodashy.Editing
         {
             var screen = pointer.position.ReadValue();
             CursorWorld = editorCamera.ScreenToWorld(screen);
-            bool overUI = ui.PointerOverUI;
+            bool overUI = EditorUI.IsScreenPointOverUI(screen, false);
             bool shift = kb != null && Shift(kb);
             bool ctrl = kb != null && Ctrl(kb);
             bool space = kb != null && kb[Key.Space].isPressed;
