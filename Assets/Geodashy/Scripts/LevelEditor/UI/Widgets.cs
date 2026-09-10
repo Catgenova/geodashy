@@ -24,7 +24,15 @@ namespace Geodashy.Editing.UI
         {
             var f = new NumberField { step = step, min = min, max = max, integer = integer, onChange = onChange, value = value };
             f.root = UIFactory.Row(parent, height, 4);
-            if (!string.IsNullOrEmpty(label)) UIFactory.Label(f.root, label, 13, TextAnchor.MiddleLeft, UIFactory.TextDim, labelWidth, height);
+            if (!string.IsNullOrEmpty(label))
+            {
+                // the label is a scrub handle: drag sideways to change the value, Shift for fine steps
+                var l = UIFactory.Label(f.root, label, 13, TextAnchor.MiddleLeft, UIFactory.TextDim, labelWidth, height);
+                l.raycastTarget = true;
+                var scrub = l.gameObject.AddComponent<ScrubHandle>();
+                scrub.onDelta = steps => f.Bump(steps);
+                UIFactory.Tip(l, "Drag left or right to scrub " + label.ToLowerInvariant() + " (Shift = fine)");
+            }
             UIFactory.Button(f.root, "-", () => f.Bump(-1), 26, height - 2, null, 16);
             f.input = UIFactory.Input(f.root, "", f.Format(value), f.Commit, -1, height - 2, InputField.ContentType.Standard, 13);
             UIFactory.Button(f.root, "+", () => f.Bump(1), 26, height - 2, null, 16);

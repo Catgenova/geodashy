@@ -1010,6 +1010,7 @@ namespace Geodashy.Editing
             }
             if (hoverUid >= 0 && set.Contains(hoverUid)) hoverUid = -1;
             MarkChanged();
+            if (record && ui != null) ui.Notify("Deleted " + list.Count + (list.Count == 1 ? " object" : " objects"), 4f, "trash", "Undo", Undo);
             SelectionChanged?.Invoke();
         }
 

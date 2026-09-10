@@ -29,24 +29,24 @@ namespace Geodashy.Editing.UI
         {
             UIFactory.HLayout(parent, 6, 8, false, TextAnchor.MiddleLeft);
 
-            buildBtn = UIFactory.Button(parent, "Build (1)", () => editor.SetMode(EditorMode.Build), 92, 36);
-            editBtn = UIFactory.Button(parent, "Edit (2)", () => editor.SetMode(EditorMode.Edit), 92, 36);
-            deleteBtn = UIFactory.Button(parent, "Delete (3)", () => editor.SetMode(EditorMode.Delete), 92, 36);
+            buildBtn = UIFactory.IconButton(parent, "build", "Build", () => editor.SetMode(EditorMode.Build), 92, 36, null, 14, "Build mode (1): place the brush object");
+            editBtn = UIFactory.IconButton(parent, "edit", "Edit", () => editor.SetMode(EditorMode.Edit), 84, 36, null, 14, "Edit mode (2): select, move and change objects");
+            deleteBtn = UIFactory.IconButton(parent, "delete", "Delete", () => editor.SetMode(EditorMode.Delete), 96, 36, null, 14, "Delete mode (3): remove objects");
             UIFactory.Spacer(parent, 36, 10);
-            undoBtn = UIFactory.Button(parent, "↶ Undo", editor.Undo, 84, 36);
-            redoBtn = UIFactory.Button(parent, "↷ Redo", editor.Redo, 84, 36);
+            undoBtn = UIFactory.IconButton(parent, "undo", null, editor.Undo, 40, 36, null, 14, "Undo (Ctrl+Z)");
+            redoBtn = UIFactory.IconButton(parent, "redo", null, editor.Redo, 40, 36, null, 14, "Redo (Ctrl+Y)");
             UIFactory.Spacer(parent, 36, 10);
-            UIFactory.Button(parent, "▶ Play", () => editor.StartPlaytest(false), 84, 36, UIFactory.Good);
-            UIFactory.Button(parent, "▶ Marker", () => editor.StartPlaytest(true), 92, 36, UIFactory.Good);
-            UIFactory.Button(parent, "▶ Train", () => editor.StartPlaytest(false, true), 84, 36, UIFactory.Good);
-            UIFactory.Button(parent, "⚑ Set", () => editor.SetPlaytestMarker(editor.editorCamera.Position), 64, 36);
+            UIFactory.IconButton(parent, "play", "Play", () => editor.StartPlaytest(false), 84, 36, UIFactory.Good, 14, "Play from the start (P)");
+            UIFactory.IconButton(parent, "marker", "Marker", () => editor.StartPlaytest(true), 96, 36, UIFactory.Good, 14, "Play from the test marker (Shift+P)");
+            UIFactory.IconButton(parent, "train", "Train", () => editor.StartPlaytest(false, true), 88, 36, UIFactory.Good, 14, "Training run: raise your own waystones (Alt+P)");
+            UIFactory.IconButton(parent, "marker", null, () => editor.SetPlaytestMarker(editor.editorCamera.Position), 40, 36, null, 14, "Set the test marker at the camera (M at the cursor)");
             UIFactory.Spacer(parent, 36, 10);
-            UIFactory.Button(parent, "Save", ui.SaveWithPrompt, 70, 36);
-            UIFactory.Button(parent, "Files", ui.OpenFileDialog, 70, 36);
-            UIFactory.Button(parent, "Settings", ui.OpenSettings, 84, 36);
-            UIFactory.Button(parent, "Help (F1)", ui.OpenHelp, 84, 36);
-            UIFactory.Button(parent, "History", ui.OpenHistory, 70, 36);
-            UIFactory.Button(parent, "Menu", ui.ReturnToMenu, 64, 36);
+            UIFactory.IconButton(parent, "save", null, ui.SaveWithPrompt, 40, 36, null, 14, "Save (Ctrl+S)");
+            UIFactory.IconButton(parent, "files", null, ui.OpenFileDialog, 40, 36, null, 14, "Files: load, share, packs (Ctrl+O)");
+            UIFactory.IconButton(parent, "settings", null, ui.OpenSettings, 40, 36, null, 14, "Level settings: song, tempo, backgrounds, colours");
+            UIFactory.IconButton(parent, "history", null, ui.OpenHistory, 40, 36, null, 14, "Undo history");
+            UIFactory.IconButton(parent, "help", null, ui.OpenHelp, 40, 36, null, 14, "Help and shortcuts (F1)");
+            UIFactory.IconButton(parent, "menu", null, ui.ReturnToMenu, 40, 36, null, 14, "Back to the main menu");
             UIFactory.Spacer(parent, 36, 10);
             nameInput = UIFactory.Input(parent, "Level name", editor.level.name, s =>
             {
@@ -73,20 +73,20 @@ namespace Geodashy.Editing.UI
             UIFactory.HLayout(parent, 4, 4, false, TextAnchor.MiddleLeft);
             const float h = 44f;
 
-            buildBtn = UIFactory.Button(parent, "Build", () => editor.SetMode(EditorMode.Build), 66, h, null, 13);
-            editBtn = UIFactory.Button(parent, "Edit", () => editor.SetMode(EditorMode.Edit), 58, h, null, 13);
-            deleteBtn = UIFactory.Button(parent, "Del", () => editor.SetMode(EditorMode.Delete), 52, h, null, 13);
+            buildBtn = UIFactory.IconButton(parent, "build", null, () => editor.SetMode(EditorMode.Build), 48, h, null, 13, "Build");
+            editBtn = UIFactory.IconButton(parent, "edit", null, () => editor.SetMode(EditorMode.Edit), 48, h, null, 13, "Edit");
+            deleteBtn = UIFactory.IconButton(parent, "delete", null, () => editor.SetMode(EditorMode.Delete), 48, h, null, 13, "Delete");
             UIFactory.Spacer(parent, h, 4);
-            undoBtn = UIFactory.Button(parent, "↶", editor.Undo, 44, h, null, 18);
-            redoBtn = UIFactory.Button(parent, "↷", editor.Redo, 44, h, null, 18);
+            undoBtn = UIFactory.IconButton(parent, "undo", null, editor.Undo, 44, h, null, 18, "Undo");
+            redoBtn = UIFactory.IconButton(parent, "redo", null, editor.Redo, 44, h, null, 18, "Redo");
             UIFactory.Spacer(parent, h, 4);
-            UIFactory.Button(parent, "▶ Play", () => editor.StartPlaytest(false), 76, h, UIFactory.Good, 13);
-            UIFactory.Button(parent, "▶⚑", () => editor.StartPlaytest(true), 50, h, UIFactory.Good, 13);
+            UIFactory.IconButton(parent, "play", "Play", () => editor.StartPlaytest(false), 80, h, UIFactory.Good, 13, "Play from the start");
+            UIFactory.IconButton(parent, "marker", null, () => editor.StartPlaytest(true), 46, h, UIFactory.Good, 13, "Play from the marker");
             UIFactory.Spacer(parent, h, 4);
-            viewBtn = UIFactory.Button(parent, "View", ui.ToggleViewDrawer, 60, h, null, 13);
-            propsBtn = UIFactory.Button(parent, "Props", ui.TogglePropsDrawer, 66, h, null, 13);
-            dockBtn = UIFactory.Button(parent, "▼", ui.ToggleDock, 44, h, null, 14);
-            menuBtn = UIFactory.Button(parent, "⋯", ShowMenuPopup, 44, h, UIFactory.ButtonActive, 20);
+            viewBtn = UIFactory.IconButton(parent, "view", null, ui.ToggleViewDrawer, 46, h, null, 13, "View drawer");
+            propsBtn = UIFactory.IconButton(parent, "props", null, ui.TogglePropsDrawer, 46, h, null, 13, "Properties drawer");
+            dockBtn = UIFactory.IconButton(parent, "dock", null, ui.ToggleDock, 44, h, null, 14, "Fold the dock away");
+            menuBtn = UIFactory.IconButton(parent, "more", null, ShowMenuPopup, 44, h, UIFactory.ButtonActive, 20, "More: save, files, settings, tools");
             info = UIFactory.Label(parent, "", 12, TextAnchor.MiddleRight, UIFactory.TextDim);
             UIFactory.Layout(info.gameObject, -1, h, 1);
             RefreshDrawerButtons();
@@ -146,9 +146,9 @@ namespace Geodashy.Editing.UI
         {
             if (viewBtn == null) return;
             UIFactory.SetButtonActive(viewBtn, ui.ViewDrawerOpen);
-            UIFactory.SetButtonActive(propsBtn, ui.PropsDrawerOpen);
-            UIFactory.SetButtonLabel(propsBtn, editor.selection.Count > 0 ? "Props •" : "Props");
-            UIFactory.SetButtonLabel(dockBtn, ui.DockCollapsed ? "▲" : "▼");
+            UIFactory.SetButtonActive(propsBtn, ui.PropsDrawerOpen || editor.selection.Count > 0);
+            var glyph = dockBtn.transform.Find("Glyph");
+            if (glyph != null) glyph.localScale = new Vector3(1f, ui.DockCollapsed ? -1f : 1f, 1f);
         }
 
         public void Tick()

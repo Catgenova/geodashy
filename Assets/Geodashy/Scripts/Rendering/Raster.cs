@@ -10,6 +10,8 @@ namespace Geodashy.Rendering
         public readonly Color32[] pixels;
         /// <summary>When true, x coordinates wrap around (used for seamless background tiles).</summary>
         public bool wrapX;
+        /// <summary>When true, plotting a fully transparent colour punches the pixel out instead of being ignored.</summary>
+        public bool punch;
 
         public Raster(int width, int height)
         {
@@ -24,6 +26,22 @@ namespace Geodashy.Rendering
             for (int i = 0; i < pixels.Length; i++) pixels[i] = c32;
         }
 
+        /// <summary>Reads a pixel (transparent outside the canvas).</summary>
+        public Color Get(int x, int y)
+        {
+            if (wrapX) x = ((x % width) + width) % width;
+            if (x < 0 || y < 0 || x >= width || y >= height) return Color.clear;
+            return pixels[y * width + x];
+        }
+
+        /// <summary>Writes a pixel without blending (so fully transparent pixels can be punched out).</summary>
+        public void Set(int x, int y, Color32 c)
+        {
+            if (wrapX) x = ((x % width) + width) % width;
+            if (x < 0 || y < 0 || x >= width || y >= height) return;
+            pixels[y * width + x] = c;
+        }
+
         public void Plot(int x, int y, Color32 c)
         {
             if (wrapX) x = ((x % width) + width) % width;
@@ -33,7 +51,11 @@ namespace Geodashy.Rendering
                 pixels[y * width + x] = c;
                 return;
             }
-            if (c.a == 0) return;
+            if (c.a == 0)
+            {
+                if (punch) pixels[y * width + x] = new Color32(0, 0, 0, 0);
+                return;
+            }
             var dst = pixels[y * width + x];
             float a = c.a / 255f;
             float da = dst.a / 255f;

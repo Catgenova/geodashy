@@ -44,8 +44,10 @@ namespace Geodashy.Gameplay
         public static readonly Color SessionDeathColor = new Color(1f, 0.6f, 0.15f, 1f);
         public static readonly Color BestColor = new Color(1f, 0.85f, 0.3f, 1f);
         RectTransform pausePanel, completePanel;
-        Text completeStats;
+        Text completeStats, pauseStats;
         float hintTimer;
+        float hintSlide = 1f;
+        Vector2 hintBase;
 
         Text practiceText;
         Button practiceToggle;
@@ -126,14 +128,26 @@ namespace Geodashy.Gameplay
 
             // progress bar
             var barBg = UIFactory.Panel(root, "ProgressBg", new Color(0, 0, 0, 0.5f));
-            UIFactory.Anchor(barBg, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(-bw, -34), new Vector2(bw, -14));
+            UIFactory.Skin(barBg.GetComponent<Image>(), UIFactory.SkinKind.BannerBar);
+            UIFactory.Anchor(barBg, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(-bw - 12, -36), new Vector2(bw + 12, -12));
             barBg.GetComponent<Image>().raycastTarget = false;
             barRoot = barBg;
             var fillRt = UIFactory.Rect(barBg, "Fill");
             progressFill = fillRt.gameObject.AddComponent<Image>();
             progressFill.color = UIFactory.Accent;
             progressFill.raycastTarget = false;
-            UIFactory.Anchor(fillRt, new Vector2(0, 0), new Vector2(0, 1), new Vector2(2, 2), new Vector2(2, -2));
+            bool themed = UIFactory.Themed;
+            float inset = themed ? 12f : 2f;
+            UIFactory.Anchor(fillRt, new Vector2(0, 0), new Vector2(0, 1), new Vector2(inset, themed ? 5 : 2), new Vector2(inset, themed ? -5 : -2));
+            // quarter ticks along the banner
+            for (int q = 1; q < 4; q++)
+            {
+                var tick = UIFactory.Rect(barBg, "Tick");
+                var ti = tick.gameObject.AddComponent<Image>();
+                ti.color = new Color(1f, 1f, 1f, 0.18f);
+                ti.raycastTarget = false;
+                UIFactory.Anchor(tick, new Vector2(q / 4f, 0), new Vector2(q / 4f, 1), new Vector2(-0.5f, themed ? 6 : 3), new Vector2(0.5f, themed ? -6 : -3));
+            }
 
             // overlay for death ticks and the personal-best marker
             markerLayer = UIFactory.Rect(barBg, "Markers");
@@ -154,14 +168,23 @@ namespace Geodashy.Gameplay
             progressText = UIFactory.Label(root, "0%", 14, TextAnchor.MiddleCenter, UIFactory.TextColor);
             UIFactory.Anchor(progressText.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(-60, -60), new Vector2(60, -36));
 
+            // parchment corner tabs behind the attempt and loot counters
+            var leftTab = UIFactory.Card(root, "AttemptTab");
+            UIFactory.Anchor(leftTab, new Vector2(0, 1), new Vector2(0, 1), new Vector2(8, -68), new Vector2(phone ? 300 : 330, -8));
+            leftTab.GetComponent<Image>().raycastTarget = false;
+            var rightTab = UIFactory.Card(root, "LootTab");
+            UIFactory.Anchor(rightTab, new Vector2(1, 1), new Vector2(1, 1), new Vector2(phone ? -340 : -410, -68), new Vector2(phone ? -70 : -8, -8));
+            rightTab.GetComponent<Image>().raycastTarget = false;
+            var tabInk = UIFactory.Themed ? UIFactory.Ink : UIFactory.TextColor;
             crestIcon = UIFactory.Icon(root, PlaceholderSpriteFactory.Crest(PlayerProfile.Crest, PlayerProfile.Primary, PlayerProfile.Secondary), 44);
             UIFactory.Anchor(crestIcon.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(16, -60), new Vector2(60, -16));
-            attemptText = UIFactory.Label(root, "Attempt 1", 22, TextAnchor.MiddleLeft, UIFactory.TextColor, -1, -1, true);
-            UIFactory.Anchor(attemptText.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(68, -60), new Vector2(phone ? 300 : 440, -14));
-            coinText = UIFactory.Label(root, "", phone ? 15 : 18, TextAnchor.MiddleRight, UIFactory.Accent);
+            attemptText = UIFactory.Label(root, "Attempt 1", 22, TextAnchor.MiddleLeft, tabInk, -1, -1, true);
+            UIFactory.Anchor(attemptText.rectTransform, new Vector2(0, 1), new Vector2(0, 1), new Vector2(68, -60), new Vector2(phone ? 290 : 320, -14));
+            coinText = UIFactory.Label(root, "", phone ? 15 : 18, TextAnchor.MiddleRight, UIFactory.Themed ? new Color(0.45f, 0.3f, 0.08f) : UIFactory.Accent);
             UIFactory.Anchor(coinText.rectTransform, new Vector2(1, 1), new Vector2(1, 1), new Vector2(phone ? -330 : -400, -60), new Vector2(phone ? -76 : -20, -14));
             hintText = UIFactory.Label(root, "", phone ? 15 : 18, TextAnchor.MiddleLeft, UIFactory.TextColor);
             UIFactory.Anchor(hintText.rectTransform, new Vector2(0, 0), new Vector2(0, 0), new Vector2(20, 16), new Vector2(phone ? 560 : 900, 50));
+            hintBase = hintText.rectTransform.anchoredPosition;
             escHint = UIFactory.Label(root, "Esc — pause / back to editor", 13, TextAnchor.MiddleRight, UIFactory.TextDim);
             UIFactory.Anchor(escHint.rectTransform, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-400, 16), new Vector2(-20, 40));
             if (phone)
@@ -202,10 +225,11 @@ namespace Geodashy.Gameplay
 
             // pause panel
             pausePanel = UIFactory.Panel(root, "Pause", new Color(0, 0, 0, 0.6f));
-            var pw = UIFactory.Panel(pausePanel, "Window", UIFactory.PanelBg2);
+            var pw = UIFactory.Themed ? UIFactory.Card(pausePanel, "Window") : UIFactory.Panel(pausePanel, "Window", UIFactory.PanelBg2);
             UIFactory.Anchor(pw, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-200, -155), new Vector2(200, 155));
-            UIFactory.VLayout(pw, 10, 20);
-            UIFactory.Label(pw, "PAUSED", 26, TextAnchor.MiddleCenter, UIFactory.Accent, -1, 40, true);
+            UIFactory.VLayout(pw, 8, 20);
+            UIFactory.Label(pw, "PAUSED", 26, TextAnchor.MiddleCenter, UIFactory.Themed ? Ink : UIFactory.Accent, -1, 40, true);
+            pauseStats = UIFactory.Label(pw, "", 13, TextAnchor.MiddleCenter, UIFactory.Themed ? Ink : UIFactory.TextDim, -1, 40);
             UIFactory.Button(pw, "Resume", () => onResume(), -1, 40, UIFactory.Good, 16);
             practiceToggle = UIFactory.Button(pw, "Switch to Training (C)", () => onTogglePractice(), -1, 40, null, 16);
             UIFactory.Button(pw, "Restart from start", () => onRestart(), -1, 40, null, 16);
@@ -213,7 +237,7 @@ namespace Geodashy.Gameplay
             UIFactory.Button(capRow, "📷 Screenshot", () => onScreenshot?.Invoke(), -1, 34, null, 13);
             clipButton = UIFactory.Button(capRow, "🎞 Save 5 s clip", () => onClip?.Invoke(), -1, 34, null, 13);
             pauseExitButton = UIFactory.Button(pw, "Back to editor", () => onExit(), -1, 40, UIFactory.Danger, 16);
-            UIFactory.Anchor(pw, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-200, -180), new Vector2(200, 180));
+            UIFactory.Anchor(pw, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-200, -205), new Vector2(200, 205));
             pausePanel.gameObject.SetActive(false);
 
             // rune combo counter and the gravity ripple ring
@@ -257,7 +281,7 @@ namespace Geodashy.Gameplay
 
             // complete panel
             completePanel = UIFactory.Panel(root, "Complete", new Color(0, 0, 0, 0.6f));
-            var cw = UIFactory.Panel(completePanel, "Window", Parchment);
+            var cw = UIFactory.Card(completePanel, "Window");
             UIFactory.Anchor(cw, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-280, -240), new Vector2(280, 240));
             UIFactory.VLayout(cw, 8, 16, true, true, TextAnchor.UpperCenter);
             var sealRow = UIFactory.Row(cw, 64, 0, TextAnchor.MiddleCenter);
@@ -394,12 +418,20 @@ namespace Geodashy.Gameplay
 
         public void ShowHint(string text, float seconds = 4f)
         {
+            if (hintText != null && hintText.text != text) hintSlide = 0f;
             hintText.text = text;
             hintText.color = UIFactory.TextColor;
             hintTimer = seconds;
         }
 
         public void ShowPause(bool on) => pausePanel.gameObject.SetActive(on);
+
+        /// <summary>Pause with the run's numbers shown on the scroll.</summary>
+        public void ShowPause(bool on, string stats)
+        {
+            if (pauseStats != null) pauseStats.text = stats ?? "";
+            pausePanel.gameObject.SetActive(on);
+        }
 
         /// <summary>Momentary edge darkening; strength 0..1 decays over about a third of a second.</summary>
         public void PulseVignette(float strength)
@@ -686,6 +718,15 @@ namespace Geodashy.Gameplay
 
         void Update()
         {
+            if (hintSlide < 1f && hintText != null)
+            {
+                hintSlide = Mathf.Min(1f, hintSlide + Time.unscaledDeltaTime * 4f);
+                float e = 1f - (1f - hintSlide) * (1f - hintSlide);
+                hintText.rectTransform.anchoredPosition = hintBase + new Vector2(-40f * (1f - e), 0f);
+                var hc = hintText.color;
+                hc.a = e;
+                hintText.color = hc;
+            }
             UpdateWipes(Time.unscaledDeltaTime);
             UpdateComplete(Time.unscaledDeltaTime);
             if (flashTimer > 0f)

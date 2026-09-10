@@ -225,6 +225,30 @@ and effect volumes are on the main menu under Options and persist.
   motion, medals pop into the report card one by one and the champion seal stamps down with a ring.
 - All of it is cosmetic (`PlayEffects.cs`) and softened or skipped under Reduce flashing.
 
+## UI round
+
+- **Parchment & iron skin**: docks and windows are riveted iron frames, title bars, corner tabs and the pause
+  scroll are parchment, section headers are swallow-tailed ribbons, toggles are wax seals, sliders have brass
+  knobs, buttons are bevelled plates that glow on hover. All nine-slices are drawn at start-up (`UISkin.cs`);
+  Options switches back to the classic flat panels.
+- **Icon set**: 16 px glyphs (`EditorIcons.cs`) on the top bar, the transform buttons and the phone bar, so
+  buttons are icon plus label on desktop and icon-only on a phone.
+- **Hints and tooltips**: every icon button has a hover tooltip with its shortcut, and a strip above the dock
+  explains the current tool state; both switch off in Options or the View dock.
+- **Properties panel**: pinned header with the object's art and count, collapsible sections (Transform,
+  Layering, Look, Groups, Behaviour, Properties), drag-to-scrub on number labels, colour swatches beside the
+  channel dropdowns that recolour the channel, and Copy props / Paste props.
+- **Palette**: larger tiles with the name on hover, a Recent strip of the last eight brushes, shelf counts and
+  an "In this level" shelf.
+- **Main menu**: a hero row on the title with the next campaign quest's thumbnail, best result and a Ride
+  button; the quest list is a grid of cards with thumbnail, rating, length and medal stars.
+- **Play HUD**: a banner-style progress bar with quarter ticks, parchment corner tabs for the counters, hints
+  that slide in, and a pause scroll that shows attempt, time, progress and loot.
+- **Dialogs**: iron frame, parchment title, close glyph top-right, primary button on the right, Enter
+  confirms, Esc closes, first field focused.
+- **Status bar and notifications**: cursor, selection count and size, zoom, layer, grid, object count and
+  save state in one strip; stacked notifications with glyphs and an Undo button after deletes.
+
 ## Tests
 
 `Assets/Geodashy/Tests` holds play-mode smoke tests (Window ▸ General ▸ Test Runner): every catalog entry

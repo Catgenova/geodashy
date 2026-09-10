@@ -21,8 +21,70 @@ namespace Geodashy.Editing.UI
         public static readonly Color Good = new Color(0.2f, 0.55f, 0.3f, 1f);
         public static readonly Color InputBg = new Color(0.06f, 0.05f, 0.08f, 1f);
 
+        public static readonly Color Ink = new Color(0.28f, 0.17f, 0.08f, 1f);
+        public static readonly Color Parchment = new Color(0.93f, 0.86f, 0.68f, 0.98f);
+
         /// <summary>Smallest font size any widget will use. Dense panels asked for 10-11px which reads badly at 1080p.</summary>
         public static int MinFontSize = 13;
+
+        /// <summary>Parchment-and-iron skin (default) or the flat classic panels; Options toggles it.</summary>
+        public const string SkinPref = "geodashy.uiSkin";
+        public static bool Themed
+        {
+            get => PlayerPrefs.GetInt(SkinPref, 1) == 1;
+            set => PlayerPrefs.SetInt(SkinPref, value ? 1 : 0);
+        }
+
+        public enum SkinKind { Iron, Parchment, Plate, Inset, Ribbon, BannerBar }
+
+        /// <summary>Gives an image the skin sprite for its role; a no-op flat fill when the classic skin is on.</summary>
+        public static void Skin(Image img, SkinKind kind, Color? tint = null)
+        {
+            if (img == null) return;
+            if (!Themed)
+            {
+                if (tint.HasValue) img.color = tint.Value;
+                return;
+            }
+            switch (kind)
+            {
+                case SkinKind.Iron: img.sprite = Geodashy.Rendering.UISkin.Iron(); break;
+                case SkinKind.Parchment: img.sprite = Geodashy.Rendering.UISkin.Parchment(); break;
+                case SkinKind.Plate: img.sprite = Geodashy.Rendering.UISkin.Plate(); break;
+                case SkinKind.Inset: img.sprite = Geodashy.Rendering.UISkin.Inset(); break;
+                case SkinKind.Ribbon: img.sprite = Geodashy.Rendering.UISkin.Ribbon(); break;
+                case SkinKind.BannerBar: img.sprite = Geodashy.Rendering.UISkin.BannerBar(); break;
+            }
+            img.type = Image.Type.Sliced;
+            img.pixelsPerUnitMultiplier = 1.5f;
+            img.color = tint ?? (kind == SkinKind.Iron || kind == SkinKind.Parchment || kind == SkinKind.Ribbon || kind == SkinKind.BannerBar ? Color.white : img.color);
+        }
+
+        /// <summary>A riveted iron frame (dock, top bar, window). Keeps the light text palette.</summary>
+        public static RectTransform Frame(Transform parent, string name, Color? fallback = null)
+        {
+            var rt = Panel(parent, name, fallback ?? PanelBg);
+            Skin(rt.GetComponent<Image>(), SkinKind.Iron, Themed ? Color.white : (Color?)null);
+            return rt;
+        }
+
+        /// <summary>A parchment card; pair it with Ink text.</summary>
+        public static RectTransform Card(Transform parent, string name)
+        {
+            var rt = Panel(parent, name, Parchment);
+            Skin(rt.GetComponent<Image>(), SkinKind.Parchment, Themed ? Color.white : (Color?)null);
+            return rt;
+        }
+
+        /// <summary>Attaches a hover tooltip to any widget.</summary>
+        public static T Tip<T>(T widget, string text) where T : Component
+        {
+            if (widget == null || string.IsNullOrEmpty(text)) return widget;
+            var t = widget.gameObject.GetComponent<Tooltip>();
+            if (t == null) t = widget.gameObject.AddComponent<Tooltip>();
+            t.text = text;
+            return widget;
+        }
 
         static Font font;
 
@@ -218,7 +280,26 @@ namespace Geodashy.Editing.UI
 
         public static Text SectionHeader(Transform parent, string text)
         {
-            var t = Label(parent, text.ToUpperInvariant(), 12, TextAnchor.MiddleLeft, AccentDim, -1, 18, true);
+            if (!Themed)
+            {
+                return Label(parent, text.ToUpperInvariant(), 12, TextAnchor.MiddleLeft, AccentDim, -1, 18, true);
+            }
+            // a swallow-tailed ribbon with the title in gold, the strip fading out to the right
+            var rt = Rect(parent, "Section " + text);
+            Layout(rt.gameObject, -1, 20, 1);
+            var ribbon = Rect(rt, "Ribbon");
+            var img = ribbon.gameObject.AddComponent<Image>();
+            Skin(img, SkinKind.Ribbon);
+            img.raycastTarget = false;
+            Anchor(ribbon, new Vector2(0, 0), new Vector2(0, 1), new Vector2(0, 0), new Vector2(Mathf.Clamp(text.Length * 8f + 30f, 90f, 240f), 0));
+            var t = Label(ribbon, text.ToUpperInvariant(), 11, TextAnchor.MiddleCenter, Accent, -1, -1, true);
+            Stretch(t.rectTransform, 12, 0, 12, 0);
+            t.horizontalOverflow = HorizontalWrapMode.Overflow;
+            var line = Rect(rt, "Line");
+            var li = line.gameObject.AddComponent<Image>();
+            li.color = new Color(AccentDim.r, AccentDim.g, AccentDim.b, 0.35f);
+            li.raycastTarget = false;
+            Anchor(line, new Vector2(0, 0.5f), new Vector2(1, 0.5f), new Vector2(Mathf.Clamp(text.Length * 8f + 34f, 94f, 244f), -0.5f), new Vector2(0, 0.5f));
             return t;
         }
 
@@ -227,6 +308,7 @@ namespace Geodashy.Editing.UI
             var rt = Rect(parent, "Button " + label);
             var img = rt.gameObject.AddComponent<Image>();
             img.color = bg ?? ButtonBg;
+            Skin(img, SkinKind.Plate);
             var b = rt.gameObject.AddComponent<Button>();
             b.targetGraphic = img;
             var colors = b.colors;
@@ -242,7 +324,46 @@ namespace Geodashy.Editing.UI
             Stretch(t.rectTransform, 4, 2, 4, 2);
             t.horizontalOverflow = HorizontalWrapMode.Overflow;
             Layout(rt.gameObject, width, height, width < 0 ? 1 : -1);
+            if (Themed) HoverGlow.Attach(rt);
             return b;
+        }
+
+        /// <summary>Button with a 16 px glyph on the left; pass a null label for an icon-only button. Tooltip optional.</summary>
+        public static Button IconButton(Transform parent, string icon, string label, UnityAction onClick, float width = -1f, float height = 32f, Color? bg = null, int fontSize = 14, string tip = null)
+        {
+            var b = Button(parent, label ?? "", onClick, width, height, bg, fontSize);
+            var rt = b.GetComponent<RectTransform>();
+            var t = b.GetComponentInChildren<Text>();
+            float iconSize = Mathf.Clamp(height * 0.55f, 14f, 22f);
+            var iconRt = Rect(rt, "Glyph");
+            var img = iconRt.gameObject.AddComponent<Image>();
+            img.sprite = Geodashy.Rendering.EditorIcons.Get(icon);
+            img.preserveAspect = true;
+            img.raycastTarget = false;
+            img.color = TextColor;
+            if (string.IsNullOrEmpty(label))
+            {
+                Anchor(iconRt, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-iconSize / 2f, -iconSize / 2f), new Vector2(iconSize / 2f, iconSize / 2f));
+                t.gameObject.SetActive(false);
+            }
+            else
+            {
+                Anchor(iconRt, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(6, -iconSize / 2f), new Vector2(6 + iconSize, iconSize / 2f));
+                Stretch(t.rectTransform, 8 + iconSize, 2, 4, 2);
+                t.alignment = TextAnchor.MiddleLeft;
+            }
+            if (!string.IsNullOrEmpty(tip)) Tip(b, tip);
+            else if (string.IsNullOrEmpty(label)) Tip(b, icon);
+            return b;
+        }
+
+        /// <summary>Swaps the glyph of an IconButton.</summary>
+        public static void SetButtonIcon(Button b, string icon)
+        {
+            var g = b.transform.Find("Glyph");
+            if (g == null) return;
+            var img = g.GetComponent<Image>();
+            if (img != null) img.sprite = Geodashy.Rendering.EditorIcons.Get(icon);
         }
 
         public static void SetButtonActive(Button b, bool active)
@@ -269,6 +390,17 @@ namespace Geodashy.Editing.UI
             var ck = ckRt.gameObject.AddComponent<Image>();
             ck.color = Accent;
             Stretch(ckRt, 4, 4, 4, 4);
+            if (Themed)
+            {
+                // a wax seal pressed into a dark socket: the seal is the toggle's check graphic
+                bg.sprite = Geodashy.Rendering.UISkin.Inset();
+                bg.type = Image.Type.Sliced;
+                bg.color = Color.white;
+                ck.sprite = Geodashy.Rendering.UISkin.Seal();
+                ck.color = Color.white;
+                ck.preserveAspect = true;
+                Stretch(ckRt, 1, 1, 1, 1);
+            }
             tg.targetGraphic = bg;
             tg.graphic = ck;
             tg.isOn = on;
@@ -299,6 +431,14 @@ namespace Geodashy.Editing.UI
             var handle = handleRt.gameObject.AddComponent<Image>();
             handle.color = Accent;
             Anchor(handleRt, new Vector2(0, 0), new Vector2(0, 1), new Vector2(-8, 0), new Vector2(8, 0));
+            if (Themed)
+            {
+                Skin(bg, SkinKind.Inset, Color.white);
+                handle.sprite = Geodashy.Rendering.UISkin.Knob();
+                handle.color = Color.white;
+                handle.preserveAspect = true;
+                Anchor(handleRt, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(-10, -10), new Vector2(10, 10));
+            }
             s.fillRect = fillRt;
             s.handleRect = handleRt;
             s.targetGraphic = handle;
@@ -318,6 +458,7 @@ namespace Geodashy.Editing.UI
             var rt = Rect(parent, "Input");
             var img = rt.gameObject.AddComponent<Image>();
             img.color = InputBg;
+            Skin(img, SkinKind.Inset, Themed ? Color.white : (Color?)null);
             var f = rt.gameObject.AddComponent<InputField>();
             f.targetGraphic = img;
             var textRt = Rect(rt, "Text");
@@ -410,7 +551,9 @@ namespace Geodashy.Editing.UI
             var rt = Rect(parent, "Tile " + caption);
             var img = rt.gameObject.AddComponent<Image>();
             img.color = ButtonBg;
+            Skin(img, SkinKind.Plate);
             var b = rt.gameObject.AddComponent<Button>();
+            if (Themed) HoverGlow.Attach(rt);
             b.targetGraphic = img;
             var colors = b.colors;
             colors.highlightedColor = new Color(1.3f, 1.3f, 1.3f, 1f);

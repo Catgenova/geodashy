@@ -60,13 +60,13 @@ namespace Geodashy.Editing.UI
 
             var rot = Group("Rotate & flip", 230);
             var q1 = UIFactory.Row(rot, h, 4);
-            UIFactory.Button(q1, "↺ 90", () => editor.RotateSelection(90), -1, h, null, 12);
-            UIFactory.Button(q1, "↻ 90", () => editor.RotateSelection(-90), -1, h, null, 12);
-            UIFactory.Button(q1, "↺ 45", () => editor.RotateSelection(45), -1, h, null, 12);
-            UIFactory.Button(q1, "↻ 45", () => editor.RotateSelection(-45), -1, h, null, 12);
+            UIFactory.IconButton(q1, "rotate_l", "90", () => editor.RotateSelection(90), -1, h, null, 12);
+            UIFactory.IconButton(q1, "rotate_r", "90", () => editor.RotateSelection(-90), -1, h, null, 12);
+            UIFactory.IconButton(q1, "rotate_l", "45", () => editor.RotateSelection(45), -1, h, null, 12);
+            UIFactory.IconButton(q1, "rotate_r", "45", () => editor.RotateSelection(-45), -1, h, null, 12);
             var q2 = UIFactory.Row(rot, h, 4);
-            UIFactory.Button(q2, "Flip H", () => editor.FlipSelection(true), -1, h, null, 12);
-            UIFactory.Button(q2, "Flip V", () => editor.FlipSelection(false), -1, h, null, 12);
+            UIFactory.IconButton(q2, "flip_h", null, () => editor.FlipSelection(true), -1, h, null, 12, "Flip horizontally");
+            UIFactory.IconButton(q2, "flip_v", null, () => editor.FlipSelection(false), -1, h, null, 12, "Flip vertically");
             UIFactory.Button(q2, "↺ 5", () => editor.RotateSelection(5), -1, h, null, 12);
             UIFactory.Button(q2, "↻ 5", () => editor.RotateSelection(-5), -1, h, null, 12);
 
@@ -80,9 +80,9 @@ namespace Geodashy.Editing.UI
 
             var clip = Group("Clipboard", 280);
             var c1 = UIFactory.Row(clip, h, 4);
-            UIFactory.Button(c1, "Copy", editor.CopySelection, -1, h, null, 12);
-            UIFactory.Button(c1, "Paste", () => editor.Paste(false), -1, h, null, 12);
-            UIFactory.Button(c1, "Dup", editor.DuplicateSelection, -1, h, null, 12);
+            UIFactory.IconButton(c1, "copy", null, editor.CopySelection, -1, h, null, 12, "Copy");
+            UIFactory.IconButton(c1, "paste", null, () => editor.Paste(false), -1, h, null, 12, "Paste");
+            UIFactory.IconButton(c1, "dup", null, editor.DuplicateSelection, -1, h, null, 12, "Duplicate");
             UIFactory.Button(c1, "Stamp…", ui.PromptSaveStamp, -1, h, UIFactory.ButtonActive, 12);
             var c2 = UIFactory.Row(clip, h, 4);
             UIFactory.Button(c2, "Cut", editor.CutSelection, -1, h, null, 12);
@@ -177,27 +177,27 @@ namespace Geodashy.Editing.UI
             // rotate / flip ---------------------------------------------------------
             var rot = Col(rt, "Rotate & Flip", 190);
             var q1 = UIFactory.Row(rot, 30, 4);
-            UIFactory.Button(q1, "↺ 90", () => editor.RotateSelection(90), -1, 28, null, 12);
-            UIFactory.Button(q1, "↻ 90", () => editor.RotateSelection(-90), -1, 28, null, 12);
+            UIFactory.IconButton(q1, "rotate_l", "90", () => editor.RotateSelection(90), -1, 28, null, 12, "Rotate 90° anticlockwise (Q)");
+            UIFactory.IconButton(q1, "rotate_r", "90", () => editor.RotateSelection(-90), -1, 28, null, 12, "Rotate 90° clockwise (E)");
             var q2 = UIFactory.Row(rot, 30, 4);
-            UIFactory.Button(q2, "↺ 45", () => editor.RotateSelection(45), -1, 28, null, 12);
-            UIFactory.Button(q2, "↻ 45", () => editor.RotateSelection(-45), -1, 28, null, 12);
+            UIFactory.IconButton(q2, "rotate_l", "45", () => editor.RotateSelection(45), -1, 28, null, 12, "Rotate 45° anticlockwise (Shift+Q)");
+            UIFactory.IconButton(q2, "rotate_r", "45", () => editor.RotateSelection(-45), -1, 28, null, 12, "Rotate 45° clockwise (Shift+E)");
             var q3 = UIFactory.Row(rot, 30, 4);
-            UIFactory.Button(q3, "↺ 5", () => editor.RotateSelection(5), -1, 28, null, 12);
-            UIFactory.Button(q3, "↻ 5", () => editor.RotateSelection(-5), -1, 28, null, 12);
+            UIFactory.IconButton(q3, "rotate_l", "5", () => editor.RotateSelection(5), -1, 28, null, 12, "Rotate 5° anticlockwise (Alt+Q)");
+            UIFactory.IconButton(q3, "rotate_r", "5", () => editor.RotateSelection(-5), -1, 28, null, 12, "Rotate 5° clockwise (Alt+E)");
             var q4 = UIFactory.Row(rot, 30, 4);
-            UIFactory.Button(q4, "Flip H", () => editor.FlipSelection(true), -1, 28, null, 12);
-            UIFactory.Button(q4, "Flip V", () => editor.FlipSelection(false), -1, 28, null, 12);
+            UIFactory.IconButton(q4, "flip_h", "Flip", () => editor.FlipSelection(true), -1, 28, null, 12, "Flip horizontally (F)");
+            UIFactory.IconButton(q4, "flip_v", "Flip", () => editor.FlipSelection(false), -1, 28, null, 12, "Flip vertically (V)");
             var q5 = UIFactory.Row(rot, 30, 4);
             UIFactory.Button(q5, "Rotate each", () => editor.RotateSelection(90, false), -1, 28, null, 11);
             UIFactory.Button(q5, "Reset rot", () => editor.EditSelection(o => o.rotation = 0), -1, 28, null, 11);
 
             // scale ------------------------------------------------------------------
             var scale = Col(rt, "Scale", 120);
-            UIFactory.Button(scale, "× 2", () => editor.ScaleSelection(2f), -1, 28, null, 12);
-            UIFactory.Button(scale, "× 1.25", () => editor.ScaleSelection(1.25f), -1, 28, null, 12);
-            UIFactory.Button(scale, "× 0.8", () => editor.ScaleSelection(0.8f), -1, 28, null, 12);
-            UIFactory.Button(scale, "× 0.5", () => editor.ScaleSelection(0.5f), -1, 28, null, 12);
+            UIFactory.IconButton(scale, "scale_up", "× 2", () => editor.ScaleSelection(2f), -1, 28, null, 12, "Double the size (Ctrl +)");
+            UIFactory.IconButton(scale, "scale_up", "× 1.25", () => editor.ScaleSelection(1.25f), -1, 28, null, 12, "Grow by a quarter");
+            UIFactory.IconButton(scale, "scale_down", "× 0.8", () => editor.ScaleSelection(0.8f), -1, 28, null, 12, "Shrink by a fifth");
+            UIFactory.IconButton(scale, "scale_down", "× 0.5", () => editor.ScaleSelection(0.5f), -1, 28, null, 12, "Halve the size (Ctrl −)");
             UIFactory.Button(scale, "Reset", () => editor.EditSelection(o =>
             {
                 o.scaleX = 1;

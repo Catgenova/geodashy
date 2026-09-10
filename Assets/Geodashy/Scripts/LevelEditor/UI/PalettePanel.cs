@@ -24,13 +24,87 @@ namespace Geodashy.Editing.UI
         string lastSearch = "";
         public const string StampsCategory = "Stamps";
         public const string FavouritesCategory = "★ Favourites";
+        public const string UsedCategory = "In this level";
+        public const string RecentPref = "geodashy.recentBrushes";
+        RectTransform recentStrip;
+        static readonly List<string> recent = new List<string>();
+
+        static void LoadRecent()
+        {
+            if (recent.Count > 0) return;
+            foreach (var id in PlayerPrefs.GetString(RecentPref, "").Split(',')) if (!string.IsNullOrEmpty(id) && ObjectCatalog.Get(id) != null) recent.Add(id);
+        }
+
+        /// <summary>Remembers the last eight brushes for the strip above the shelf.</summary>
+        public static void RememberBrush(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return;
+            LoadRecent();
+            recent.Remove(id);
+            recent.Insert(0, id);
+            while (recent.Count > 8) recent.RemoveAt(recent.Count - 1);
+            PlayerPrefs.SetString(RecentPref, string.Join(",", recent));
+        }
+
+        /// <summary>Distinct object types the current level already uses, most common first.</summary>
+        List<ObjectDefinition> UsedDefs()
+        {
+            var counts = new Dictionary<string, int>();
+            foreach (var o in editor.level.objects) counts[o.type] = counts.TryGetValue(o.type, out var c) ? c + 1 : 1;
+            var list = new List<KeyValuePair<string, int>>(counts);
+            list.Sort((a, b) => b.Value.CompareTo(a.Value));
+            var defs = new List<ObjectDefinition>();
+            foreach (var kv in list)
+            {
+                var d = ObjectCatalog.Get(kv.Key);
+                if (d != null) defs.Add(d);
+            }
+            return defs;
+        }
+
+        string ShelfLabel(string cat)
+        {
+            if (cat == StampsCategory) return cat + "  (" + StampStorage.List().Count + ")";
+            if (cat == FavouritesCategory) return cat + "  (" + (PresetStorage.Favourites.Count + PresetStorage.Presets.Count) + ")";
+            if (cat == UsedCategory) return cat + "  (" + UsedDefs().Count + ")";
+            return cat + "  (" + ObjectCatalog.InCategory(cat).Count + ")";
+        }
+
+        void RefreshRecent()
+        {
+            if (recentStrip == null) return;
+            LoadRecent();
+            foreach (Transform child in recentStrip) Destroy(child.gameObject);
+            if (recent.Count == 0)
+            {
+                UIFactory.Label(recentStrip, "Recent brushes appear here", 11, TextAnchor.MiddleLeft, UIFactory.TextDim, -1, 30);
+                return;
+            }
+            UIFactory.Label(recentStrip, "Recent", 11, TextAnchor.MiddleLeft, UIFactory.TextDim, 46, 30);
+            foreach (var id in recent)
+            {
+                var d = ObjectCatalog.Get(id);
+                if (d == null) continue;
+                var def = d;
+                var b = UIFactory.Button(recentStrip, "", () =>
+                {
+                    editor.SetBuildDef(def);
+                    if (editor.Mode != EditorMode.Build) editor.SetMode(EditorMode.Build);
+                }, 32, 30, null, 10);
+                var ic = UIFactory.Icon(b.transform, SpriteLibrary.ForObject(def), 24);
+                Destroy(ic.GetComponent<LayoutElement>());
+                UIFactory.Anchor(ic.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-12, -12), new Vector2(12, 12));
+                UIFactory.Tip(b, def.name);
+                UIFactory.SetButtonActive(b, editor.BuildDef != null && editor.BuildDef.id == def.id);
+            }
+        }
         Button deleteStampButton, favouriteButton, presetButton, curveButton;
         readonly Dictionary<string, Stamp> stampTiles = new Dictionary<string, Stamp>();
         readonly Dictionary<BrushPreset, Button> presetTiles = new Dictionary<BrushPreset, Button>();
 
         static string[] CategoriesWithStamps()
         {
-            var list = new List<string> { FavouritesCategory };
+            var list = new List<string> { FavouritesCategory, UsedCategory };
             list.AddRange(ObjectCatalog.Categories);
             list.Add(StampsCategory);
             return list.ToArray();
@@ -281,7 +355,8 @@ namespace Geodashy.Editing.UI
             foreach (var cat in CategoriesWithStamps())
             {
                 var c = cat;
-                var b = UIFactory.Button(catContent, cat, () => ShowCategory(c), -1, 28, null, 13);
+                var b = UIFactory.Button(catContent, ShelfLabel(cat), () => ShowCategory(c), -1, 28, null, 12);
+                b.GetComponentInChildren<Text>().alignment = TextAnchor.MiddleLeft;
                 categoryButtons[cat] = b;
             }
 
@@ -296,9 +371,10 @@ namespace Geodashy.Editing.UI
                 search.text = "";
                 ShowCategory(currentCategory);
             }, 30, 28);
+            recentStrip = UIFactory.Row(center, 30, 4);
             gridScroll = UIFactory.ScrollView(center, "Objects", out gridContent, true, false);
             UIFactory.Layout(gridScroll.gameObject, -1, -1, 1, 1);
-            UIFactory.Grid(gridContent, new Vector2(76, 76), new Vector2(5, 5), 6);
+            UIFactory.Grid(gridContent, new Vector2(84, 84), new Vector2(5, 5), 6);
             UIFactory.Fitter(gridContent, true, false);
 
             // placement controls --------------------------------------------------------
@@ -307,18 +383,18 @@ namespace Geodashy.Editing.UI
             selectedName = UIFactory.Label(right, "", 15, TextAnchor.MiddleLeft, UIFactory.Accent, -1, 22, true);
             selectedDesc = UIFactory.Label(right, "", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 44);
             var r1 = UIFactory.Row(right, 30, 4);
-            UIFactory.Button(r1, "↺ 90 (Q)", () => editor.RotateSelection(90), -1, 28, null, 12);
-            UIFactory.Button(r1, "↻ 90 (E)", () => editor.RotateSelection(-90), -1, 28, null, 12);
+            UIFactory.IconButton(r1, "rotate_l", "90", () => editor.RotateSelection(90), -1, 28, null, 12, "Rotate the brush 90° anticlockwise (Q)");
+            UIFactory.IconButton(r1, "rotate_r", "90", () => editor.RotateSelection(-90), -1, 28, null, 12, "Rotate the brush 90° clockwise (E)");
             var r2 = UIFactory.Row(right, 30, 4);
-            UIFactory.Button(r2, "↺ 45", () => editor.RotateSelection(45), -1, 28, null, 12);
-            UIFactory.Button(r2, "↻ 45", () => editor.RotateSelection(-45), -1, 28, null, 12);
+            UIFactory.IconButton(r2, "rotate_l", "45", () => editor.RotateSelection(45), -1, 28, null, 12, "Rotate 45° anticlockwise (Shift+Q)");
+            UIFactory.IconButton(r2, "rotate_r", "45", () => editor.RotateSelection(-45), -1, 28, null, 12, "Rotate 45° clockwise (Shift+E)");
             var r3 = UIFactory.Row(right, 30, 4);
-            UIFactory.Button(r3, "Flip H (F)", () => editor.FlipSelection(true), -1, 28, null, 12);
-            UIFactory.Button(r3, "Flip V (V)", () => editor.FlipSelection(false), -1, 28, null, 12);
+            UIFactory.IconButton(r3, "flip_h", "Flip", () => editor.FlipSelection(true), -1, 28, null, 12, "Flip horizontally (F)");
+            UIFactory.IconButton(r3, "flip_v", "Flip", () => editor.FlipSelection(false), -1, 28, null, 12, "Flip vertically (V)");
             var r4 = UIFactory.Row(right, 30, 4);
-            UIFactory.Button(r4, "Scale −", () => editor.ScaleSelection(0.5f), -1, 28, null, 12);
-            UIFactory.Button(r4, "Scale +", () => editor.ScaleSelection(2f), -1, 28, null, 12);
-            UIFactory.Button(r4, "Reset (R)", () =>
+            UIFactory.IconButton(r4, "scale_down", null, () => editor.ScaleSelection(0.5f), -1, 28, null, 12, "Halve the brush size");
+            UIFactory.IconButton(r4, "scale_up", null, () => editor.ScaleSelection(2f), -1, 28, null, 12, "Double the brush size");
+            UIFactory.IconButton(r4, "reset", "Reset", () =>
             {
                 editor.placeRotation = 0;
                 editor.placeFlipX = editor.placeFlipY = false;
@@ -350,6 +426,7 @@ namespace Geodashy.Editing.UI
             editor.StampsChanged += () => { if (currentCategory == StampsCategory) ShowCategory(StampsCategory); };
             PresetStorage.Changed += OnPresetsChanged;
             RefreshPlacement();
+            RefreshRecent();
         }
 
         void OnPresetsChanged()
@@ -377,8 +454,17 @@ namespace Geodashy.Editing.UI
         public void ShowCategory(string cat)
         {
             currentCategory = cat;
-            foreach (var kv in categoryButtons) UIFactory.SetButtonActive(kv.Value, kv.Key == cat);
+            foreach (var kv in categoryButtons)
+            {
+                UIFactory.SetButtonActive(kv.Value, kv.Key == cat);
+                if (kv.Key == StampsCategory || kv.Key == FavouritesCategory || kv.Key == UsedCategory) UIFactory.SetButtonLabel(kv.Value, ShelfLabel(kv.Key));
+            }
             if (categoryButton != null) UIFactory.SetButtonLabel(categoryButton, cat + "  ▾");
+            if (cat == UsedCategory)
+            {
+                Populate(UsedDefs());
+                return;
+            }
             if (cat == StampsCategory)
             {
                 PopulateStamps();
@@ -405,7 +491,27 @@ namespace Geodashy.Editing.UI
                 {
                     editor.SetBuildDef(d);
                     if (editor.Mode != EditorMode.Build) editor.SetMode(EditorMode.Build);
-                });
+                }, 84f);
+                if (!ui.IsPhone)
+                {
+                    // desktop: the caption only shows while hovered, so the art has the whole tile
+                    var cap = b.GetComponentInChildren<Text>();
+                    if (cap != null)
+                    {
+                        var icon = b.transform.Find("Icon") as RectTransform;
+                        if (icon != null) UIFactory.Anchor(icon, new Vector2(0, 0), new Vector2(1, 1), new Vector2(6, 6), new Vector2(-6, -6));
+                        cap.gameObject.SetActive(false);
+                        var shadow = cap.gameObject.AddComponent<Shadow>();
+                        shadow.effectColor = new Color(0, 0, 0, 0.9f);
+                        shadow.effectDistance = new Vector2(1f, -1f);
+                        cap.fontSize = 12;
+                        cap.fontStyle = FontStyle.Bold;
+                        cap.transform.SetAsLastSibling();
+                        var hc = b.gameObject.AddComponent<HoverCaption>();
+                        hc.caption = cap.gameObject;
+                    }
+                    UIFactory.Tip(b, string.IsNullOrEmpty(def.description) ? def.name + " · " + def.category : def.name + " — " + def.description);
+                }
                 tiles[def.id] = b;
             }
             gridScroll.verticalNormalizedPosition = 1f;
@@ -413,11 +519,18 @@ namespace Geodashy.Editing.UI
             RefreshPlacement();
         }
 
+        string lastRemembered = "";
         void RefreshPlacement()
         {
             if (selectedName == null) return;   // panel destroyed
             var def = editor.BuildDef;
             var stamp = editor.StampBrush;
+            if (def != null && def.id != lastRemembered)
+            {
+                lastRemembered = def.id;
+                RememberBrush(def.id);
+                RefreshRecent();
+            }
             foreach (var kv in tiles) UIFactory.SetButtonActive(kv.Value, def != null && kv.Key == def.id && editor.ActivePreset == null);
             foreach (var kv in stampTiles) UIFactory.SetButtonActive(kv.Value, stamp != null && kv.Key == stamp.path);
             foreach (var kv in presetTiles) UIFactory.SetButtonActive(kv.Value, editor.ActivePreset == kv.Key);

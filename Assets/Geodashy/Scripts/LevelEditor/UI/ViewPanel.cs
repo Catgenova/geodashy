@@ -78,15 +78,16 @@ namespace Geodashy.Editing.UI
             songEndLabel = UIFactory.Label(c, "", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 32);
             UIFactory.Button(c, "Place banner at song end", editor.PlaceSongEndBanner, -1, 26, null, 12);
             budgetLabel = UIFactory.Label(c, "", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 46);
-            savedLabel = UIFactory.Label(c, "", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 32);
+            savedLabel = UIFactory.Label(c, "", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 0);
+            savedLabel.gameObject.SetActive(false);   // the status strip carries the saved state now
             UIFactory.Button(c, "◀ Main menu", ui.ReturnToMenu, -1, 26, null, 12);
 
             UIFactory.SectionHeader(c, "Grid");
-            snapToggle = UIFactory.Toggle(c, "Snap to grid (G)", editor.snapToGrid, v =>
+            snapToggle = UIFactory.Tip(UIFactory.Toggle(c, "Snap to grid (G)", editor.snapToGrid, v =>
             {
                 editor.snapToGrid = v;
                 editor.NotifyViewOptionsChanged();
-            });
+            }), "Placed and dragged objects land on grid lines");
             gridToggle = UIFactory.Toggle(c, "Show grid (Ctrl+G)", editor.grid.showGrid, v => editor.grid.showGrid = v);
             var gr = UIFactory.Row(c, 26, 3);
             string[] names = { "¼", "½", "1", "2" };
@@ -128,11 +129,11 @@ namespace Geodashy.Editing.UI
             UIFactory.SectionHeader(c, "Guides");
             gizmoToggle = UIFactory.Toggle(c, "Transform gizmo on selection (X)", editor.GizmoVisible, v => editor.GizmoVisible = v);
             UIFactory.Label(c, "Corners scale, edges scale one axis, the ring rotates, the centre moves. Hold Shift for fine steps.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 36);
-            hitboxToggle = UIFactory.Toggle(c, "Hitbox edges on all objects (B)", editor.showHitboxes, v =>
+            hitboxToggle = UIFactory.Tip(UIFactory.Toggle(c, "Hitbox edges on all objects (B)", editor.showHitboxes, v =>
             {
                 editor.showHitboxes = v;
                 editor.NotifyViewOptionsChanged();
-            });
+            }), "Draws the collision edges over every object");
             UIFactory.Label(c, "Green = safe to land on, red = kills, blue = interacts. The brush preview always shows them.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 36);
             traceToggle = UIFactory.Toggle(c, "Show last playtest path", editor.showRunTrace, v =>
             {
@@ -226,6 +227,17 @@ namespace Geodashy.Editing.UI
                 Refresh();
                 ui.Toast("Layout: " + EditorUI.PhoneLayoutName + " — applies when the editor is reopened", 4f);
             }, -1, 26, null, 12);
+            UIFactory.Toggle(c, "Hint bar and tooltips", EditorUI.HintsEnabled && Tooltip.Enabled, v =>
+            {
+                EditorUI.HintsEnabled = v;
+                Tooltip.Enabled = v;
+                ui.RefreshHint();
+            });
+            UIFactory.Toggle(c, "Parchment & iron skin (reopen to apply)", UIFactory.Themed, v =>
+            {
+                UIFactory.Themed = v;
+                ui.Toast("Skin: " + (v ? "parchment & iron" : "classic flat") + " — applies when the editor is reopened", 4f);
+            });
             UIFactory.Label(c, ui.IsPhone
                 ? "Phone layout: View and Props are drawers, ▼ hides the dock, ⋯ holds save, files and settings. One finger places or selects, two fingers pan and zoom."
                 : "Tip: set the Game view to Free Aspect so the interface fits the window. The phone layout is picked automatically on Android.", 11, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 60);

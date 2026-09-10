@@ -959,7 +959,9 @@ namespace Geodashy.Gameplay
         {
             if (complete) return;
             paused = !paused;
-            hud.ShowPause(paused);
+            float progress = finishX > 0f ? Mathf.Clamp01(player.position.x / finishX) : 0f;
+            string loot = totalCoins + totalGems > 0 ? "   ·   loot " + (coins + gems) + " / " + (totalCoins + totalGems) : "";
+            hud.ShowPause(paused, "Attempt " + attempts + "   ·   " + elapsed.ToString("0.0") + " s   ·   " + (progress * 100f).ToString("0.0") + "%" + loot + "\n" + level.name + "   ·   " + DifficultyInfo.Name(difficulty));
         }
 
         public void Exit()

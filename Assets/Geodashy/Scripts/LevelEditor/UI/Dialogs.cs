@@ -705,6 +705,12 @@ namespace Geodashy.Editing.UI
             "View / Props — slide-in drawers   ·   ▼ hides the dock   ·   ⋯ holds save, files, settings, marker and help\n" +
             "Build dock: category ▾ picks a shelf, Search… filters, the strip scrolls sideways, Swipe paints while dragging\n" +
             "In play: tap anywhere — action   ·   ❚❚ — pause   ·   the Android back button also pauses\n\n" +
+            "INTERFACE\n" +
+            "Hover any button for a tooltip with its shortcut; the strip above the dock shows cursor, selection, zoom, layer, grid, object count and save state on the left and a hint for the current tool on the right\n" +
+            "Properties: drag a field's label sideways to scrub its value (Shift = fine) · section ribbons collapse · Copy props / Paste props carry transform, colours, flags and properties between objects · the colour swatch recolours the channel\n" +
+            "Palette: the Recent strip keeps your last eight brushes · shelves show their counts · In this level lists only what the quest already uses · hover a tile for its name\n" +
+            "Notifications stack above the dock; a delete offers Undo right there · Enter confirms and Esc closes any dialog\n" +
+            "Options ▸ Parchment & iron skin switches back to the classic flat panels; Hint bar and tooltips turns the help off once learned\n\n" +
             "NEWEST TOOLS\n" +
             "Level settings ▸ Music ▸ Detect BPM & offset — listens to the song and sets the tempo and the first-beat offset   ·   Tap tempo — tap the beat yourself\n" +
             "Timeline strip — the song's waveform runs behind the bar lines, mapped through every speed portal; bookmarks show as cyan diamonds\n" +

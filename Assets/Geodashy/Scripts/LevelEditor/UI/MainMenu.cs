@@ -110,9 +110,9 @@ namespace Geodashy.Editing.UI
             // ---- title screen ---------------------------------------------------
             titleScreen = UIFactory.Rect(root, "Title");
             UIFactory.Stretch(titleScreen);
-            var titleCard = UIFactory.Panel(titleScreen, "Card", new Color(0.11f, 0.09f, 0.14f, 0.82f));
-            if (phone) UIFactory.Anchor(titleCard, new Vector2(0.5f, 0), new Vector2(0.5f, 1), new Vector2(-280, 12), new Vector2(280, -12));
-            else UIFactory.Anchor(titleCard, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-300, -330), new Vector2(300, 330));
+            var titleCard = UIFactory.Frame(titleScreen, "Card", new Color(0.11f, 0.09f, 0.14f, 0.82f));
+            if (phone) UIFactory.Anchor(titleCard, new Vector2(0.5f, 0), new Vector2(0.5f, 1), new Vector2(-300, 12), new Vector2(300, -12));
+            else UIFactory.Anchor(titleCard, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-320, -370), new Vector2(320, 370));
             UIFactory.VLayout(titleCard, phone ? 6 : 12, phone ? 16 : 32, true, true, TextAnchor.UpperCenter);
             var crestRow = UIFactory.Row(titleCard, phone ? 44 : 64, 0, TextAnchor.MiddleCenter);
             titleCrest = UIFactory.Icon(crestRow, PlaceholderSpriteFactory.Crest(PlayerProfile.Crest, PlayerProfile.Primary, PlayerProfile.Secondary), phone ? 44 : 64);
@@ -121,6 +121,7 @@ namespace Geodashy.Editing.UI
             UIFactory.Label(titleCard, "One button. Seven mounts. A kingdom of spikes.", phone ? 13 : 16, TextAnchor.MiddleCenter, UIFactory.TextDim, -1, phone ? 22 : 28);
             UIFactory.Spacer(titleCard, phone ? 4 : 10);
             UIFactory.Button(titleCard, L10n.T("Campaign"), ShowCampaign, -1, phone ? 44 : 50, UIFactory.Good, phone ? 17 : 20);
+            BuildHero(titleCard);
             var playRow = UIFactory.Row(titleCard, phone ? 42 : 46, 8);
             UIFactory.Button(playRow, L10n.T("All quests"), ShowLevelSelect, -1, phone ? 42 : 46, UIFactory.Good, phone ? 15 : 17);
             UIFactory.Button(playRow, L10n.T("Daily Quest"), PlayDaily, -1, phone ? 42 : 46, UIFactory.ButtonActive, phone ? 15 : 17);
@@ -136,7 +137,7 @@ namespace Geodashy.Editing.UI
             // ---- level select ---------------------------------------------------
             levelScreen = UIFactory.Rect(root, "LevelSelect");
             UIFactory.Stretch(levelScreen);
-            var frame = UIFactory.Panel(levelScreen, "Frame", new Color(0.11f, 0.09f, 0.14f, 0.9f));
+            var frame = UIFactory.Frame(levelScreen, "Frame", new Color(0.11f, 0.09f, 0.14f, 0.9f));
             if (phone) UIFactory.Stretch(frame, 12, 12, 12, 12);
             else UIFactory.Anchor(frame, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-620, -400), new Vector2(620, 400));
             var header = UIFactory.Rect(frame, "Header");
@@ -166,7 +167,9 @@ namespace Geodashy.Editing.UI
             UIFactory.Anchor(listHost, new Vector2(0, 0), new Vector2(0.55f, 1), new Vector2(16, 16), new Vector2(-8, -100));
             var scroll = UIFactory.ScrollView(listHost, "Levels", out listContent, true, false);
             UIFactory.Stretch(scroll.GetComponent<RectTransform>());
-            UIFactory.VLayout(listContent, 4, 6);
+            // quest cards: two per row on desktop, one on a phone
+            var cardGrid = UIFactory.Grid(listContent, new Vector2(phone ? 300 : 316, 118), new Vector2(8, 8), 6);
+            cardGrid.constraint = GridLayoutGroup.Constraint.Flexible;
             UIFactory.Fitter(listContent, true, false);
 
             // the detail pane scrolls so the record, difficulty buttons and description fit on short screens
@@ -183,7 +186,7 @@ namespace Geodashy.Editing.UI
         {
             var screen = UIFactory.Rect(root, name);
             UIFactory.Stretch(screen);
-            var frame = UIFactory.Panel(screen, "Frame", new Color(0.11f, 0.09f, 0.14f, 0.92f));
+            var frame = UIFactory.Frame(screen, "Frame", new Color(0.11f, 0.09f, 0.14f, 0.92f));
             if (phone) UIFactory.Stretch(frame, 12, 12, 12, 12);
             else UIFactory.Anchor(frame, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-halfWidth, -halfHeight), new Vector2(halfWidth, halfHeight));
             UIFactory.VLayout(frame, 8, phone ? 12 : 20, true, true, TextAnchor.UpperLeft);
@@ -195,6 +198,66 @@ namespace Geodashy.Editing.UI
             UIFactory.VLayout(content, phone ? 8 : 12, 4);
             UIFactory.Fitter(content, true, false);
             return screen;
+        }
+
+        /// <summary>Medal letters a quest has earned across its best runs: S swift, L all loot, D deathless.</summary>
+        static string Medals(LevelStats stats)
+        {
+            bool s = false, l = stats.fullLoot, d = false;
+            if (stats.bestRuns != null)
+                foreach (var r in stats.bestRuns)
+                {
+                    if (r.medals.Contains("S")) s = true;
+                    if (r.medals.Contains("L")) l = true;
+                    if (r.medals.Contains("D")) d = true;
+                }
+            var sb = new System.Text.StringBuilder();
+            sb.Append(s ? "<color=#4d9cf0>★</color>" : "<color=#555555>☆</color>");
+            sb.Append(l ? "<color=#e0b64a>★</color>" : "<color=#555555>☆</color>");
+            sb.Append(d ? "<color=#c94a3a>★</color>" : "<color=#555555>☆</color>");
+            return sb.ToString();
+        }
+
+        /// <summary>Title-screen hero: the next campaign quest with its thumbnail, best result and a Ride button.</summary>
+        void BuildHero(RectTransform card)
+        {
+            var all = LevelStorage.ListLevels();
+            var campaign = new List<LevelFileInfo>();
+            foreach (var l in all) if (l.builtIn) campaign.Add(l);
+            if (campaign.Count == 0) return;
+            campaign.Sort((a, b) => a.campaignOrder != b.campaignOrder ? a.campaignOrder.CompareTo(b.campaignOrder) : string.Compare(a.name, b.name, StringComparison.OrdinalIgnoreCase));
+            LevelFileInfo next = campaign[campaign.Count - 1];
+            LevelStats nextStats = null;
+            for (int i = 0; i < campaign.Count; i++)
+            {
+                var st = LevelStatsStorage.Load(campaign[i].id);
+                if (st.completions == 0 && st.checkpointCompletions == 0)
+                {
+                    next = campaign[i];
+                    nextStats = st;
+                    break;
+                }
+            }
+            if (nextStats == null) nextStats = LevelStatsStorage.Load(next.id);
+            float h = phone ? 72 : 84;
+            var hero = UIFactory.Card(card, "Hero");
+            UIFactory.Layout(hero.gameObject, -1, h);
+            UIFactory.HLayout(hero, 10, 8, false, TextAnchor.MiddleLeft);
+            var thumb = LevelThumbnail.Get(next);
+            if (thumb != null)
+            {
+                var img = UIFactory.Icon(hero, thumb, h - 16);
+                UIFactory.Layout(img.gameObject, (h - 16) * 2.6f, h - 16);
+            }
+            var col = UIFactory.Column(hero, -1, 0);
+            var ink = UIFactory.Themed ? UIFactory.Ink : UIFactory.TextColor;
+            UIFactory.Label(col, (nextStats.completions > 0 || nextStats.checkpointCompletions > 0 ? "Campaign cleared · replay " : "Next on the road: ") + next.name, phone ? 13 : 15, TextAnchor.MiddleLeft, ink, -1, 24, true);
+            float best = 0f;
+            if (nextStats.bestRuns != null) foreach (var r in nextStats.bestRuns) if (best <= 0f || r.seconds < best) best = r.seconds;
+            string line = LevelRating.Name(next.difficultyTag) + " · " + next.LengthTag + (best > 0f ? " · best " + best.ToString("0.00") + " s" : (nextStats.bestProgress > 0f ? " · best " + (nextStats.bestProgress * 100f).ToString("0") + "%" : " · unexplored"));
+            UIFactory.Label(col, line, phone ? 11 : 12, TextAnchor.MiddleLeft, UIFactory.Themed ? new Color(0.4f, 0.28f, 0.14f) : UIFactory.TextDim, -1, 18);
+            var ride = next;
+            UIFactory.Button(hero, "▶ " + L10n.T("Ride"), () => Launch(ride, Difficulty.Checkpoints), phone ? 70 : 84, h - 24, UIFactory.Good, 14);
         }
 
         void PlayDaily()
@@ -222,7 +285,7 @@ namespace Geodashy.Editing.UI
         {
             campaignScreen = UIFactory.Rect(root, "Campaign");
             UIFactory.Stretch(campaignScreen);
-            var frame = UIFactory.Panel(campaignScreen, "Frame", new Color(0.11f, 0.09f, 0.14f, 0.92f));
+            var frame = UIFactory.Frame(campaignScreen, "Frame", new Color(0.11f, 0.09f, 0.14f, 0.92f));
             if (phone) UIFactory.Stretch(frame, 12, 12, 12, 12);
             else UIFactory.Anchor(frame, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-620, -300), new Vector2(620, 300));
             var header = UIFactory.Rect(frame, "Header");
@@ -352,6 +415,17 @@ namespace Geodashy.Editing.UI
             }, -1, 36, UIFactory.ButtonActive, 13);
             UIFactory.Label(frame, "The phone layout has finger-sized controls, drawers instead of docks and touch gestures. Auto picks it on Android and the desktop layout elsewhere.", 12, TextAnchor.UpperLeft, UIFactory.TextDim, -1, 34);
             RefreshUiLabel();
+            UIFactory.Toggle(frame, "Parchment & iron skin (off = classic flat panels)", UIFactory.Themed, v =>
+            {
+                UIFactory.Themed = v;
+                reopenOptions = true;
+                app.ShowMenu();
+            }, 30);
+            UIFactory.Toggle(frame, "Editor hint bar and tooltips", EditorUI.HintsEnabled && Tooltip.Enabled, v =>
+            {
+                EditorUI.HintsEnabled = v;
+                Tooltip.Enabled = v;
+            }, 30);
 
             if (Haptics.Supported)
             {
@@ -599,22 +673,30 @@ namespace Geodashy.Editing.UI
             {
                 var i = info;
                 var stats = statsById[i.id];
-                string status = stats.completions > 0 ? "✔ cleared" : (stats.bestProgress > 0f ? (stats.bestProgress * 100f).ToString("0") + "%" : "new");
-                if (stats.fullLoot) status += " · all loot";
-                string tags = (string.IsNullOrEmpty(i.difficultyTag) ? "" : LevelRating.Name(i.difficultyTag) + " · ") + i.LengthTag;
-                var b = UIFactory.Button(listContent, (i.builtIn ? "★ " : "") + i.name + (string.IsNullOrEmpty(i.pack) ? "" : "  <color=#7fd0ff>[" + i.pack + "]</color>") + "\n<size=11>" + (string.IsNullOrEmpty(i.author) ? "unknown author" : i.author) + " · " + status + "   [" + tags + "]</size>",
-                    () => Select(i), -1, 52, null, 15);
+                string status = stats.completions > 0 ? "cleared ×" + stats.completions : (stats.bestProgress > 0f ? "best " + (stats.bestProgress * 100f).ToString("0") + "%" : "new");
+                string tags = (string.IsNullOrEmpty(i.difficultyTag) ? "unrated" : LevelRating.Name(i.difficultyTag)) + " · " + i.LengthTag;
+                // card: thumbnail across the top, name and meta underneath, medal stars in the corner
+                var b = UIFactory.Button(listContent, "", () => Select(i), 316, 118, null, 12);
                 var t = b.GetComponentInChildren<Text>();
-                t.alignment = TextAnchor.MiddleLeft;
-                t.supportRichText = true;
-                var thumb = LevelThumbnail.Get(i);
-                if (thumb != null)
-                {
-                    var img = UIFactory.Icon(b.transform, thumb, 44);
-                    UIFactory.Anchor(img.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(4, -22), new Vector2(120, 22));
-                    Destroy(img.GetComponent<LayoutElement>());
-                    UIFactory.Stretch(t.rectTransform, 128, 2, 4, 2);
-                }
+                t.gameObject.SetActive(false);
+                var thumbRt = UIFactory.Rect(b.transform, "Thumb");
+                var thumbImg = thumbRt.gameObject.AddComponent<Image>();
+                thumbImg.sprite = LevelThumbnail.Get(i);
+                thumbImg.preserveAspect = false;
+                thumbImg.raycastTarget = false;
+                thumbImg.color = thumbImg.sprite != null ? Color.white : new Color(0, 0, 0, 0.3f);
+                UIFactory.Anchor(thumbRt, new Vector2(0, 1), new Vector2(1, 1), new Vector2(4, -62), new Vector2(-4, -4));
+                var name = UIFactory.Label(b.transform, (i.builtIn ? "★ " : "") + i.name + (string.IsNullOrEmpty(i.pack) ? "" : "  <color=#7fd0ff>[" + i.pack + "]</color>"), 14, TextAnchor.MiddleLeft, UIFactory.Accent, -1, -1, true);
+                name.supportRichText = true;
+                name.horizontalOverflow = HorizontalWrapMode.Overflow;
+                UIFactory.Anchor(name.rectTransform, new Vector2(0, 0), new Vector2(1, 0), new Vector2(8, 30), new Vector2(-60, 54));
+                var meta = UIFactory.Label(b.transform, (string.IsNullOrEmpty(i.author) ? "unknown author" : i.author) + " · " + status + " · " + tags, 11, TextAnchor.MiddleLeft, UIFactory.TextDim);
+                meta.horizontalOverflow = HorizontalWrapMode.Overflow;
+                UIFactory.Anchor(meta.rectTransform, new Vector2(0, 0), new Vector2(1, 0), new Vector2(8, 6), new Vector2(-60, 28));
+                var medals = UIFactory.Label(b.transform, Medals(stats), 16, TextAnchor.MiddleRight, UIFactory.TextColor);
+                medals.supportRichText = true;
+                UIFactory.Anchor(medals.rectTransform, new Vector2(1, 0), new Vector2(1, 0), new Vector2(-58, 8), new Vector2(-6, 52));
+                UIFactory.Tip(b, "Medals: swift (under par), all loot, deathless");
                 rowButtons.Add(b);
             }
             LevelFileInfo keep = null;

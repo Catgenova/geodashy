@@ -137,6 +137,24 @@ namespace Geodashy.Editing.UI
         Text toastText;
         float toastTimer;
         bool playMode;
+        // status strip, hint bar, stacked notifications and tooltips
+        RectTransform statusBar;
+        Text statusText, hintText;
+        float statusTimer;
+        float stripHeight;
+        class Note { public RectTransform rt; public float life; public CanvasGroup group; }
+        readonly List<Note> notes = new List<Note>();
+        RectTransform noteStack;
+        RectTransform tooltipRt;
+        Text tooltipText;
+        Tooltip tooltipOwner;
+        readonly Dictionary<GameObject, Action> modalPrimary = new Dictionary<GameObject, Action>();
+        public const string HintsPref = "geodashy.hintBar";
+        public static bool HintsEnabled
+        {
+            get => PlayerPrefs.GetInt(HintsPref, 1) == 1;
+            set => PlayerPrefs.SetInt(HintsPref, value ? 1 : 0);
+        }
         bool phone;
         bool viewDrawerOpen, propsDrawerOpen, dockCollapsed;
         float topHeight, dockHeight, leftWidth, rightWidth;
@@ -247,7 +265,8 @@ namespace Geodashy.Editing.UI
             if (phone) ApplySafeArea(root);
 
             // docks -----------------------------------------------------------
-            var top = UIFactory.Panel(root, "TopBar", UIFactory.PanelBg);
+            stripHeight = phone ? 20f : 24f;
+            var top = UIFactory.Frame(root, "TopBar");
             UIFactory.Anchor(top, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -topHeight), new Vector2(0, 0));
             topBar = TopBar.Create(this, top);
 
@@ -258,14 +277,15 @@ namespace Geodashy.Editing.UI
             timeline = TimelineStrip.Create(this, strip);
             topHeight += stripH;
 
-            bottomDock = UIFactory.Panel(root, "BottomDock", UIFactory.PanelBg);
+            bottomDock = UIFactory.Frame(root, "BottomDock");
             UIFactory.Anchor(bottomDock, new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, 0), new Vector2(0, dockHeight));
+            BuildStatusBar();
 
-            leftDock = UIFactory.Panel(root, "LeftDock", UIFactory.PanelBg);
-            UIFactory.Anchor(leftDock, new Vector2(0, 0), new Vector2(0, 1), new Vector2(0, dockHeight), new Vector2(leftWidth, -topHeight));
+            leftDock = UIFactory.Frame(root, "LeftDock");
+            UIFactory.Anchor(leftDock, new Vector2(0, 0), new Vector2(0, 1), new Vector2(0, dockHeight + stripHeight), new Vector2(leftWidth, -topHeight));
 
-            rightDock = UIFactory.Panel(root, "RightDock", UIFactory.PanelBg);
-            UIFactory.Anchor(rightDock, new Vector2(1, 0), new Vector2(1, 1), new Vector2(-rightWidth, dockHeight), new Vector2(0, -topHeight));
+            rightDock = UIFactory.Frame(root, "RightDock");
+            UIFactory.Anchor(rightDock, new Vector2(1, 0), new Vector2(1, 1), new Vector2(-rightWidth, dockHeight + stripHeight), new Vector2(0, -topHeight));
 
             palettePanel = PalettePanel.Create(this, bottomDock);
             editPanel = EditPanel.Create(this, bottomDock);
@@ -286,18 +306,35 @@ namespace Geodashy.Editing.UI
                 ApplySafeArea(popupLayer);
                 ApplySafeArea(toastLayer);
             }
-            var toastBg = UIFactory.Panel(toastLayer, "Toast", new Color(0, 0, 0, 0.75f));
-            float tw = phone ? 220 : 260;
-            UIFactory.Anchor(toastBg, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(-tw, dockHeight + 12), new Vector2(tw, dockHeight + 52));
-            toastBg.GetComponent<Image>().raycastTarget = false;
+            // notifications stack up from just above the dock; each row can carry an icon and an Undo button
+            float tw = phone ? 230 : 280;
+            noteStack = UIFactory.Rect(toastLayer, "Notes");
+            UIFactory.Anchor(noteStack, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(-tw, dockHeight + stripHeight + 10), new Vector2(tw, dockHeight + stripHeight + 10 + 4 * 44));
+            var vl = UIFactory.VLayout(noteStack, 4, 0, true, true, TextAnchor.LowerCenter);
+            vl.childForceExpandHeight = false;
+            // legacy single-line toast kept for callers that update the same line rapidly
+            var toastBg = UIFactory.Rect(toastLayer, "Toast");
+            UIFactory.Anchor(toastBg, new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(-tw, dockHeight + stripHeight + 10), new Vector2(tw, dockHeight + stripHeight + 50));
             toastText = UIFactory.Label(toastBg, "", 16, TextAnchor.MiddleCenter, UIFactory.Accent);
             UIFactory.Stretch(toastText.rectTransform, 8, 4, 8, 4);
             toastBg.gameObject.SetActive(false);
+            // tooltip bubble
+            tooltipRt = UIFactory.Panel(toastLayer, "Tooltip", new Color(0.05f, 0.04f, 0.07f, 0.96f));
+            UIFactory.Skin(tooltipRt.GetComponent<Image>(), UIFactory.SkinKind.Parchment);
+            tooltipRt.GetComponent<Image>().raycastTarget = false;
+            tooltipText = UIFactory.Label(tooltipRt, "", 13, TextAnchor.MiddleLeft, UIFactory.Themed ? UIFactory.Ink : UIFactory.TextColor);
+            UIFactory.Stretch(tooltipText.rectTransform, 8, 4, 8, 4);
+            tooltipText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            tooltipRt.gameObject.SetActive(false);
 
             editor.ModeChanged += OnModeChanged;
             editor.SelectionChanged += OnSelectionChanged;
+            editor.ViewOptionsChanged += RefreshHint;
+            editor.SelectionChanged += RefreshHint;
+            editor.ModeChanged += RefreshHint;
             OnModeChanged();
             OnSelectionChanged();
+            RefreshHint();
             EditorTour.StartIfFirstRun(this);
             Geodashy.Core.Achievements.Announce = msg =>
             {
@@ -362,13 +399,23 @@ namespace Geodashy.Editing.UI
             dockCollapsed = !dockCollapsed;
             bottomDock.gameObject.SetActive(!dockCollapsed);
             float bottom = dockCollapsed ? 0f : dockHeight;
-            leftDock.offsetMin = new Vector2(0, bottom);
-            rightDock.offsetMin = new Vector2(-rightWidth, bottom);
+            leftDock.offsetMin = new Vector2(0, bottom + stripHeight);
+            rightDock.offsetMin = new Vector2(-rightWidth, bottom + stripHeight);
+            if (statusBar != null)
+            {
+                statusBar.offsetMin = new Vector2(0, bottom);
+                statusBar.offsetMax = new Vector2(0, bottom + stripHeight);
+            }
             var toast = toastText != null ? toastText.transform.parent as RectTransform : null;
             if (toast != null)
             {
-                toast.offsetMin = new Vector2(toast.offsetMin.x, bottom + 12);
-                toast.offsetMax = new Vector2(toast.offsetMax.x, bottom + 52);
+                toast.offsetMin = new Vector2(toast.offsetMin.x, bottom + stripHeight + 10);
+                toast.offsetMax = new Vector2(toast.offsetMax.x, bottom + stripHeight + 50);
+            }
+            if (noteStack != null)
+            {
+                noteStack.offsetMin = new Vector2(noteStack.offsetMin.x, bottom + stripHeight + 10);
+                noteStack.offsetMax = new Vector2(noteStack.offsetMax.x, bottom + stripHeight + 10 + 4 * 44);
             }
             topBar.RefreshDrawerButtons();
         }
@@ -380,6 +427,20 @@ namespace Geodashy.Editing.UI
                 toastTimer -= Time.unscaledDeltaTime;
                 if (toastTimer <= 0f) toastText.transform.parent.gameObject.SetActive(false);
             }
+            UpdateNotes(Time.unscaledDeltaTime);
+            statusTimer -= Time.unscaledDeltaTime;
+            if (statusTimer <= 0f)
+            {
+                statusTimer = 0.1f;
+                RefreshStatus();
+            }
+            // Enter confirms the top modal's primary action (Esc closes it from the editor's key handling)
+            var kb = UnityEngine.InputSystem.Keyboard.current;
+            if (kb != null && modals.Count > 0 && (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame))
+            {
+                var top = modals[modals.Count - 1];
+                if (modalPrimary.TryGetValue(top, out var act) && act != null) act();
+            }
             topBar?.Tick();
             viewPanel?.Tick();
             timeline?.Tick();
@@ -387,12 +448,180 @@ namespace Geodashy.Editing.UI
 
         // ---- public helpers ---------------------------------------------------
 
-        public void Toast(string message, float seconds = 2.2f)
+        public void Toast(string message, float seconds = 2.2f) => Notify(message, seconds, null, null, null);
+
+        /// <summary>Stacked notification with an optional glyph and an action button ("Undo" after a delete).</summary>
+        public void Notify(string message, float seconds = 2.2f, string icon = null, string actionLabel = null, Action action = null)
         {
-            if (toastText == null) return;
-            toastText.text = message;
-            toastText.transform.parent.gameObject.SetActive(true);
-            toastTimer = seconds;
+            if (noteStack == null) return;
+            // an identical message already showing just gets its timer refreshed
+            foreach (var n in notes)
+            {
+                var t = n.rt.GetComponentInChildren<Text>();
+                if (t != null && t.text == message && n.life > 0.3f)
+                {
+                    n.life = seconds;
+                    return;
+                }
+            }
+            while (notes.Count >= 4)
+            {
+                Destroy(notes[0].rt.gameObject);
+                notes.RemoveAt(0);
+            }
+            var row = UIFactory.Panel(noteStack, "Note", new Color(0.05f, 0.04f, 0.07f, 0.9f));
+            UIFactory.Skin(row.GetComponent<Image>(), UIFactory.SkinKind.Iron);
+            row.GetComponent<Image>().raycastTarget = action != null;
+            UIFactory.HLayout(row, 8, 8, false, TextAnchor.MiddleLeft);
+            UIFactory.Layout(row.gameObject, -1, 40, 1);
+            var g = row.gameObject.AddComponent<CanvasGroup>();
+            if (!string.IsNullOrEmpty(icon))
+            {
+                var ic = UIFactory.Icon(row, Geodashy.Rendering.EditorIcons.Get(icon), 18, UIFactory.Accent);
+                UIFactory.Layout(ic.gameObject, 18, 18);
+            }
+            var label = UIFactory.Label(row, message, 14, TextAnchor.MiddleLeft, UIFactory.Accent, -1, 40);
+            label.horizontalOverflow = HorizontalWrapMode.Wrap;
+            if (action != null)
+            {
+                var note = new Note { rt = row, life = seconds, group = g };
+                UIFactory.Button(row, actionLabel ?? "Undo", () =>
+                {
+                    action();
+                    note.life = 0f;
+                }, 70, 28, UIFactory.ButtonActive, 13);
+                notes.Add(note);
+            }
+            else notes.Add(new Note { rt = row, life = seconds, group = g });
+        }
+
+        void UpdateNotes(float dt)
+        {
+            for (int i = notes.Count - 1; i >= 0; i--)
+            {
+                var n = notes[i];
+                n.life -= dt;
+                if (n.group != null) n.group.alpha = Mathf.Clamp01(n.life / 0.35f);
+                if (n.life <= 0f)
+                {
+                    if (n.rt != null) Destroy(n.rt.gameObject);
+                    notes.RemoveAt(i);
+                }
+            }
+        }
+
+        // ---- status strip and hint bar ------------------------------------------------
+
+        void BuildStatusBar()
+        {
+            statusBar = UIFactory.Panel(root, "StatusBar", new Color(0.07f, 0.06f, 0.09f, 0.96f));
+            UIFactory.Anchor(statusBar, new Vector2(0, 0), new Vector2(1, 0), new Vector2(0, dockHeight), new Vector2(0, dockHeight + stripHeight));
+            statusBar.GetComponent<Image>().raycastTarget = false;
+            statusText = UIFactory.Label(statusBar, "", 12, TextAnchor.MiddleLeft, UIFactory.TextDim);
+            statusText.horizontalOverflow = HorizontalWrapMode.Overflow;
+            UIFactory.Anchor(statusText.rectTransform, new Vector2(0, 0), new Vector2(phone ? 0f : 0.5f, 1), new Vector2(10, 0), new Vector2(phone ? 0f : -4, 0));
+            hintText = UIFactory.Label(statusBar, "", 12, TextAnchor.MiddleRight, UIFactory.Accent);
+            hintText.horizontalOverflow = HorizontalWrapMode.Overflow;
+            UIFactory.Anchor(hintText.rectTransform, new Vector2(phone ? 0f : 0.5f, 0), new Vector2(1, 1), new Vector2(phone ? 10f : 4, 0), new Vector2(-10, 0));
+            if (phone)
+            {
+                statusText.gameObject.SetActive(false);
+                hintText.alignment = TextAnchor.MiddleLeft;
+            }
+        }
+
+        void RefreshStatus()
+        {
+            if (statusText == null || !statusText.gameObject.activeSelf || editor == null || editor.level == null) return;
+            var sb = new System.Text.StringBuilder();
+            var c = editor.CursorSnapped;
+            sb.Append("x ").Append(c.x.ToString("0.##")).Append("  y ").Append(c.y.ToString("0.##"));
+            int sel = editor.selection.Count;
+            if (sel > 0)
+            {
+                var b = editor.SelectionBounds();
+                sb.Append("   ·   ").Append(sel).Append(sel == 1 ? " selected" : " selected  ").Append(sel == 1 ? "" : b.width.ToString("0.#") + "×" + b.height.ToString("0.#"));
+            }
+            sb.Append("   ·   zoom ").Append(Mathf.RoundToInt(editor.editorCamera.zoom * 100f)).Append('%');
+            sb.Append("   ·   layer ").Append(editor.currentEditorLayer).Append(editor.showAllLayers ? " (all)" : "");
+            sb.Append("   ·   grid ").Append(editor.gridSize.ToString("0.##")).Append(editor.snapToGrid ? "" : " (no snap)");
+            int n = editor.level.objects.Count;
+            sb.Append("   ·   ").Append(n).Append(" objects").Append(n >= LevelEditor.BudgetHigh ? " (heavy)" : "");
+            sb.Append("   ·   ").Append(string.IsNullOrEmpty(editor.currentFilePath) ? "unsaved" : (editor.Dirty ? "unsaved changes" : "saved"));
+            statusText.text = sb.ToString();
+        }
+
+        /// <summary>One line that explains the current tool state; changes with mode, brush and selection.</summary>
+        public void RefreshHint()
+        {
+            if (hintText == null) return;
+            if (!HintsEnabled)
+            {
+                hintText.text = "";
+                return;
+            }
+            string h;
+            bool touch = phone;
+            switch (editor.Mode)
+            {
+                case EditorMode.Build:
+                    if (editor.StampBrush != null) h = touch ? "Stamp: tap to place the group" : "Stamp: click to place the group · Esc clears the brush";
+                    else if (editor.pathTool) h = touch ? "Path: tap points, then Lay" : "Path: click points, then Lay (grid) or Lay (beat) · Curve bends it";
+                    else if (editor.BuildDef != null) h = touch ? "Build: tap to place " + editor.BuildDef.name + " · two fingers pan and zoom" : "Build: click to place " + editor.BuildDef.name + " · drag paints · Ctrl+click selects · Q/E rotate · F/V flip · Esc clears";
+                    else h = touch ? "Build: pick an object from the shelf below" : "Build: pick an object from the shelf · Ctrl+K searches everything";
+                    break;
+                case EditorMode.Edit:
+                    if (editor.selection.Count > 0) h = touch ? editor.selection.Count + " selected: drag to move · long-press for the menu · Props edits" : editor.selection.Count + " selected: drag to move · arrows nudge · X gizmo · Ctrl+D duplicate · Delete removes · right-click for the menu";
+                    else h = touch ? "Edit: tap an object to select · drag empty space to box-select" : "Edit: click to select · Shift+click adds · drag empty space to box-select · T selects same type";
+                    break;
+                default:
+                    h = touch ? "Delete: tap objects to remove them · drag to sweep" : "Delete: click objects to remove them · drag to sweep · Ctrl+Z brings them back";
+                    break;
+            }
+            hintText.text = h;
+        }
+
+        // ---- tooltips ---------------------------------------------------------------------
+
+        public void ShowTooltip(Tooltip owner, string text, RectTransform anchor)
+        {
+            if (tooltipRt == null || anchor == null) return;
+            tooltipOwner = owner;
+            tooltipText.text = text;
+            float w = Mathf.Clamp(text.Length * 7.2f + 20f, 60f, 320f);
+            float lines = Mathf.Ceil(text.Length * 7.2f / (w - 16f));
+            float h = 22f + (lines - 1) * 16f;
+            tooltipRt.gameObject.SetActive(true);
+            var canvasRt = canvas.GetComponent<RectTransform>();
+            var corners = new Vector3[4];
+            anchor.GetWorldCorners(corners);
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRt, RectTransformUtility.WorldToScreenPoint(null, corners[1]), null, out var tl);
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRt, RectTransformUtility.WorldToScreenPoint(null, corners[0]), null, out var bl);
+            float canvasH = canvasRt.rect.height, canvasW = canvasRt.rect.width;
+            float x = Mathf.Clamp(tl.x, -canvasW / 2f + 4f, canvasW / 2f - w - 4f);
+            // above the widget when there is room, below it otherwise
+            float y = tl.y + 6f + h;
+            if (y > canvasH / 2f) y = bl.y - 6f;
+            tooltipRt.anchorMin = tooltipRt.anchorMax = new Vector2(0.5f, 0.5f);
+            tooltipRt.pivot = new Vector2(0, 1);
+            tooltipRt.anchoredPosition = new Vector2(x, y);
+            tooltipRt.sizeDelta = new Vector2(w, h);
+            tooltipRt.SetAsLastSibling();
+        }
+
+        public void HideTooltip(Tooltip owner)
+        {
+            if (tooltipRt == null) return;
+            if (owner != null && tooltipOwner != null && owner != tooltipOwner) return;
+            tooltipOwner = null;
+            tooltipRt.gameObject.SetActive(false);
+        }
+
+        /// <summary>Registers the action Enter triggers while this modal is on top.</summary>
+        public void SetModalPrimary(GameObject modal, Action action)
+        {
+            if (modal == null) return;
+            modalPrimary[modal] = action;
         }
 
         public void SetHidden(bool hidden)
@@ -530,13 +759,14 @@ namespace Geodashy.Editing.UI
                 height = Mathf.Min(height, avail.height - 16f);
             }
             var backdrop = UIFactory.Panel(modalLayer, "Modal " + title, new Color(0, 0, 0, 0.55f));
-            var window = UIFactory.Panel(backdrop, "Window", UIFactory.PanelBg2);
+            var window = UIFactory.Frame(backdrop, "Window", UIFactory.PanelBg2);
             UIFactory.Anchor(window, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(-width / 2f, -height / 2f), new Vector2(width / 2f, height / 2f));
-            var header = UIFactory.Panel(window, "Header", UIFactory.PanelBg3);
-            UIFactory.Anchor(header, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0, -40), new Vector2(0, 0));
-            var t = UIFactory.Label(header, title, 18, TextAnchor.MiddleLeft, UIFactory.Accent, -1, -1, true);
+            // parchment title strip pinned across the iron frame
+            var header = UIFactory.Themed ? UIFactory.Card(window, "Header") : UIFactory.Panel(window, "Header", UIFactory.PanelBg3);
+            UIFactory.Anchor(header, new Vector2(0, 1), new Vector2(1, 1), new Vector2(6, -40), new Vector2(-6, -4));
+            var t = UIFactory.Label(header, title, 18, TextAnchor.MiddleLeft, UIFactory.Themed ? UIFactory.Ink : UIFactory.Accent, -1, -1, true);
             UIFactory.Stretch(t.rectTransform, 14, 0, 50, 0);
-            var close = UIFactory.Button(header, "✕", () => CloseModal(backdrop.gameObject), 36, 30, UIFactory.Danger, 16);
+            var close = UIFactory.IconButton(header, "close", null, () => CloseModal(backdrop.gameObject), 36, 30, UIFactory.Danger, 16, "Close (Esc)");
             var crt = close.GetComponent<RectTransform>();
             UIFactory.Anchor(crt, new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(-42, -15), new Vector2(-6, 15));
 
@@ -564,6 +794,7 @@ namespace Geodashy.Editing.UI
         public void CloseModal(GameObject modal)
         {
             modals.Remove(modal);
+            modalPrimary.Remove(modal);
             Destroy(modal);
         }
 
@@ -572,6 +803,7 @@ namespace Geodashy.Editing.UI
             if (modals.Count == 0) return;
             var m = modals[modals.Count - 1];
             modals.RemoveAt(modals.Count - 1);
+            modalPrimary.Remove(m);
             Destroy(m);
         }
 
@@ -586,11 +818,13 @@ namespace Geodashy.Editing.UI
             t.horizontalOverflow = HorizontalWrapMode.Wrap;
             var row = UIFactory.Row(content, 36, 8, TextAnchor.MiddleRight);
             UIFactory.Button(row, "Cancel", () => CloseModal(modal), 110, 34);
-            UIFactory.Button(row, yesLabel, () =>
+            Action yes = () =>
             {
                 CloseModal(modal);
                 onYes?.Invoke();
-            }, 110, 34, UIFactory.ButtonActive);
+            };
+            UIFactory.Button(row, yesLabel, () => yes(), 110, 34, UIFactory.ButtonActive);
+            SetModalPrimary(modal, yes);
         }
 
         public void Prompt(string title, string message, string initial, Action<string> onOk)
@@ -601,12 +835,14 @@ namespace Geodashy.Editing.UI
             var input = UIFactory.Input(content, "", initial, null, -1, 32);
             var row = UIFactory.Row(content, 36, 8, TextAnchor.MiddleRight);
             UIFactory.Button(row, "Cancel", () => CloseModal(modal), 110, 34);
-            UIFactory.Button(row, "OK", () =>
+            Action ok = () =>
             {
                 var v = input.text;
                 CloseModal(modal);
                 onOk?.Invoke(v);
-            }, 110, 34, UIFactory.ButtonActive);
+            };
+            UIFactory.Button(row, "OK", () => ok(), 110, 34, UIFactory.ButtonActive);
+            SetModalPrimary(modal, ok);
             input.ActivateInputField();
         }
 
