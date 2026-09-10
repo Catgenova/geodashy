@@ -102,6 +102,16 @@ namespace Geodashy.Rendering
             return result;
         }
 
+        static Sprite[] ghostFrames;
+        /// <summary>The spectral rider used by the death replay and the personal-best ghost (Resources/Sprites/ghost_float_N.png), or null.</summary>
+        public static Sprite[] GhostFrames()
+        {
+            if (ghostFrames != null) return ghostFrames.Length > 0 ? ghostFrames : null;
+            var tex = FindSheet("ghost_float", out var frames);
+            ghostFrames = tex != null ? Slice(tex, frames, MountFrameHeightUnits) : new Sprite[0];
+            return ghostFrames.Length > 0 ? ghostFrames : null;
+        }
+
         /// <summary>
         /// Animation sheets for a mount, or null when none exist. Drop horizontal strips into
         /// Resources/Sprites named mount_{id}_run_{frames}.png and mount_{id}_jump_{frames}.png.

@@ -84,6 +84,30 @@ namespace Geodashy.Gameplay
         readonly List<ReplaySample> replay = new List<ReplaySample>();
         SpriteRenderer replayGhost;
         float replayClock;
+        const float GhostFps = 9f;
+        float ghostAnimTime;
+
+        /// <summary>Puts the spectral rider's current frame on a ghost renderer, facing the way it is moving.</summary>
+        void ApplyGhostFrame(SpriteRenderer sr, Vector2 pos, float facing, float dt)
+        {
+            var frames = SpriteLibrary.GhostFrames();
+            if (frames == null)
+            {
+                // no sheet: fall back to the mount silhouette
+                if (sr.sprite == null) sr.sprite = SpriteLibrary.ForMount(player.mount);
+                float mountScale = sr.sprite != null ? player.mount.width / Mathf.Max(0.01f, sr.sprite.bounds.size.x) : 1f;
+                sr.transform.localScale = new Vector3(mountScale * facing * SpriteLibrary.MountFacing(player.mount), mountScale, 1f);
+            }
+            else
+            {
+                ghostAnimTime += dt;
+                sr.sprite = frames[Mathf.FloorToInt(ghostAnimTime * GhostFps) % frames.Length];
+                float scale = player.mount.width / Mathf.Max(0.01f, sr.sprite.bounds.size.x);
+                sr.transform.localScale = new Vector3(scale * facing, scale, 1f);
+            }
+            sr.transform.position = new Vector3(pos.x, pos.y, 0f);
+            sr.transform.rotation = Quaternion.identity;
+        }
 
         // ---- personal-best ghost (Champion): a faint rider following the best recorded run ----------
         SpriteRenderer bestGhost;
@@ -343,13 +367,11 @@ namespace Geodashy.Gameplay
             int i = 0;
             while (i < replay.Count - 1 && replay[i + 1].time < target) i++;
             var s = replay[i];
-            replayGhost.enabled = s.sprite != null;
-            replayGhost.sprite = s.sprite;
-            replayGhost.transform.position = new Vector3(s.pos.x, s.pos.y, 0f);
-            replayGhost.transform.rotation = Quaternion.Euler(0f, 0f, s.rot);
-            replayGhost.transform.localScale = s.scale;
+            replayGhost.enabled = true;
+            float facing = i + 1 < replay.Count ? Mathf.Sign(replay[i + 1].pos.x - s.pos.x + 0.0001f) : 1f;
+            ApplyGhostFrame(replayGhost, s.pos, facing, dt);
             float fade = t > span - 0.05f ? 0f : 1f;
-            replayGhost.color = new Color(0.6f, 0.9f, 1f, 0.4f * fade);
+            replayGhost.color = new Color(0.75f, 0.95f, 1f, 0.75f * fade);
         }
 
         void RecordBestRunSample(float dt)
@@ -391,11 +413,9 @@ namespace Geodashy.Gameplay
             float x = Mathf.Lerp(stats.bestRunX[i], stats.bestRunX[i + 1], f);
             float y = Mathf.Lerp(stats.bestRunY[i], stats.bestRunY[i + 1], f);
             bestGhost.enabled = true;
-            if (bestGhost.sprite == null) bestGhost.sprite = SpriteLibrary.ForMount(player.mount);
-            float baseScale = bestGhost.sprite != null ? player.mount.width / Mathf.Max(0.01f, bestGhost.sprite.bounds.size.x) : 1f;
-            bestGhost.transform.position = new Vector3(x, y, 0f);
-            bestGhost.transform.localScale = new Vector3(baseScale * SpriteLibrary.MountFacing(player.mount), baseScale, 1f);
-            bestGhost.color = new Color(1f, 0.9f, 0.5f, 0.28f);
+            float facing = stats.bestRunX[i + 1] >= stats.bestRunX[i] ? 1f : -1f;
+            ApplyGhostFrame(bestGhost, new Vector2(x, y), facing, Time.deltaTime);
+            bestGhost.color = new Color(1f, 0.92f, 0.6f, 0.55f);
         }
 
         /// <summary>Resolved spawn state: where the rider appears and with what mount/speed/gravity/size.</summary>

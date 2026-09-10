@@ -345,6 +345,13 @@ Assets/Geodashy/Scripts
 Assets/Geodashy/Editor   Unity Editor menu (open/regenerate scene, levels folder, catalog dump)
 ```
 
+## The ghost
+
+The death replay and the personal-best ghost are a spectral rider rather than a tinted copy of the mount:
+`Tools/mount_art/ghost.py` draws an eight-frame bobbing sheet (`Resources/Sprites/ghost_float_8.png`),
+`SpriteLibrary.GhostFrames()` slices it like a mount sheet and `GameRunner` plays it at nine frames a second,
+facing the way the recorded run moves. Replace the PNG (any `ghost_float_<frames>.png`) to change the look.
+
 ## Regenerating the mount art
 
 `Tools/mount_art` holds a small Python renderer (numpy only) that draws every mount's animation
