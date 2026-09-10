@@ -80,7 +80,7 @@ namespace Geodashy.Rendering
                 return;
             }
             var src = layers[0].sprite;
-            string key = layerIds[0] + ":" + src.GetInstanceID();
+            string key = layerIds[0] + ":" + src.name + ":" + src.rect.width + "x" + src.rect.height;
             if (key == hazeSource && haze.sprite != null)
             {
                 haze.enabled = visible[0];

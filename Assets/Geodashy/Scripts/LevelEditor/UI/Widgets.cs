@@ -30,7 +30,7 @@ namespace Geodashy.Editing.UI
                 var l = UIFactory.Label(f.root, label, 13, TextAnchor.MiddleLeft, UIFactory.TextDim, labelWidth, height);
                 l.raycastTarget = true;
                 var scrub = l.gameObject.AddComponent<ScrubHandle>();
-                scrub.onDelta = steps => f.Bump(steps);
+                scrub.onDelta = steps => f.Bump(Mathf.RoundToInt(steps));
                 UIFactory.Tip(l, "Drag left or right to scrub " + label.ToLowerInvariant() + " (Shift = fine)");
             }
             UIFactory.Button(f.root, "-", () => f.Bump(-1), 26, height - 2, null, 16);

@@ -99,7 +99,7 @@ namespace Geodashy.Editing.UI
             }
         }
         Button deleteStampButton, favouriteButton, presetButton, curveButton;
-        readonly Dictionary<string, Stamp> stampTiles = new Dictionary<string, Stamp>();
+        readonly Dictionary<string, Button> stampTiles = new Dictionary<string, Button>();
         readonly Dictionary<BrushPreset, Button> presetTiles = new Dictionary<BrushPreset, Button>();
 
         static string[] CategoriesWithStamps()

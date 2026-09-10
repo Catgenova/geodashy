@@ -20,7 +20,7 @@ namespace Geodashy.Core
             var bytes = Encoding.UTF8.GetBytes(json);
             using (var ms = new MemoryStream())
             {
-                using (var gz = new GZipStream(ms, CompressionLevel.Optimal, true)) gz.Write(bytes, 0, bytes.Length);
+                using (var gz = new GZipStream(ms, System.IO.Compression.CompressionLevel.Optimal, true)) gz.Write(bytes, 0, bytes.Length);
                 return Prefix + Convert.ToBase64String(ms.ToArray());
             }
         }

@@ -1313,6 +1313,7 @@ namespace Geodashy.Gameplay
             float progress = Mathf.Clamp01(finishX > 0f ? player.position.x / finishX : 0f);
             hud.SetProgress(progress, true);
             sessionDeaths.Add(progress);
+            DeathRecorded?.Invoke(player.position, player.deathPoint, player.killer != null ? player.killer.def.name : "the world");
             if (fullRun)
             {
                 stats.RecordDeath(progress);
